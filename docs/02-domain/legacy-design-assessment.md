@@ -76,12 +76,12 @@ DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic 
 ### Preparation execution
 Earlier: recipe definition and execution/stock effects were not cleanly separated.
 
-DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparation points to an immutable RecipeVersion or equivalent snapshot containing the exact RecipeIngredient lines, quantities, units and constraints used. PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation. PreparationInputAllocation maps measurable input quantity to the exact immutable RecipeIngredient line it fulfills, preserves the effective scaled requirement and scaling context, and retains compatibility-decision evidence where concept compatibility is used. Later Recipe or compatibility edits cannot reinterpret historical execution validity.
+DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparation points to an immutable RecipeVersion or equivalent snapshot containing the exact RecipeIngredient lines, quantities, units and constraints used. PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation. PreparationInputAllocation maps measurable input quantity to the exact immutable RecipeIngredient line it fulfills, preserves the effective scaled requirement and scaling context, and retains compatibility-decision evidence where concept compatibility is used. Every consumed recipe-based PreparationInput is fully accounted: RecipeIngredient allocations plus explicit non-recipe additions, process loss, waste or other governed deviations must sum exactly to the committed input quantity after valid conversion; an unallocated remainder is invalid. Later Recipe or compatibility edits cannot reinterpret historical execution validity.
 
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
@@ -139,13 +139,13 @@ DB-00 introduces or makes explicit:
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
 - shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
 - StockItem distinct from Batch;
-- SourceExpirationFact independent of Batch;
+- SourceExpirationFact independent of Batch, with a preserved domain/source temporal anchor for deterministic date-only timezone selection;
 - InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups and deterministic EffectiveExpiration;
 - immutable RecipeVersion/snapshot for committed recipe execution;
-- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation and preserved compatibility evidence;
+- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation, preserved compatibility evidence and exhaustive consumed-input accounting;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
 - Household-scoped AlertRule, Alert and NotificationDelivery ownership/subject chain;
 - idempotency, concurrency and cross-household isolation invariants;
