@@ -21,21 +21,7 @@ DB-01 defines:
 - which facts are authoritative and which are projections;
 - transaction-boundary expectations needed to preserve invariants.
 
-DB-01 does **not** yet choose:
-
-- physical SQL column types;
-- UUID implementation/version;
-- ORM;
-- database extensions;
-- concrete indexes;
-- partitioning strategy;
-- generated-column syntax;
-- trigger implementation language;
-- RLS syntax/provider specifics;
-- migration tooling;
-- cache/search/queue technology.
-
-Those are DB-02/implementation concerns and must conform to this model.
+DB-01 does **not** yet choose physical SQL types, UUID implementation/version, ORM, extensions, concrete indexes, partitioning, generated-column syntax, trigger language, RLS syntax/provider specifics, migration tooling or cache/search/queue technology. Those are DB-02/implementation concerns and must conform to this model.
 
 ## Source-of-truth hierarchy
 
@@ -52,29 +38,23 @@ If a lower layer conflicts with a higher layer, the lower layer is wrong until t
 
 ### R1 — Household isolation is structurally recoverable
 
-Every Household-owned operational relation must carry a direct `household_id` or have one single, non-ambiguous immutable ownership path to a parent that carries it. High-risk operational facts such as inventory movements, counts, receipts, preparations, waste, alerts, imports and idempotency records retain direct Household scope even when it could be derived, because authorization and integrity must not depend on a long mutable join path.
+Every Household-owned operational relation must carry a direct `household_id` or have one single, non-ambiguous immutable ownership path to a parent that carries it. High-risk operational facts such as inventory movements, counts, receipts, preparations, waste, alerts, imports and idempotency records retain direct Household scope even when derivable, because authorization and integrity must not depend on a long mutable join path.
 
 ### R2 — Global and Household catalog scopes are explicit
 
-Relations representing Product, IngredientConcept, Recipe, ShelfLifeRule and governed compatibility data expose one explicit catalog scope. `GLOBAL` scope has no Household owner; `HOUSEHOLD` scope requires exactly one owning Household. Cross-scope references follow DB-00 visibility rules.
+Product, IngredientConcept, Recipe, ShelfLifeRule and governed compatibility data expose one explicit catalog scope. GLOBAL has no Household owner; HOUSEHOLD requires exactly one owner. Cross-scope references follow DB-00 visibility rules.
 
 ### R3 — Current state never replaces history
 
-Mutable current-state relations such as `stock_item` may hold the current placement/state necessary for operation, but immutable `inventory_movement` and lineage/evidence relations remain authoritative for historical reconstruction. A cached/current balance is a projection, never the only quantity truth.
+Mutable current-state relations such as `stock_item` may hold current placement/state, but immutable `inventory_movement` and lineage/evidence relations remain authoritative for historical reconstruction. Cached/current balance is a projection, never the only quantity truth.
 
-### R4 — Semantic alternatives are represented as constrained alternatives
+### R4 — Semantic alternatives are constrained alternatives
 
-Where DB-00 defines XOR semantics, DB-01 retains them explicitly rather than collapsing them into ambiguous nullable references. Examples include:
-
-- Product versus IngredientConcept shopping subject;
-- StorageLocation versus Compartment placement anchor;
-- global versus Household ownership;
-- ordinary receipt allocation versus explicit substitution allocation;
-- SourceExpirationFact versus ShelfLifeRuleActivation as one expiration candidate source.
+DB-00 XOR semantics remain explicit, including Product versus IngredientConcept shopping subject, StorageLocation versus Compartment placement, global versus Household ownership, ordinary receiving versus substitution allocation, and SourceExpirationFact versus ShelfLifeRuleActivation as an expiration-candidate source.
 
 ### R5 — Exact quantities are logical rationals
 
-Every authoritative conserved/reconciled quantity is a logical rational value plus MeasurementUnit. The physical representation must be lossless. DB-01 refers to this pair as `RationalQuantity(amount, unit_id)`; DB-02 will choose the storage encoding.
+Every authoritative conserved/reconciled quantity is a logical rational value plus MeasurementUnit. Physical representation must be lossless; DB-02 chooses the encoding.
 
 ### R6 — Money is role-bearing and currency-bearing
 
@@ -101,8 +81,11 @@ An application-level check alone is insufficient for invariants that can be expr
 - `logical-relational-model.md` — canonical logical relations and cardinalities.
 - `relational-integrity-contracts.md` — keys, uniqueness, XOR rules, conservation and transaction-level constraints.
 - `db-01-decisions.md` — accepted logical modeling decisions and rationale.
-- `db-01-open-decisions.md` — unresolved logical choices, or an explicit statement that none are currently known; physical implementation choices are not DB-01 blockers.
-- `db-01-review-findings.md` — independent review traceability for findings, corrections and exact review-baseline context.
+- `db-01-open-decisions.md` — unresolved logical choices, or an explicit statement that none are currently known.
+- `db-01-review-findings.md` — independent finding/correction traceability.
+- `db-01-coverage-matrix.md` — DB-00 concept/invariant-area → DB-01 relation/integrity coverage gate.
+
+Physical implementation choices are not DB-01 blockers unless review proves they change logical semantics.
 
 ## Gate to leave DB-01
 
@@ -115,4 +98,5 @@ DB-01 is complete only when:
 5. historical expiration decisions remain reproducible across rule, compatibility and Household-timezone evolution;
 6. no relation reintroduces a rejected DB-00 conflation;
 7. all material logical ambiguities are closed or explicitly recorded as DB-01 open decisions;
-8. the exact DB-01 HEAD passes panoramic review before merge.
+8. the DB-00→DB-01 coverage matrix shows no unexplained durable-domain omission;
+9. the exact DB-01 HEAD passes panoramic review before merge.
