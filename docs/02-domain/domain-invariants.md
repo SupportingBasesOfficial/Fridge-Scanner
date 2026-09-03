@@ -22,7 +22,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 8. Product identity is independent of household stock, purchase price and storage location.
 9. A Product may have zero, one or many identifiers, and identifier type must be explicit.
 10. Price is transaction/context-specific. Product must not hold a single authoritative current unit price.
-11. Quantities must have valid measurement semantics; every purchased, received, moved, consumed, counted, prepared-output, replenishment-policy, shopping or recipe quantity that participates in reconciliation/comparison must carry or resolve an explicit MeasurementUnit. Incompatible dimensions cannot be converted without an explicit product/ingredient-specific rule where required.
+11. Quantities must have valid measurement semantics; every purchased, received, moved, consumed, counted, prepared-input, prepared-output, replenishment-policy, shopping or recipe quantity that participates in reconciliation/comparison must carry or resolve an explicit MeasurementUnit. Incompatible dimensions cannot be converted without an explicit product/ingredient-specific rule where required.
 
 ## Batch and stock identity
 
@@ -34,10 +34,10 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 
 15. Business-significant stock changes must be represented by durable inventory movement semantics. Any business operation that redistributes one conserved quantity across multiple movement effects must preserve Product identity and exact total quantity after valid dimension-safe conversion unless that operation is explicitly a transformation with separately modeled inputs and outputs.
 16. A materialized/current balance may exist for performance, but it must be reconcilable with authoritative stock history.
-17. Stock-changing commands must define atomic concurrency behavior so two valid concurrent actions cannot silently produce an invalid balance.
+17. Stock-changing commands must define atomic concurrency behavior so two valid concurrent actions cannot silently produce an invalid balance. Inventory reconciliation must use a captured physical-observation/ledger as-of point and concurrency semantics that preserve all movements committed after that cutoff rather than overwriting or double-accounting for them.
 18. Retrying an idempotent stock-changing command with the same identity must not apply the quantity delta twice.
 19. Committed historical movement records are immutable for business truth; corrections are represented by explicit compensating/adjustment semantics rather than rewriting committed history.
-20. Physical inventory reconciliation must create an explicit adjustment or equivalent auditable outcome rather than silently overwriting history. Each InventoryCountItem must identify the counted Product, observed quantity and MeasurementUnit, plus placement when relevant to the count scope. It may reference an existing StockItem when matched, but unmatched newly discovered physical stock must remain representable without fabricating an existing StockItem; the count line must still carry enough subject identity to produce a deterministic reconciliation outcome.
+20. Physical inventory reconciliation must create an explicit adjustment or equivalent auditable outcome rather than silently overwriting history. Every InventoryCount records an authoritative physical observation time and a corresponding ledger cutoff/as-of point. Each InventoryCountItem must identify the counted Product, observed quantity and MeasurementUnit, plus placement when relevant to the count scope. It may reference an existing StockItem when matched, but unmatched newly discovered physical stock must remain representable without fabricating an existing StockItem. The adjustment must be computed against the captured as-of state, link back to the count line and its cutoff, and preserve intervening committed movements. If that as-of state cannot be reconstructed/reconciled safely, the system must block or escalate rather than guess.
 
 ## Purchase and receiving
 
@@ -47,10 +47,10 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 ## Recipes and preparation
 
 23. A Recipe is a reusable definition and must not depend on a concrete physical Batch or StockItem.
-24. A RecipeIngredient describes what is required; a PreparationInput records which concrete stock fulfilled that requirement.
+24. A RecipeIngredient describes what is required; a PreparationInput records which concrete stock fulfilled that requirement. Each PreparationInput must identify its source StockItem, Product, consumed quantity and MeasurementUnit and retain traceable linkage to the authoritative preparation-input InventoryMovement decrement effect(s). Those effects must represent the same Product, resolve to the referenced StockItem or governed split lineage, and sum exactly to the PreparationInput quantity after valid dimension-safe conversion.
 25. A Preparation is a concrete household-scoped execution.
 26. Food produced by a Preparation must be representable as inventory output when it remains available for later storage, consumption, waste or further preparation. Each PreparationOutput must identify its Product, quantity and MeasurementUnit and retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialized the output. Those effects must represent the same Product and sum exactly to the PreparationOutput quantity after valid dimension-safe conversion.
-27. Preparation lineage must be preservable from output back to consumed inputs through durable provenance. Current StockItem balance alone is insufficient lineage when outputs are split, merged or later mutated by additional movements.
+27. Preparation lineage must be preservable from output back to consumed inputs through durable provenance. Current StockItem balance alone is insufficient lineage when inputs/outputs are split, merged or later mutated by additional movements.
 
 ## Shelf life and food lifecycle
 
@@ -62,7 +62,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 
 ## Audit, provenance and time
 
-33. Domain occurrence time and system recording time are distinct where delayed/offline recording is possible.
+33. Domain occurrence time and system recording time are distinct where delayed/offline recording is possible. Physical inventory counts and any other delayed reconciliation workflow must preserve the domain occurrence/as-of point required to evaluate historical state correctly.
 34. Important external or automated mutations must retain source/provenance such as user action, barcode scan, vision result, import, automation or system process.
 35. AuditEvent is not a replacement for inventory movement history, domain events, application logs or security telemetry.
 36. Auditable actions must be attributable to an actor or trusted system principal and to the relevant Household/context when applicable.
