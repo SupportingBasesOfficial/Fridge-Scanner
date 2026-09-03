@@ -20,7 +20,9 @@ This avoids one-row-per-grain over-modeling while preserving physical truth when
 
 `Product` is the canonical stockable food/product identity referenced by StockItem. It may represent a commercial packaged product, loose/unbranded food, a household-defined item, or a reusable identity for prepared food/output; commercial identifiers and manufacturer metadata are optional. A controlled compatibility mapping determines which Products can satisfy an IngredientConcept. A recipe may optionally impose an exact-Product constraint when the recipe genuinely requires it.
 
-This prevents generic recipes such as "milk" from being tied to one barcode/SKU while ensuring prepared, loose and non-commercial food can still have valid stock identity without fabricated commercial metadata.
+When a concrete Preparation executes a Recipe, fulfillment of recipe requirements is not inferred from Product names or stock usage alone. `PreparationInputAllocation` explicitly allocates measurable quantity from PreparationInput to the exact RecipeIngredient line it fulfills. This supports repeated ingredient concepts, partial fulfillment and multiple stock sources while preserving line identity and compatibility constraints. Ad-hoc Preparations without a Recipe do not require RecipeIngredient allocations.
+
+This prevents generic recipes such as "milk" from being tied to one barcode/SKU while ensuring prepared, loose and non-commercial food can still have valid stock identity without fabricated commercial metadata, and it keeps recipe definition traceable to concrete execution.
 
 ## D-003 — Measurement conversion is dimension-safe and context-aware
 
@@ -48,7 +50,11 @@ The projection must never become an unexplained second source of truth.
 
 **Decision:** committed authoritative inventory balances must not become negative through ordinary operations or reconciliation.
 
-Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Each InventoryCountItem captures its authoritative physical observation time and corresponding ledger as-of/cutoff so a session that spans time does not falsely treat all lines as simultaneous. One common session-level cutoff is valid only when a genuinely atomic/frozen snapshot or equivalent snapshot token guarantees all lines correspond to the same authoritative inventory state. Reconciliation is computed against each line's captured historical state, not the later processing-time balance, and the resulting adjustment must preserve all movements committed after that cutoff through explicit concurrency semantics. If the as-of state cannot be reconstructed safely, reconciliation must block or escalate rather than guess.
+Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Each InventoryCountItem captures its authoritative physical observation time and corresponding ledger as-of/cutoff so a session that spans time does not falsely treat all lines as simultaneous. One common session-level cutoff is valid only when a genuinely atomic/frozen snapshot or equivalent snapshot token guarantees all lines correspond to the same authoritative inventory state.
+
+Reconciliation is governed by domain occurrence time as well as ledger recording order. A movement recorded after a count cutoff but occurring after the physical observation is a genuinely intervening movement and is preserved outside the count adjustment. A movement recorded after the cutoff but occurring at or before the observation changes the historical state the count should have been compared against: the reconciliation basis is invalidated/rebased and must be recomputed with that movement included. It must not be applied on top of an adjustment that already compensated for the same physical effect.
+
+If such a late pre-observation fact arrives after an adjustment has already committed, committed history remains immutable. The corrected count outcome is recomputed against the authoritative historical movement set and represented by an explicit compensating/reconciliation outcome when deterministic and safe; otherwise the case blocks/escalates. If the required as-of history, occurrence ordering or allocation cannot be reconstructed safely, reconciliation must not guess.
 
 Imports or integrations with incomplete/contradictory data remain in staging/reconciliation state until they can be committed without fabricating negative stock.
 
@@ -67,6 +73,8 @@ This representation keeps balances easy to reconcile while preserving one busine
 **Decision:** `Household` is the canonical architecture and code term for the primary domestic operational boundary. User interfaces may localize the label as `Casa` or another product-language term.
 
 The domain term must not imply that physical street address is mandatory or that all future household-like scopes require a residential address.
+
+Inventory-affecting external integrations do not create an alternate ownership boundary: every such Integration use, ImportRun and reconciled ExternalReference must resolve to an explicitly authorized target Household, and resulting operational entities remain within that Household.
 
 ## Consequence for DB-01
 
