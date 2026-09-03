@@ -43,7 +43,9 @@ Canonical description of a commercial or otherwise catalogued food product. Prod
 Classifies products and may form a hierarchy.
 
 ### ProductIdentifier
-Maps a Product to one or more identifiers. Identifier type is explicit so barcode/GTIN, PLU, SKU, QR, internal identifiers and future scanner identifiers can coexist.
+Maps a Product to one or more identifiers. Every identifier records an explicit scheme/type and the issuer/namespace required by that scheme. Globally governed schemes such as GTIN use their governed global namespace; non-global schemes such as retailer SKU, provider code, household/internal ID or locally scoped PLU must identify the issuing retailer/provider/Household or other governed namespace.
+
+Identifier uniqueness is therefore evaluated within the canonical tuple `(scheme, issuer/namespace, normalized value)`, with issuer omitted only when the scheme itself defines a single global namespace. The same non-global value may legitimately exist under different issuers and must not resolve ambiguously across those namespaces.
 
 ### Brand / Manufacturer
 Brand and manufacturer are distinct concepts and must not be conflated by the model, even if an initial physical implementation keeps one of them optional.
@@ -51,13 +53,18 @@ Brand and manufacturer are distinct concepts and must not be conflated by the mo
 ### MeasurementUnit
 Defines units used by measurable quantities. Quantities must be dimensionally meaningful; mass, volume and count are not interchangeable without an explicit valid conversion rule.
 
+### Money / Currency
+Monetary values carry an exact amount and explicit currency. Binary floating-point representation is not authoritative money semantics. Cross-currency comparison or aggregation requires an explicit conversion rate/source and conversion time/context; the system must never silently treat numerically equal amounts in different currencies as equivalent.
+
 ## 4. Procurement and receiving
 
 ### Purchase
-Represents a commercial transaction or acquisition record.
+Represents a commercial transaction or acquisition record and establishes the transaction currency/context used by its monetary lines unless a source transaction explicitly models multiple currencies with preserved conversion provenance.
 
 ### PurchaseItem
-Represents an item purchased, including Product, transaction-specific quantity, MeasurementUnit and price. The quantity is never unitless; reconciliation may convert only under the accepted dimension-safe conversion rules.
+Represents an item purchased, including Product, transaction-specific quantity, MeasurementUnit and monetary price. The quantity is never unitless; reconciliation may convert only under the accepted dimension-safe conversion rules. Price/discount/tax values are transaction facts with explicit currency and exact monetary semantics rather than Product attributes.
+
+If an imported/source line is denominated differently from the Purchase transaction currency, both the source amount/currency and any normalized amount must preserve the explicit conversion rate/source and conversion time/context; silent conversion is forbidden.
 
 ### Receipt / Receiving
 Represents a physical receiving operation into a Household. Purchase and Receipt may occur atomically in simple flows, but they remain separate concepts because purchased and received quantities can differ in time or amount. A Receipt may also represent an acquisition with no prior Purchase record when the source workflow legitimately has no commercial order.
@@ -103,7 +110,11 @@ Reconciliation must compare observed quantities with the system state as of that
 ### InventoryCountItem
 Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
 
-When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to support an explicit reconciliation outcome that can create canonical inventory rather than silently mutating or inventing history. Every reconciliation outcome links back to the InventoryCount/InventoryCountItem, the captured as-of point and the committed adjustment movement(s) it produced.
+When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to represent the observation, but this does not authorize arbitrary allocation across state-distinct holdings.
+
+If more than one existing StockItem is compatible with the observed Product/placement while differing in batch, expiration, package/lifecycle state or other identity-affecting provenance, the discrepancy is ambiguous. The workflow must either capture sufficient count granularity to identify the affected holding(s), or retain the discrepancy in an explicit unresolved/staging state until a governed allocation decision is made. No adjustment may arbitrarily decrement or increment one candidate StockItem merely to force aggregate equality.
+
+Every committed reconciliation outcome links back to the InventoryCount/InventoryCountItem, the captured as-of point, the deterministic allocation/match decision and the committed adjustment movement(s) it produced.
 
 ## 6. Food lifecycle and shelf life
 
@@ -167,7 +178,12 @@ Represents future purchase intent and is distinct from Purchase, which represent
 ### ShoppingListItem
 Represents one measurable desired item and can originate from manual input, policy, recipe planning or future automation. A resolved line targets exactly one canonical subject: either a Product when a specific catalog item is desired or an IngredientConcept when any compatible Product can satisfy the intent. It carries requested quantity and MeasurementUnit.
 
-Free text may be retained as unresolved user input/provenance, but unresolved text is not a canonical fulfillment identity. Once fulfilled or matched, a ShoppingListItem may link to one or more PurchaseItems so requested and acquired quantities remain traceable without conflating shopping intent with the purchase transaction.
+Free text may be retained as unresolved user input/provenance, but unresolved text is not a canonical fulfillment identity.
+
+### ShoppingListFulfillment
+Represents an explicit quantity allocation from one PurchaseItem to one ShoppingListItem. For a Product-targeted list line, the PurchaseItem must reference that exact Product. For an IngredientConcept-targeted line, the purchased Product must satisfy that IngredientConcept through the governed compatibility relationship effective for the fulfillment decision.
+
+Each fulfillment allocation records allocated quantity and MeasurementUnit. Allocated quantities are reconciled through the accepted dimension-safe conversion rules, may represent partial fulfillment, and must not exceed the quantity of the source PurchaseItem available for allocation after accounting for its other fulfillment allocations. A ShoppingListItem is fully fulfilled only when the sum of its compatible allocated quantities satisfies its requested quantity under an explicit fulfillment policy; over-fulfillment, substitution or tolerance must be represented explicitly rather than inferred. The same purchased quantity must not be double-counted across multiple list lines.
 
 ## 10. Automation, alerts and integrations
 
@@ -226,7 +242,7 @@ User ──< HouseholdMembership >── Household
                                 ├──< Preparation ──< PreparationInput ──< InventoryMovement >── StockItem
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
-                                │                              └──< fulfillment >── PurchaseItem
+                                │                              └──< ShoppingListFulfillment >── PurchaseItem
                                 └──< HouseholdProductPolicy >── Product
 
 IngredientConcept ──< RecipeIngredient >── Recipe
@@ -234,7 +250,7 @@ IngredientConcept ──< RecipeIngredient >── Recipe
         ├──< ShelfLifeRule
         └──< controlled compatibility >── Product
 
-Product ──< ProductIdentifier
+Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         ├──< ShelfLifeRule
         ├──> ProductCategory
         └── measurement/catalog metadata
@@ -252,16 +268,19 @@ The canonical model rejects these conflations:
 - global `User.role` as household authority;
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
+- ProductIdentifier uniqueness without scheme/issuer namespace semantics;
 - Product as owner of a single current price;
+- monetary amount without explicit currency or silent cross-currency conversion;
 - unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
 - Purchase as proof that stock physically entered inventory;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
 - InventoryCountItem without explicit counted-subject identity;
 - inventory reconciliation without a captured physical-count as-of/ledger cutoff;
+- ambiguous aggregate count allocated arbitrarily across state-distinct StockItems;
 - InventoryTransfer without same-Product and quantity-conservation semantics;
 - PreparationInput without authoritative decrement provenance and quantity conservation;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
-- ShoppingListItem without a canonical subject and measurable requested amount;
+- ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
 - EffectiveExpiration without deterministic candidate-combination semantics;
