@@ -4,7 +4,7 @@
 
 This file distinguishes genuine logical-model blockers from physical implementation choices that must not reopen DB-01 unnecessarily.
 
-After the first independent DB-01 red-team pass and a second closure pass against the accepted DB-00 contract, **there are currently no intentionally open logical-model decisions**.
+After independent DB-01 red-team passes and closure against the accepted DB-00 contract, **there are currently no intentionally open logical-model decisions**.
 
 This does not declare DB-01 review-complete. Further review may create new findings. It means the baseline is not knowingly carrying a material logical ambiguity forward.
 
@@ -20,13 +20,11 @@ Any new reviewer finding that can produce materially different relational models
 
 ### O-001 — Polymorphic historical subject references — CLOSED
 
-**Resolution:** referentially significant business relationships must use typed FKs/association relations; an unconstrained generic `entity_type/entity_id` pair cannot replace domain integrity. Generic stable target identity remains allowed only as evidentiary metadata such as AuditEvent target identity.
+**Resolution:** referentially significant business relationships use typed FKs/association relations; unconstrained generic `entity_type/entity_id` cannot replace domain integrity. Generic stable target identity remains allowed only as evidentiary metadata such as AuditEvent target identity.
 
 ### O-002 — Quantity-lineage granularity — CLOSED
 
-**Resolution:** `inventory_quantity_lineage` is an explicit conserved source-movement → destination-movement edge carrying optional endpoint StockItems, Product and exact quantity portion. `quantity_lineage_shelf_life_fact` attaches inherited expiration/lifecycle/rule evidence to that exact edge.
-
-Product-transforming Preparation is explicitly excluded from same-Product lineage and uses its own input/output conservation boundary.
+**Resolution:** `inventory_quantity_lineage` is an explicit conserved source-movement → destination-movement edge carrying optional endpoint StockItems, Product and exact quantity portion. `quantity_lineage_shelf_life_fact` attaches inherited expiration/lifecycle/rule evidence to that exact edge. Product-transforming Preparation is excluded from same-Product lineage.
 
 ### O-003 — Count historical basis identity — CLOSED
 
@@ -34,25 +32,27 @@ Product-transforming Preparation is explicitly excluded from same-Product lineag
 
 ### O-004 — Rule applicability to governed classification — CLOSED
 
-**DB-00 evidence:** accepted DB-00 allows a ShelfLifeRule to target Product, IngredientConcept, or “another governed classification introduced later.” The classification is explicitly an extension point, not a requirement to invent an abstract taxonomy in DB-01.
-
-**Resolution:** the DB-01 baseline has concrete referential targets for Product and IngredientConcept. No persisted rule may use a generic/untyped classification target. A future classification target becomes valid only after an explicit governed classification relation/versioning contract is introduced through a reviewed schema evolution. ProductCategory is not silently promoted into a universal ShelfLifeRule taxonomy merely for implementation convenience.
+**Resolution:** current DB-01 has concrete referential targets Product XOR IngredientConcept. DB-00's “another governed classification introduced later” is a future extension point, not permission for a generic/untyped classification target. ProductCategory is not silently promoted into a universal ShelfLifeRule taxonomy.
 
 ### O-005 — Global notification preferences — CLOSED / DEFERRED FEATURE
 
-**DB-00 evidence:** a genuinely user-global notification preference *may* exist only when it grants no Household operational authority. DB-00 does not require that optional feature to exist in the initial durable model.
-
-**Resolution:** no `user_notification_preference` relation is required for DB-01 acceptance. If the feature is introduced later, it is a separate user-level preference model influencing delivery behavior only. It cannot replace or weaken Household AlertRule/Alert ownership and authorization.
+**Resolution:** no `user_notification_preference` relation is required for DB-01 acceptance. If introduced later, it is separate user-level preference data affecting delivery behavior only and cannot replace Household AlertRule/Alert authorization.
 
 ### O-006 — Receipt allocation and line-to-ledger provenance — CLOSED
 
-**Resolution:** ReceiptItem no longer contains an implicit nullable PurchaseItem allocation. Ordinary same-Product receiving uses `purchase_item_receipt_allocation`; substitution uses a separate allocation relation; `receipt_item_inventory_effect` explicitly links each physically received quantity portion to the InventoryMovement effect that materialized it.
-
-Both the ReceiptItem source quantity and PurchaseItem receiving pool now have independent conservation constraints.
+**Resolution:** ordinary same-Product receiving uses `purchase_item_receipt_allocation`; substitution uses a separate allocation relation; `receipt_item_inventory_effect` links each physically received quantity portion to the InventoryMovement effect that materialized it. ReceiptItem source quantity and PurchaseItem receiving pool have independent conservation constraints.
 
 ### O-007 — Household timezone historical reproducibility — CLOSED
 
-**Resolution:** introduced versioned `household_timezone_version` with non-ambiguous effective intervals. Historical expiration/source-rule evidence references the exact selected version when Household timezone semantics participate, preventing later configuration changes from reinterpreting history.
+**Resolution:** introduced versioned `household_timezone_version` with non-ambiguous effective intervals. Historical expiration/source-rule evidence references the exact selected version when Household timezone semantics participate.
+
+### O-008 — HouseholdProductPolicy preferred-storage semantics — CLOSED
+
+**Resolution:** preferred storage defaults are no longer generic policy metadata. `household_product_storage_preference` is a ranked typed child targeting exactly one same-Household StorageLocation, same-Household Compartment or governed StorageLocation kind. The preference is explicitly not StockItem placement truth and cannot itself move stock.
+
+### O-009 — Alert subject/scope relational representation — CLOSED
+
+**Resolution:** every Household AlertRule has one typed primary `alert_rule_subject`; every committed Alert retains typed `alert_trigger_subject` evidence. Current subject kinds are Household, Product, StockItem, StorageLocation, Compartment and HouseholdProductPolicy. Future subject kinds require reviewed typed schema evolution.
 
 ## C. Explicitly deferred to DB-02 — not DB-01 blockers
 
@@ -98,7 +98,9 @@ These are already closed by DB-00/DB-01 and must not be reopened as implementati
 - whether an idempotency key is globally unique without scope/fingerprint — no;
 - whether generic polymorphic IDs may replace enforceable business FKs — no;
 - whether ProductCategory may be assumed to be the universal future classification taxonomy — no;
-- whether optional global notification preferences grant or imply Household authority — no.
+- whether optional global notification preferences grant or imply Household authority — no;
+- whether preferred storage defaults may remain opaque policy metadata — no;
+- whether AlertRule scope or Alert trigger subject may be deferred to generic DB-02 IDs — no.
 
 ## Exit criterion
 
