@@ -14,7 +14,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 ## Storage topology
 
 5. Every Compartment belongs to exactly one StorageLocation; every StorageLocation belongs to exactly one Household.
-6. A StockItem location must resolve to the same Household that owns the StockItem.
+6. Every stored StockItem has exactly one placement anchor: either one Compartment or one StorageLocation directly. If anchored to a Compartment, the parent StorageLocation is authoritative; competing direct location truth is forbidden. A StockItem may be temporarily unplaced only through an explicit governed state, and every resolved placement must belong to the same Household that owns the StockItem.
 7. Occupancy labels such as full/almost-full/empty are projections or observations; they must not silently become a second authoritative inventory ledger.
 
 ## Product catalog and identifiers
@@ -22,13 +22,13 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 8. Product identity is independent of household stock, purchase price and storage location.
 9. A Product may have zero, one or many identifiers, and identifier type must be explicit.
 10. Price is transaction/context-specific. Product must not hold a single authoritative current unit price.
-11. Quantities must have valid measurement semantics; incompatible dimensions cannot be converted without an explicit product/ingredient-specific rule where required.
+11. Quantities must have valid measurement semantics; every purchased, received, moved, consumed, counted or recipe quantity that participates in reconciliation must carry or resolve an explicit MeasurementUnit. Incompatible dimensions cannot be converted without an explicit product/ingredient-specific rule where required.
 
 ## Batch and stock identity
 
-12. Batch identity and physical stock identity are distinct.
-13. Multiple StockItems may originate from the same Batch while having different locations, package states, lifecycle events or effective expiry.
-14. Moving a StockItem must not mutate the manufacturing/commercial identity of its Batch.
+12. Batch identity and physical stock identity are distinct. Every StockItem identifies exactly one Product directly; Batch association is optional provenance and must never be required merely to obtain Product identity.
+13. Multiple StockItems may originate from the same Batch while having different placements, package states, lifecycle events or effective expiry. If a StockItem references a Batch, that Batch must belong to the same Product as the StockItem.
+14. Moving a StockItem must not mutate the manufacturing/commercial identity of its Batch, and absence of known manufacturer batch information must not be represented by fabricated batch identity.
 
 ## Inventory truth
 
@@ -36,13 +36,13 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 16. A materialized/current balance may exist for performance, but it must be reconcilable with authoritative stock history.
 17. Stock-changing commands must define atomic concurrency behavior so two valid concurrent actions cannot silently produce an invalid balance.
 18. Retrying an idempotent stock-changing command with the same identity must not apply the quantity delta twice.
-19. Historical movement records must not be rewritten to conceal an error; corrections are represented by explicit compensating/adjustment semantics.
+19. Committed historical movement records are immutable for business truth; corrections are represented by explicit compensating/adjustment semantics rather than rewriting committed history.
 20. Physical inventory reconciliation must create an explicit adjustment or equivalent auditable outcome rather than silently overwriting history.
 
 ## Purchase and receiving
 
 21. A Purchase represents acquisition/commercial intent or transaction; Receipt represents physical entry into inventory.
-22. A simple workflow may create Purchase and Receipt together, but purchased and received quantities must remain independently reconcilable at line level. Each committed ReceiptItem must identify the received product/quantity/unit, link to its source PurchaseItem when applicable, and retain traceable linkage to the inventory entry effect(s) that materialized the receipt. A legitimate ad-hoc Receipt may omit PurchaseItem provenance, but it must not omit inventory-entry provenance.
+22. A simple workflow may create Purchase and Receipt together, but purchased and received quantities must remain independently reconcilable at line level. Each PurchaseItem must identify its Product, quantity and MeasurementUnit. Each committed ReceiptItem must identify the received Product, quantity and MeasurementUnit, link to its source PurchaseItem when applicable, and retain traceable linkage to the inventory entry effect(s) that materialized the receipt. A legitimate ad-hoc Receipt may omit PurchaseItem provenance, but it must not omit inventory-entry provenance.
 
 ## Recipes and preparation
 
