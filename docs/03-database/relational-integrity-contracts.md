@@ -357,15 +357,15 @@ A future user-global preference may influence delivery behavior only. It cannot 
 
 ### C-076 — Import Household binding
 
-Every inventory-affecting ImportRun has exactly one target Household; ExternalReference and produced operational facts remain within that boundary.
+Every inventory-affecting ImportRun has exactly one target Household. ExternalReference used for Household operational reconciliation retains that same Household directly or through one unambiguous owning ImportRun/binding, and produced canonical operational facts remain inside the boundary.
 
 ### C-077 — External reference namespace
 
-ExternalReference resolution/uniqueness is scoped by provider/integration namespace, type/value and Household when operationally Household-scoped.
+ExternalReference resolution/uniqueness is scoped by provider/integration namespace, reference type/value and Household when operationally Household-scoped. Cross-Household reuse of provider values does not create authority or a global canonical key.
 
-### C-078 — Typed canonical external-reference targets
+### C-078 — ExternalReference is provenance, not a universal polymorphic target
 
-Where an ExternalReference resolves to a referentially significant canonical business entity, the target is represented by a reviewed typed association contract. An unconstrained generic entity ID cannot become canonical resolution truth.
+ExternalReference itself does not carry an unconstrained generic canonical `target_type/target_id`. If a canonical domain fact must retain an ExternalReference durably, that fact or a dedicated typed provenance relation defines the association and its cardinality. New imported target classes require reviewed schema evolution rather than generic metadata.
 
 ### C-079 — Secret separation
 
@@ -420,6 +420,7 @@ DB-02 explicitly chooses physical delete behavior under these logical defaults:
 - transient uncommitted staging: governed cascade may be allowed;
 - catalog/rule/evidence/timezone records referenced by history: retire/version/tombstone, not destructive deletion;
 - Alert trigger evidence for committed alerts remains reproducible even if the referenced subject later retires;
+- ExternalReference provenance needed by committed imported facts cannot be destructively removed in a way that breaks traceability;
 - Household deletion: explicit retention/lifecycle workflow, never uncontrolled cascade through ledger/audit/history.
 
 ## 17. Gate rule
