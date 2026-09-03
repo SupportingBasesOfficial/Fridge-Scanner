@@ -37,7 +37,9 @@ Recipe-facing semantic food/ingredient concept, such as "milk", "egg" or "rice".
 A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Compatibility is domain data, not uncontrolled name matching. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
 
 ### Product
-Canonical description of a commercial or otherwise catalogued food product. Product identity is independent from purchase price, household stock and physical location. A Product may satisfy one or more IngredientConcepts according to controlled compatibility semantics.
+Canonical definition of a stockable food/product identity. A Product may represent a commercial packaged product, loose/unbranded food, a household-defined item, or a reusable identity for prepared food/output. Commercial metadata such as SKU, barcode, brand, manufacturer or Batch is optional and must not be required merely to create valid stock identity.
+
+Product identity is independent from purchase price, Household stock and physical location. A Product may satisfy one or more IngredientConcepts according to controlled compatibility semantics. `Product` therefore does not mean “retail SKU”; it is the canonical stockable subject referenced directly by StockItem.
 
 ### ProductCategory
 Classifies products and may form a hierarchy.
@@ -84,7 +86,7 @@ Represents a concrete inventory holding under a Household. It is the inventory u
 
 Every StockItem identifies exactly one Product directly. A StockItem may additionally reference a Batch when batch provenance is known; if present, that Batch must belong to the same Product as the StockItem. Batch is therefore optional provenance, never the only path from inventory to Product identity.
 
-A stored StockItem has exactly one placement anchor: either one Compartment or one StorageLocation directly. If the anchor is a Compartment, its parent StorageLocation is authoritative and must belong to the same Household. A StockItem may be temporarily unplaced only when that condition is represented explicitly. It must be splittable when part of its quantity acquires materially different placement, package state, shelf-life state, reservation/hold state or provenance requirements.
+A stored StockItem has exactly one placement anchor: either one Compartment or one StorageLocation directly. If the anchor is a Compartment, its parent StorageLocation is authoritative and must belong to the same Household. A StockItem may be temporarily unplaced only when that condition is represented explicitly. It must be splittable when part of its quantity acquires materially different placement, package state, shelf-life state or provenance requirements. Future reservation/hold behavior, if introduced, must define its own governed semantics before it can become an identity-affecting StockItem state.
 
 A Batch must not be used as the physical-location record.
 
@@ -268,6 +270,7 @@ StockItem ──< EffectiveExpiration ── provenance ──> SourceExpiration
 The canonical model rejects these conflations:
 
 - global `User.role` as household authority;
+- Product as synonymous with retail SKU or commercial packaging;
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - ProductIdentifier uniqueness without scheme/issuer namespace semantics;
@@ -284,6 +287,7 @@ The canonical model rejects these conflations:
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
 - ambiguous StockItem placement with conflicting location/compartment truths;
+- undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
