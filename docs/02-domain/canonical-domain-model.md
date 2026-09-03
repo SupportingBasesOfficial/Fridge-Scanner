@@ -107,7 +107,7 @@ A stored StockItem has exactly one placement anchor: either one Compartment or o
 A Batch must not be used as the physical-location record.
 
 ### SourceExpirationFact
-Represents an authoritative expiration or best-before fact observed for a concrete StockItem/package, independent of whether manufacturer Batch identity is known. It records the source value with its original precision/semantics and provenance, such as package label, ReceiptItem/import, user observation or trusted external source.
+Represents an authoritative expiration or best-before fact observed for a concrete StockItem/package, independent of whether manufacturer Batch identity is known. It records the source value with its original precision/semantics and provenance, such as package label, ReceiptItem/import, user observation or trusted external source. It also preserves the authoritative domain occurrence time at which the fact became authoritative for that concrete StockItem/package — normally the source observation, import or receipt occurrence time — plus any more specific governed temporal context supplied by the source.
 
 A SourceExpirationFact may reference a Batch when the fact is genuinely batch-level, but Batch is not required. Stock must never fabricate a Batch merely to retain a printed expiration date.
 
@@ -163,9 +163,9 @@ An explainable materialized projection for a concrete StockItem. Authoritative t
 
 Each applicable authoritative input or independent ShelfLifeRule semantic group produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline.
 
-For candidate ordering, a source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source data but is interpreted operationally as the end of that local calendar day in the canonical Household timezone applicable to the StockItem. If the source itself supplies an explicit timezone/offset or a governed external context requires one, that source context is preserved and used instead. The Household timezone used for interpretation must itself be a governed, versioned/as-of context so later timezone-setting changes do not alter historical recomputation. Instant-valued candidates retain their exact instant. Comparisons normalize these operational instants without mutating or fabricating precision in the original source fact.
+For candidate ordering, a source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source data but is interpreted operationally as the end of that local calendar day in the canonical Household timezone applicable to the StockItem. If the source itself supplies an explicit timezone/offset or a governed external context requires one, that source context is preserved and used instead. When Household timezone is used, its exact governed version is selected as of the preserved domain occurrence time at which the relevant SourceExpirationFact became authoritative for the concrete StockItem/package — normally that fact's source observation/import/receipt occurrence time — unless a more specific governed source temporal context applies. Initial calculation and every recomputation reuse this same timezone-selection anchor; later Household timezone changes cannot reinterpret the historical date-only fact. Instant-valued candidates retain their exact instant. Comparisons normalize these operational instants without mutating or fabricating precision in the original source fact.
 
-The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, semantic trigger/deadline groups, group-local precedence decisions, combination result, evaluation anchor, date-only interpretation timezone/context and ShelfLifeRule version(s) that participated in selection.
+The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, semantic trigger/deadline groups, group-local precedence decisions, combination result, rule evaluation anchor, the SourceExpirationFact occurrence/source anchor used for date-only timezone selection, the selected timezone version/context and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -193,9 +193,11 @@ For a Preparation that executes a Recipe, fulfillment of recipe requirements is 
 
 The allocated Product must satisfy the line's IngredientConcept and any exact-Product or other governed constraints effective for the Preparation. When compatibility rather than exact Product identity is used, the allocation preserves or immutably references the exact CompatibilityDecisionEvidence used at commit time. Later compatibility edits cannot invalidate or retroactively validate the committed allocation.
 
-Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion and preserve enough identity to distinguish repeated or otherwise similar recipe lines. Across all allocations sourced from one PreparationInput, the allocated total must not exceed that PreparationInput quantity.
+Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion and preserve enough identity to distinguish repeated or otherwise similar recipe lines.
 
-For each RecipeIngredient snapshot line, the Preparation preserves the effective required quantity after applying its governed recipe scaling/yield factor or other explicit quantity adjustment, including the scaling inputs/context used. The sum of compatible PreparationInputAllocation quantities targeting that exact immutable line must reconcile against the preserved effective requirement after valid conversion. Normal exact fulfillment must not exceed or underfill the requirement silently. If the preparation intentionally permits an underage, overage, tolerance or substitution, the deviation must be explicit and preserve the expected quantity, actual allocated quantity, MeasurementUnit, reason/policy and provenance/approval where required. Recipe requirement fulfillment is derived from these explicit historical allocations rather than inferred from current Recipe contents, ingredient names or current Product compatibility. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
+For every recipe-based PreparationInput, source-side accounting must be exhaustive. After valid dimension-safe conversion into a comparison unit, the sum of all RecipeIngredient allocations sourced from that PreparationInput plus any explicitly classified non-recipe addition, process loss, waste or other governed deviation must equal exactly the committed PreparationInput quantity. An unallocated remainder is forbidden. A non-recipe classification preserves quantity, MeasurementUnit, reason/type and provenance/approval where policy requires it; it must not masquerade as fulfillment of a RecipeIngredient.
+
+For each RecipeIngredient snapshot line, the Preparation preserves the effective required quantity after applying its governed recipe scaling/yield factor or other explicit quantity adjustment, including the scaling inputs/context used. The sum of compatible PreparationInputAllocation quantities targeting that exact immutable line must reconcile against the preserved effective requirement after valid conversion. Normal exact fulfillment must not exceed or underfill the requirement silently. If the preparation intentionally permits an underage, overage, tolerance or substitution, the deviation must be explicit and preserve the expected quantity, actual allocated quantity, MeasurementUnit, reason/policy and provenance/approval where required. Recipe requirement fulfillment is derived from these explicit historical allocations rather than inferred from current Recipe contents, ingredient names or current Product compatibility. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement, but their PreparationInput quantities remain exactly conserved against their authoritative decrement effects.
 
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
@@ -296,8 +298,9 @@ User ──< HouseholdMembership >── Household
                                 │                              └── placement ─> StorageLocation/Compartment
                                 ├──< Preparation ──> RecipeVersion ──> Recipe
                                 │              ├──< PreparationInput ──< InventoryMovement >── StockItem
-                                │              │          └──< PreparationInputAllocation >── RecipeIngredient snapshot
-                                │              │                         └── CompatibilityDecisionEvidence
+                                │              │          ├──< PreparationInputAllocation >── RecipeIngredient snapshot
+                                │              │          │              └── CompatibilityDecisionEvidence
+                                │              │          └── explicit non-recipe/loss/waste deviation accounting
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
                                 │                              └──< ShoppingListFulfillment >── PurchaseItem
@@ -356,6 +359,7 @@ The canonical model rejects these conflations:
 - PreparationInput without authoritative decrement provenance and quantity conservation;
 - recipe-based Preparation without immutable RecipeVersion/snapshot and preserved scaling/constraint context;
 - recipe-based PreparationInput fulfillment inferred without explicit RecipeIngredient allocation;
+- recipe-based PreparationInput with an unallocated consumed remainder that is neither recipe fulfillment nor an explicit governed deviation;
 - recipe allocations capped only by source input while silently over/under-fulfilling the target RecipeIngredient requirement;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
@@ -366,6 +370,7 @@ The canonical model rejects these conflations:
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule precedence applied globally across independent semantic trigger/deadline groups;
 - ShelfLifeRule without explicit applicability, deterministic group-local precedence and an activation-class-specific stable evaluation anchor;
+- EffectiveExpiration date-only interpretation whose timezone version is selected from calculation time instead of the preserved SourceExpirationFact domain/source anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
