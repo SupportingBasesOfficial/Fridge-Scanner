@@ -36,7 +36,7 @@ DB-00: Product is the canonical stockable food identity and is not synonymous wi
 ### Product / IngredientConcept compatibility
 Earlier: semantic compatibility could be inferred from current catalog data or names.
 
-DB-00: Product-to-IngredientConcept compatibility is governed, versioned reference data. A committed preparation or shopping allocation that relies on compatibility preserves immutable CompatibilityDecisionEvidence with Product, IngredientConcept, mapping/rule identity and version, effective/evaluation context, relevant constraints and provenance. Later compatibility edits affect future decisions or explicit correction workflows; they do not reinterpret historical allocations.
+DB-00: IngredientConcept and Product-to-IngredientConcept compatibility are explicitly global-or-Household scoped, governed, versioned reference data. Global mappings connect only global entities; Household mappings connect only global or same-Household entities, and cross-scope publication/cloning validates destination references without exposing private catalog data. A committed preparation or shopping allocation that relies on compatibility preserves immutable CompatibilityDecisionEvidence with Product, IngredientConcept, mapping/rule identity and version, effective/evaluation context, relevant constraints and provenance. Later compatibility edits affect future decisions or explicit correction workflows; they do not reinterpret historical allocations.
 
 ### Batch / lot
 Earlier: `Lote` combined product batch, compartment, quantity, package state and expiration.
@@ -61,7 +61,7 @@ DB-00: their stock effect is unified under InventoryMovement semantics while dom
 ### Transfer
 Earlier: movement semantics could rely on the current location of the affected stock row.
 
-DB-00: InventoryTransfer is one domain operation backed by paired conserved effects. The source decrement preserves immutable source placement, the destination increment preserves immutable destination placement, and occurrence time is retained independently from later recording when required. Historical per-placement balances and counts therefore remain reconstructible after the StockItem moves again.
+DB-00: InventoryTransfer is one domain operation backed by paired conserved effects. Every transferred/split quantity portion immutably inherits applicable source-expiration, lifecycle and activated shelf-life evaluation context; merges require equivalent state or retained distinguishable sublineages, so redistribution cannot reset freshness or lose an earlier deadline. The source decrement preserves immutable source placement, the destination increment preserves immutable destination placement, and occurrence time is retained independently from later recording when required. Historical per-placement balances and counts therefore remain reconstructible after the StockItem moves again.
 
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock, and line monetary fields could be read as generic price/value scalars.
@@ -81,7 +81,7 @@ DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparat
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. Relative rules also preserve duration amount/unit, elapsed-vs-local-calendar arithmetic, endpoint semantics and governed timezone/version context when calendar arithmetic is used. Month/year calendar arithmetic applies the full amount to the original anchored local date and clamps an invalid day-of-month to the target month's final valid day without iterative drift. DST gaps/overlaps and end-of-day boundaries have one canonical resolution, so an `N days after opening` rule cannot mean `N × 24h` in one implementation and `N local calendar days` in another. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. Relative rules also preserve duration amount/unit, elapsed-vs-local-calendar arithmetic, require integral amounts for calendar units, and preserve endpoint semantics and governed timezone/version context when calendar arithmetic is used. Month/year calendar arithmetic applies the full amount to the original anchored local date and clamps an invalid day-of-month to the target month's final valid day without iterative drift. DST gaps/overlaps and end-of-day boundaries have one canonical resolution, so an `N days after opening` rule cannot mean `N × 24h` in one implementation and `N local calendar days` in another. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
@@ -130,9 +130,10 @@ They remain open until later phases select technology based on accepted requirem
 DB-00 introduces or makes explicit:
 
 - IngredientConcept and versioned controlled Product compatibility for recipe/planning semantics;
+- explicit global-or-Household IngredientConcept and compatibility-mapping governance;
 - immutable CompatibilityDecisionEvidence for committed concept-based allocations;
 - Product as a stockable identity broader than retail SKU, with explicit global-vs-Household catalog governance;
-- ProductIdentifier with scheme plus issuer/namespace scoping;
+- ProductIdentifier with scheme plus issuer/namespace scoping and governed versioned scheme-specific normalization/collision migration;
 - MeasurementUnit and dimensional semantics;
 - versioned MeasurementConversionEvidence and exact-rational semantics for committed contextual/package/cross-dimension conversions and conservation;
 - exact Money/Currency semantics plus explicit PurchaseItem pricing basis, line gross/discount/tax-or-charge/net roles and governed rounding/reconciliation;
@@ -141,7 +142,7 @@ DB-00 introduces or makes explicit:
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch, with a preserved domain/source temporal anchor for deterministic date-only timezone selection;
 - InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
-- InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement;
+- InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement and shelf-life fact lineage per quantity portion;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups, explicit relative-duration arithmetic including canonical month/year rollover, and deterministic EffectiveExpiration;
 - explicit global-or-Household Recipe/RecipeVersion catalog governance and cross-scope reference constraints;
