@@ -149,8 +149,8 @@ Legend: **AUTH** authoritative/history-bearing; **CURR** mutable current-state; 
 | Integration | `integration` | C-005, C-079 |
 | Inventory-affecting Household binding | Integration scope + `import_run.household_id` | C-005, C-076 |
 | ImportRun | `import_run` AUTH | C-076 |
-| ExternalReference | `external_reference` AUTH/EVIDENCE | C-076–C-078 |
-| Referentially significant resolved target | typed association contract | C-078 |
+| External provider identity/provenance | `external_reference` AUTH/EVIDENCE | C-076–C-078 |
+| Durable link from canonical fact to external provenance | domain-specific typed FK/provenance relation when that import contract requires it | C-078; no universal polymorphic target |
 | Secret separation | secure credential reference | C-079 |
 
 ## 14. Governance/platform records
@@ -174,6 +174,7 @@ Intentionally not independent competing authoritative facts:
 - expiration as disposal — explicit WasteRecord/effect required;
 - free-text ShoppingList subject as canonical fulfillment identity — provenance only;
 - generic alert subject IDs — typed rule/trigger subjects required;
+- generic ExternalReference canonical target — not part of DB-00; typed domain provenance links only when required;
 - provider identity as Household authorization — explicit scope required;
 - generic polymorphic business FK — typed associations required;
 - future ShelfLifeRule classification before governed typed schema exists — invalid until extension.
