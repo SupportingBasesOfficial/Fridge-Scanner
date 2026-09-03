@@ -2,7 +2,7 @@
 
 ## Status
 
-The eleven DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-011. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
+The fourteen DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-014. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
 No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
@@ -22,7 +22,7 @@ Resolution: units have explicit dimensions. Same-dimension conversions may use c
 
 ### OD-004 — Effective expiration persistence and temporal arithmetic → resolved by D-004
 
-Resolution: effective expiration may be materialized for efficient reads and alerts, but authoritative truth remains the source facts, lifecycle/storage facts and versioned shelf-life rules. The projection must be explainable, invalidatable and recomputable. Relative ShelfLifeRule arithmetic explicitly records elapsed-vs-local-calendar basis, temporal unit, endpoint semantics, governed timezone/version context and canonical month/year end-of-month clamping when required, so rollover and DST/timezone transitions cannot produce implementation-dependent deadlines.
+Resolution: effective expiration may be materialized for efficient reads and alerts, but authoritative truth remains the source facts, lifecycle/storage facts and versioned shelf-life rules. The projection must be explainable, invalidatable and recomputable. Relative ShelfLifeRule arithmetic explicitly records elapsed-vs-local-calendar basis, temporal unit, requires integral calendar amounts, and records endpoint semantics, governed timezone/version context and canonical month/year end-of-month clamping when required, so rollover and DST/timezone transitions cannot produce implementation-dependent deadlines.
 
 ### OD-005 — Negative inventory policy → resolved by D-005
 
@@ -51,6 +51,18 @@ Resolution: receipt/substitution allocations share one physical-receiving pool, 
 ### OD-011 — Idempotency scope and request identity → resolved by D-011
 
 Resolution: idempotency identity is bound to target Household/system scope, authenticated principal, operation and client key, with a canonical fingerprint of the complete normalized request. Matching retries reuse the original outcome after authorization; mismatched reuse is rejected, and another tenant's record cannot suppress execution or disclose results.
+
+### OD-012 — IngredientConcept and compatibility governance → resolved by D-012
+
+Resolution: concepts and mappings have explicit global-or-Household scope, ownership and authority. Global mappings reference only global entities; Household mappings reference global or same-Household entities. Cross-scope publication/cloning validates destination references and preserves provenance.
+
+### OD-013 — Shelf-life lineage through redistribution → resolved by D-013
+
+Resolution: splits/transfers preserve applicable source-expiration, lifecycle and activated-rule context per quantity portion. Merges require equivalent state or distinguishable sublineages; redistribution cannot reset freshness or discard an earlier deadline.
+
+### OD-014 — ProductIdentifier normalization → resolved by D-014
+
+Resolution: normalization is governed per scheme/issuer and version, source values are preserved, and rule changes create collision-checked migration candidates rather than in-place reinterpretation or deployment-order-dependent matching.
 
 ## Decisions deliberately deferred to later phases
 
