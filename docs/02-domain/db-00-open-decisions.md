@@ -2,7 +2,7 @@
 
 ## Status
 
-The seven DB-00 conceptual decisions originally tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-007. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
+The eight DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-008. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
 No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
@@ -20,9 +20,9 @@ Resolution: RecipeIngredient targets `IngredientConcept`, not commercial stock. 
 
 Resolution: units have explicit dimensions. Same-dimension conversions may use canonical conversion rules; cross-dimension conversion requires explicit product/ingredient context such as density or package equivalence.
 
-### OD-004 — Effective expiration persistence → resolved by D-004
+### OD-004 — Effective expiration persistence and temporal arithmetic → resolved by D-004
 
-Resolution: effective expiration may be materialized for efficient reads and alerts, but authoritative truth remains the source facts, lifecycle/storage facts and versioned shelf-life rules. The projection must be explainable, invalidatable and recomputable.
+Resolution: effective expiration may be materialized for efficient reads and alerts, but authoritative truth remains the source facts, lifecycle/storage facts and versioned shelf-life rules. The projection must be explainable, invalidatable and recomputable. Relative ShelfLifeRule arithmetic explicitly records elapsed-vs-local-calendar basis, temporal unit, endpoint semantics and governed timezone/version context when required, so DST/timezone transitions cannot produce implementation-dependent deadlines.
 
 ### OD-005 — Negative inventory policy → resolved by D-005
 
@@ -35,6 +35,10 @@ Resolution: one atomic `InventoryTransfer` domain operation produces two linked 
 ### OD-007 — Household naming and external vocabulary → resolved by D-007
 
 Resolution: `Household` is the canonical architecture/code term. User interfaces may localize it as `Casa` or another product-language term.
+
+### OD-008 — PurchaseItem monetary basis → resolved by D-008
+
+Resolution: purchase-line money is modeled by explicit semantic role rather than a generic ambiguous price. Unit/basis price identifies its pricing quantity/unit; gross, discount, tax/line charges and net are explicit and reconciled under a governed rounding policy. Purchase-level charges remain distinct unless an explicit derived allocation preserves its method and provenance.
 
 ## Decisions deliberately deferred to later phases
 
