@@ -31,7 +31,7 @@ DB-00: household authority belongs to HouseholdMembership. A platform-level role
 ### Product
 Earlier: category/manufacturer/value were scalar attributes.
 
-DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
+DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency and semantic role; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
 
 ### Product / IngredientConcept compatibility
 Earlier: semantic compatibility could be inferred from current catalog data or names.
@@ -64,9 +64,9 @@ Earlier: movement semantics could rely on the current location of the affected s
 DB-00: InventoryTransfer is one domain operation backed by paired conserved effects. The source decrement preserves immutable source placement, the destination increment preserves immutable destination placement, and occurrence time is retained independently from later recording when required. Historical per-placement balances and counts therefore remain reconstructible after the StockItem moves again.
 
 ### Purchase / receiving
-Earlier: a Purchase record could imply that goods entered stock.
+Earlier: a Purchase record could imply that goods entered stock, and line monetary fields could be read as generic price/value scalars.
 
-DB-00: Purchase and Receipt are separate concepts. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared purchased-quantity availability pool per PurchaseItem.
+DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explicit by semantic role: any unit/basis price identifies its pricing quantity/unit, while line gross, discount, tax/governed charges and net are distinct exact-money facts reconciled under an explicit rounding policy. Purchase-level discounts/taxes/fees remain Purchase-level unless an explicit derived allocation records method, basis, rounding and provenance; they are never silently folded into line unit cost. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared purchased-quantity availability pool per PurchaseItem.
 
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
@@ -81,7 +81,7 @@ DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparat
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. Relative rules also preserve duration amount/unit, elapsed-vs-local-calendar arithmetic, endpoint semantics and governed timezone/version context when calendar arithmetic is used. DST gaps/overlaps and end-of-day boundaries have one canonical resolution, so an `N days after opening` rule cannot mean `N × 24h` in one implementation and `N local calendar days` in another. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
@@ -135,7 +135,7 @@ DB-00 introduces or makes explicit:
 - ProductIdentifier with scheme plus issuer/namespace scoping;
 - MeasurementUnit and dimensional semantics;
 - versioned MeasurementConversionEvidence for committed contextual/package/cross-dimension conversions;
-- exact Money/Currency semantics for transaction values;
+- exact Money/Currency semantics plus explicit PurchaseItem pricing basis, line gross/discount/tax-or-charge/net roles and governed rounding/reconciliation;
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
 - shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
 - StockItem distinct from Batch;
@@ -143,7 +143,7 @@ DB-00 introduces or makes explicit:
 - InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
-- FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups and deterministic EffectiveExpiration;
+- FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups, explicit relative-duration arithmetic and deterministic EffectiveExpiration;
 - immutable RecipeVersion/snapshot for committed recipe execution;
 - Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation, preserved compatibility evidence and exhaustive consumed-input accounting;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
