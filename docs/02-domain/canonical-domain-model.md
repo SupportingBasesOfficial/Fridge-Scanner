@@ -91,21 +91,27 @@ Represents one atomic business transfer identity backed by linked source-decreme
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
 
 ### InventoryCount
-Represents a physical inventory/counting session.
+Represents a physical inventory/counting session scoped to one Household and optionally to a defined counting area such as a StorageLocation or Compartment.
 
 ### InventoryCountItem
-Compares observed physical quantity with system quantity and is the basis for explicit reconciliation adjustments.
+Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
+
+When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to support an explicit reconciliation outcome that can create canonical inventory rather than silently mutating or inventing history.
 
 ## 6. Food lifecycle and shelf life
 
 ### ShelfLifeRule
-Represents a rule such as "N days after opening", "N days after preparation", or a rule conditional on storage state. A relative shelf life is a duration/rule, not a calendar date.
+Represents a versioned rule such as "N days after opening", "N days after preparation", or a rule conditional on storage state. A relative shelf life is a duration/rule, not a calendar date.
+
+Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability may include trigger/event type, storage condition/category and other explicit predicates required by the rule.
+
+When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority and version/effective interval resolve ordering. Conflicting equally specific rules with the same effective priority must be rejected or surfaced for governance rather than selected arbitrarily.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
 
 ### EffectiveExpiration
-An explainable materialized projection for a concrete StockItem. Authoritative truth remains the applicable source expiration facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen.
+An explainable materialized projection for a concrete StockItem. Authoritative truth remains the applicable source expiration facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen, including which ShelfLifeRule version(s) participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -195,7 +201,9 @@ User ──< HouseholdMembership >── Household
                                 │       ├──< FoodLifecycleEvent
                                 │       └── EffectiveExpiration
                                 ├──< InventoryTransfer
-                                ├──< InventoryCount ──< InventoryCountItem
+                                ├──< InventoryCount ──< InventoryCountItem ──> Product
+                                │                              ├── optional ──> StockItem
+                                │                              └── placement ─> StorageLocation/Compartment
                                 ├──< Preparation ──< PreparationInput >── StockItem
                                 │              └──< PreparationOutput ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem
@@ -203,11 +211,16 @@ User ──< HouseholdMembership >── Household
 
 IngredientConcept ──< RecipeIngredient >── Recipe
         │
+        ├──< ShelfLifeRule
         └──< controlled compatibility >── Product
 
 Product ──< ProductIdentifier
+        ├──< ShelfLifeRule
         ├──> ProductCategory
         └── measurement/catalog metadata
+
+ShelfLifeRule ── scoped applicability / precedence ──> Product | IngredientConcept | governed classification
+StockItem ──< EffectiveExpiration ── provenance ──> ShelfLifeRule version(s)
 ```
 
 `StorageLocation XOR Compartment` means one stored StockItem has one placement anchor, not two competing placement truths. Explicitly unplaced StockItems are the governed exception.
@@ -220,10 +233,12 @@ The canonical model rejects these conflations:
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product;
 - Product as owner of a single current price;
-- unitless purchased quantities;
+- unitless purchased or counted quantities;
 - Purchase as proof that stock physically entered inventory;
 - Receipt without line-level received-quantity and inventory-entry provenance;
+- InventoryCountItem without explicit counted-subject identity;
 - ambiguous StockItem placement with conflicting location/compartment truths;
+- ShelfLifeRule without explicit applicability and deterministic precedence;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
