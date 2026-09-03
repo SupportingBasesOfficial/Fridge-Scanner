@@ -34,7 +34,7 @@ Package-to-quantity relationships such as "1 package = 500 g" are product/packag
 
 **Decision:** authoritative shelf-life truth consists of source expiration facts, lifecycle events, storage facts and versioned shelf-life rules. A concrete `effective_expiration_at` may be materialized for efficient queries/alerts.
 
-Source expiration must be representable at the concrete StockItem/package level even when no manufacturer Batch is known. Rule-version selection is anchored to the domain occurrence time of the fact that activates the rule, and recomputation must reuse that same anchor rather than current time.
+Source expiration must be representable at the concrete StockItem/package level even when no manufacturer Batch is known. Rule-version selection is anchored to the domain occurrence time of the authoritative fact that activates the rule, and recomputation must reuse that same original anchor rather than current time. Event-triggered rules use the triggering FoodLifecycleEvent occurrence time; stock-entry/default rules use authoritative stock-entry occurrence time; placement/storage-change rules use the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change; trusted observation-triggered storage rules use the observation occurrence time.
 
 Applicable source expirations and rule-derived deadlines form an explicit candidate set. Unless a future governed semantic-class rule defines a different composition, the effective operational expiration is the earliest applicable candidate: a later candidate may not extend an earlier authoritative deadline.
 
@@ -48,7 +48,7 @@ The projection must never become an unexplained second source of truth.
 
 **Decision:** committed authoritative inventory balances must not become negative through ordinary operations or reconciliation.
 
-Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Every physical count captures its authoritative observation time and a corresponding ledger as-of/cutoff. Reconciliation is computed against that historical state, not the later processing-time balance, and the resulting adjustment must preserve all movements committed after the cutoff through explicit concurrency semantics. If the as-of state cannot be reconstructed safely, reconciliation must block or escalate rather than guess.
+Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Each InventoryCountItem captures its authoritative physical observation time and corresponding ledger as-of/cutoff so a session that spans time does not falsely treat all lines as simultaneous. One common session-level cutoff is valid only when a genuinely atomic/frozen snapshot or equivalent snapshot token guarantees all lines correspond to the same authoritative inventory state. Reconciliation is computed against each line's captured historical state, not the later processing-time balance, and the resulting adjustment must preserve all movements committed after that cutoff through explicit concurrency semantics. If the as-of state cannot be reconstructed safely, reconciliation must block or escalate rather than guess.
 
 Imports or integrations with incomplete/contradictory data remain in staging/reconciliation state until they can be committed without fabricating negative stock.
 
