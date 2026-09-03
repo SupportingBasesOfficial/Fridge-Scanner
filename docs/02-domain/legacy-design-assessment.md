@@ -71,7 +71,7 @@ DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explici
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
 
-DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic food requirement independently of commercial SKU or physical stock. Concrete StockItems are selected only during Preparation.
+DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic food requirement independently of commercial SKU or physical stock. Concrete StockItems are selected only during Preparation. Recipe and RecipeVersion also have explicit catalog governance: global recipes may reference only global catalog entities, while household recipes may reference global or same-Household entities, never another Household's private Product. RecipeVersion inherits scope/ownership, and cross-scope publication or cloning is governed and provenance-preserving.
 
 ### Preparation execution
 Earlier: recipe definition and execution/stock effects were not cleanly separated.
@@ -81,7 +81,7 @@ DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparat
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. Relative rules also preserve duration amount/unit, elapsed-vs-local-calendar arithmetic, endpoint semantics and governed timezone/version context when calendar arithmetic is used. DST gaps/overlaps and end-of-day boundaries have one canonical resolution, so an `N days after opening` rule cannot mean `N × 24h` in one implementation and `N local calendar days` in another. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving. Relative rules also preserve duration amount/unit, elapsed-vs-local-calendar arithmetic, endpoint semantics and governed timezone/version context when calendar arithmetic is used. Month/year calendar arithmetic applies the full amount to the original anchored local date and clamps an invalid day-of-month to the target month's final valid day without iterative drift. DST gaps/overlaps and end-of-day boundaries have one canonical resolution, so an `N days after opening` rule cannot mean `N × 24h` in one implementation and `N local calendar days` in another. When a date-only source fact uses the Household timezone, the exact timezone version is selected from the preserved domain occurrence/source temporal anchor at which that SourceExpirationFact became authoritative, and the same anchor/version is reused for recomputation so later Household timezone changes cannot reinterpret history.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
@@ -143,7 +143,8 @@ DB-00 introduces or makes explicit:
 - InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
-- FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups, explicit relative-duration arithmetic and deterministic EffectiveExpiration;
+- FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups, explicit relative-duration arithmetic including canonical month/year rollover, and deterministic EffectiveExpiration;
+- explicit global-or-Household Recipe/RecipeVersion catalog governance and cross-scope reference constraints;
 - immutable RecipeVersion/snapshot for committed recipe execution;
 - Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation, preserved compatibility evidence and exhaustive consumed-input accounting;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
