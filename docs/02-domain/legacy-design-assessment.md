@@ -33,6 +33,11 @@ Earlier: category/manufacturer/value were scalar attributes.
 
 DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
 
+### Product / IngredientConcept compatibility
+Earlier: semantic compatibility could be inferred from current catalog data or names.
+
+DB-00: Product-to-IngredientConcept compatibility is governed, versioned reference data. A committed preparation or shopping allocation that relies on compatibility preserves immutable CompatibilityDecisionEvidence with Product, IngredientConcept, mapping/rule identity and version, effective/evaluation context, relevant constraints and provenance. Later compatibility edits affect future decisions or explicit correction workflows; they do not reinterpret historical allocations.
+
 ### Batch / lot
 Earlier: `Lote` combined product batch, compartment, quantity, package state and expiration.
 
@@ -41,7 +46,7 @@ DB-00: Batch and StockItem are distinct concepts. Physical location and mutable 
 ### Stock quantity
 Earlier: `quantidade_atual` was directly mutated by triggers/actions.
 
-DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible.
+DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible. Placement-changing movements also preserve immutable placement facts needed for historical reconstruction instead of relying on current StockItem placement.
 
 ### Measurement conversion
 Earlier: unit/package conversion could be interpreted as current configuration.
@@ -52,6 +57,11 @@ DB-00: same-dimension conversion remains governed by canonical unit semantics, w
 Earlier: separate operational tables each mutated the current quantity.
 
 DB-00: their stock effect is unified under InventoryMovement semantics while domain-specific detail may remain in dedicated records. Conserved redistribution operations must preserve Product identity and quantity.
+
+### Transfer
+Earlier: movement semantics could rely on the current location of the affected stock row.
+
+DB-00: InventoryTransfer is one domain operation backed by paired conserved effects. The source decrement preserves immutable source placement, the destination increment preserves immutable destination placement, and occurrence time is retained independently from later recording when required. Historical per-placement balances and counts therefore remain reconstructible after the StockItem moves again.
 
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock.
@@ -66,7 +76,7 @@ DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic 
 ### Preparation execution
 Earlier: recipe definition and execution/stock effects were not cleanly separated.
 
-DB-00: PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation across stock changes. For recipe-based execution, PreparationInputAllocation maps measurable input quantity to the exact RecipeIngredient line it fulfills, preserving repeated-line identity, compatibility constraints and partial/multiple-source fulfillment. Allocations are constrained both by available PreparationInput quantity and by the scaled effective requirement of the target RecipeIngredient; intentional underage, overage, tolerance or substitution is explicit rather than inferred.
+DB-00: reusable Recipe evolution is versioned. A committed recipe-based Preparation points to an immutable RecipeVersion or equivalent snapshot containing the exact RecipeIngredient lines, quantities, units and constraints used. PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation. PreparationInputAllocation maps measurable input quantity to the exact immutable RecipeIngredient line it fulfills, preserves the effective scaled requirement and scaling context, and retains compatibility-decision evidence where concept compatibility is used. Later Recipe or compatibility edits cannot reinterpret historical execution validity.
 
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
@@ -76,12 +86,12 @@ DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and Effectiv
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
 
-DB-00: each non-atomic InventoryCountItem preserves its own physical observation time and ledger as-of/cutoff; a shared session cutoff is allowed only for a genuinely atomic/frozen snapshot. Reconciliation classifies late-recorded movements by domain occurrence time: pre-observation facts rebase/invalidate the historical reconciliation basis, while genuinely post-observation movements are preserved. Already committed adjustments are corrected through explicit compensating/reconciliation outcomes rather than history mutation. Ambiguous discrepancies remain staged/blocked rather than being arbitrarily allocated across state-distinct StockItems.
+DB-00: each non-atomic InventoryCountItem preserves its own physical observation time and ledger as-of/cutoff; a shared session cutoff is allowed only for a genuinely atomic/frozen snapshot. Reconciliation classifies late-recorded movements by domain occurrence time: pre-observation facts rebase/invalidate the historical reconciliation basis, while genuinely post-observation movements are preserved. Already committed adjustments are corrected through explicit compensating/reconciliation outcomes rather than history mutation. Ambiguous discrepancies remain staged/blocked rather than being arbitrarily allocated across state-distinct StockItems. Historical placement reconstruction uses immutable movement/transfer placement evidence rather than current stock location.
 
 ### Shopping / replenishment
 Earlier: shopping intent and purchase fulfillment were underspecified.
 
-DB-00: HouseholdProductPolicy thresholds have measurement semantics; ShoppingListItem has a canonical Product-or-IngredientConcept subject and measurable requested amount; ShoppingListFulfillment explicitly allocates compatible PurchaseItem quantities without double counting.
+DB-00: HouseholdProductPolicy thresholds have measurement semantics; ShoppingListItem has a canonical Product-or-IngredientConcept subject and measurable requested amount; ShoppingListFulfillment explicitly allocates compatible PurchaseItem quantities without double counting. IngredientConcept-targeted fulfillment retains the exact compatibility mapping/version/context that justified the allocation.
 
 ### Alerts / notifications
 Earlier: alert configuration and delivery were described functionally but without a durable ownership/subject chain.
@@ -119,7 +129,8 @@ They remain open until later phases select technology based on accepted requirem
 
 DB-00 introduces or makes explicit:
 
-- IngredientConcept and controlled Product compatibility for recipe/planning semantics;
+- IngredientConcept and versioned controlled Product compatibility for recipe/planning semantics;
+- immutable CompatibilityDecisionEvidence for committed concept-based allocations;
 - Product as a stockable identity broader than retail SKU, with explicit global-vs-Household catalog governance;
 - ProductIdentifier with scheme plus issuer/namespace scoping;
 - MeasurementUnit and dimensional semantics;
@@ -129,11 +140,12 @@ DB-00 introduces or makes explicit:
 - shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch;
-- InventoryMovement with occurrence/recording time, conservation rules and reconcilable balances;
-- InventoryTransfer as one business transfer backed by paired conserved effects;
+- InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
+- InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups and deterministic EffectiveExpiration;
-- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage and scaled RecipeIngredient reconciliation;
+- immutable RecipeVersion/snapshot for committed recipe execution;
+- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation and preserved compatibility evidence;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
 - Household-scoped AlertRule, Alert and NotificationDelivery ownership/subject chain;
 - idempotency, concurrency and cross-household isolation invariants;
