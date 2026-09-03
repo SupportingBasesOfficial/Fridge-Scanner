@@ -51,7 +51,7 @@ DB-00: their stock effect is unified under InventoryMovement semantics while dom
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock.
 
-DB-00: Purchase and Receipt are separate concepts. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment.
+DB-00: Purchase and Receipt are separate concepts. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared purchased-quantity availability pool per PurchaseItem.
 
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
@@ -61,7 +61,7 @@ DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic 
 ### Preparation execution
 Earlier: recipe definition and execution/stock effects were not cleanly separated.
 
-DB-00: PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation across stock changes. For recipe-based execution, PreparationInputAllocation maps measurable input quantity to the exact RecipeIngredient line it fulfills, preserving repeated-line identity, compatibility constraints and partial/multiple-source fulfillment.
+DB-00: PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation across stock changes. For recipe-based execution, PreparationInputAllocation maps measurable input quantity to the exact RecipeIngredient line it fulfills, preserving repeated-line identity, compatibility constraints and partial/multiple-source fulfillment. Allocations are constrained both by available PreparationInput quantity and by the scaled effective requirement of the target RecipeIngredient; intentional underage, overage, tolerance or substitution is explicit rather than inferred.
 
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
@@ -77,6 +77,11 @@ DB-00: each non-atomic InventoryCountItem preserves its own physical observation
 Earlier: shopping intent and purchase fulfillment were underspecified.
 
 DB-00: HouseholdProductPolicy thresholds have measurement semantics; ShoppingListItem has a canonical Product-or-IngredientConcept subject and measurable requested amount; ShoppingListFulfillment explicitly allocates compatible PurchaseItem quantities without double counting.
+
+### Alerts / notifications
+Earlier: alert configuration and delivery were described functionally but without a durable ownership/subject chain.
+
+DB-00: Household-derived AlertRule belongs to one Household and records the governed subject/scope it evaluates. Alert retains its originating rule, target Household and triggering subject/context. NotificationDelivery links to one Alert and preserves recipient/destination, channel and delivery provenance; a destination or provider identity is never itself proof of Household authorization. Truly user-global preferences may influence delivery behavior but cannot become cross-household operational alert authority.
 
 ### Household configuration JSON
 Earlier: physical storage structure and active integrations could be duplicated inside JSON configuration.
@@ -115,14 +120,16 @@ DB-00 introduces or makes explicit:
 - MeasurementUnit and dimensional semantics;
 - exact Money/Currency semantics for transaction values;
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
+- shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch;
 - InventoryMovement with occurrence/recording time, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, ShelfLifeRule and deterministic EffectiveExpiration;
-- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage;
+- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage and scaled RecipeIngredient reconciliation;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
+- Household-scoped AlertRule, Alert and NotificationDelivery ownership/subject chain;
 - idempotency, concurrency and cross-household isolation invariants;
 - source/provenance and distinct occurrence/recording time;
 - scanner/vision/import evidence governance;
