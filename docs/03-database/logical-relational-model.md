@@ -65,7 +65,7 @@ Effective intervals for one Household cannot overlap ambiguously. Historical evi
 
 - `storage_location_id` PK;
 - `household_id` FK REQ;
-- logical kind/type;
+- governed logical kind/type;
 - name/metadata;
 - lifecycle status.
 
@@ -428,7 +428,7 @@ IMM same-Product conserved edge for split/transfer/merge/redistribution.
 
 For any movement/effect declared as a lineage-redistribution source, outgoing lineage edges for that operation sum exactly to the redistributed source quantity; disappearance is not represented by an unlinked remainder. If part of a holding is genuinely consumed/wasted/transformed, that terminal/transformation effect is represented explicitly by its own InventoryMovement/domain operation rather than disguised as missing lineage.
 
-For a lineage-derived destination effect, incoming edges sum exactly to the destination quantity. Same-Product lineage never transforms Product identity. Product-transforming Preparation uses its own input/output conservation model.
+For a lineage-derived destination effect, incoming edges sum exactly to destination quantity. Same-Product lineage never transforms Product identity. Product-transforming Preparation uses its own input/output conservation model.
 
 ### `quantity_lineage_shelf_life_fact`
 
@@ -712,11 +712,30 @@ Candidate must be applicable to the same Household and StockItem lineage history
 
 ### `household_product_policy`
 
-- policy PK;
+Household/Product-specific operational policy. Quantitative replenishment and preferred-storage defaults are relationally explicit rather than opaque policy JSON.
+
+- `household_product_policy_id` PK;
 - `household_id` FK REQ;
 - visible `product_id` FK REQ;
 - optional exact desired/minimum quantity/unit;
-- policy metadata.
+- lifecycle/policy provenance.
+
+### `household_product_storage_preference`
+
+Typed child of HouseholdProductPolicy representing one preferred storage default.
+
+- `household_product_storage_preference_id` PK;
+- `household_id` FK REQ;
+- `household_product_policy_id` FK REQ;
+- preference rank/priority REQ;
+- target XOR:
+  - specific `storage_location_id`, or
+  - specific `compartment_id`, or
+  - governed `storage_location_kind` value from the same controlled vocabulary used by StorageLocation;
+- optional applicability condition metadata only for non-relational predicate details;
+- provenance/lifecycle state.
+
+A concrete StorageLocation/Compartment target must belong to the policy Household. A Compartment preference derives its parent location and does not carry a competing direct location. Preference rank is unique within one active policy where the business rule requires deterministic ordering. This relation is a default/preference only; it does not move stock or become current placement truth.
 
 ### `shopping_list`
 
@@ -751,22 +770,52 @@ All fulfillments from one PurchaseItem share the distinct shopping-intent pool a
 
 ### `alert_rule`
 
+Household-derived operational rule definition.
+
 - `alert_rule_id` PK;
-- `household_id` FK REQ for Household-derived operational rules;
-- governed subject/scope descriptor defined by rule type;
-- condition/configuration;
+- `household_id` FK REQ;
+- rule kind/condition contract;
 - lifecycle/version metadata.
 
-Referentially significant targets use typed FK/association relations, not unconstrained generic IDs.
+### `alert_rule_subject`
+
+Typed governed scope/subject evaluated by one AlertRule.
+
+- `alert_rule_subject_id` PK;
+- `household_id` FK REQ;
+- `alert_rule_id` FK REQ UQ for the rule's primary scope;
+- `subject_kind` REQ;
+- typed subject alternative exactly matching `subject_kind`:
+  - HOUSEHOLD — no entity FK; Household itself is the subject;
+  - PRODUCT — `product_id` FK;
+  - STOCK_ITEM — `stock_item_id` FK;
+  - STORAGE_LOCATION — `storage_location_id` FK;
+  - COMPARTMENT — `compartment_id` FK;
+  - HOUSEHOLD_PRODUCT_POLICY — `household_product_policy_id` FK.
+
+Exactly one typed alternative is valid for non-HOUSEHOLD kinds; HOUSEHOLD has none. Every concrete subject is GLOBAL-or-same-Household where catalog visibility permits it, or directly owned by the same Household for operational subjects. Expiration is a condition over a typed stock/product/Household scope, not a fake generic “expiration entity”. Future subject kinds require a reviewed typed relation extension before use.
 
 ### `alert`
 
 - `alert_id` PK;
 - `household_id` FK REQ;
-- AlertRule FK REQ;
-- triggering subject/context typed according to rule;
+- `alert_rule_id` FK REQ;
 - detection occurrence/recording provenance;
 - state.
+
+### `alert_trigger_subject`
+
+IMM explainability evidence identifying the concrete subject(s) that caused one Alert.
+
+- `alert_trigger_subject_id` PK;
+- `household_id` FK REQ;
+- `alert_id` FK REQ;
+- role/order when more than one subject participates;
+- `subject_kind` REQ;
+- typed subject alternative using the same currently governed subject kinds as AlertRuleSubject;
+- trigger/evaluation evidence/provenance.
+
+At least one primary trigger subject is retained for a committed Household alert. Every concrete trigger subject belongs to/is visible in the Alert Household and must be consistent with the originating AlertRule scope/condition. A generic entity ID cannot substitute for this typed evidence.
 
 ### `notification_delivery`
 
@@ -807,7 +856,7 @@ Alert state and delivery state are independent. A future global user notificatio
 - typed canonical target where resolved;
 - lifecycle/status.
 
-Uniqueness/resolution is scoped by provider/integration namespace, type/value and Household when applicable. Provider identity never grants Household authority.
+Uniqueness/resolution is scoped by provider/integration namespace, type/value and Household when applicable. Provider identity never grants Household authority. Any referentially significant canonical target is implemented by a typed association contract rather than an unconstrained generic entity ID.
 
 ## 14. Audit, idempotency and outbox
 
@@ -853,13 +902,13 @@ Outbox is committed in the same durable database transaction as the business mut
 
 ## 15. Ownership summary
 
-Direct Household scope is required at minimum on HouseholdMembership/TimezoneVersion, storage topology, Household-private catalog/evidence, procurement/receiving allocations/effects, inventory/ledger/lineage/waste/count/reconciliation, preparation facts, shelf-life activations/projections, shopping, alerts, Household integrations/imports/references, and Household-scoped audit/idempotency/outbox facts.
+Direct Household scope is required at minimum on HouseholdMembership/TimezoneVersion, storage topology, Household-private catalog/evidence, procurement/receiving allocations/effects, inventory/ledger/lineage/waste/count/reconciliation, preparation facts, shelf-life activations/projections, HouseholdProductPolicy/storage preferences/shopping, alert rules/subjects/alerts/trigger subjects/deliveries, Household integrations/imports/references, and Household-scoped audit/idempotency/outbox facts.
 
 A child carrying Household scope must agree with every Household-owning parent it references.
 
 ## 16. Authoritative versus derived
 
-Authoritative/history-bearing examples include HouseholdTimezoneVersion; Purchase/Receipt facts and allocations; InventoryMovement; Transfer effects and exact lineage; WasteRecord semantics linked to ledger effects; InventoryLedgerBasis and reconciliation outcomes; immutable RecipeVersion/ingredients; Preparation inputs/outputs/allocations/deviations; SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation; conversion/compatibility evidence; committed ShoppingListFulfillment; IdempotencyRecord; AuditEvent; OutboxRecord.
+Authoritative/history-bearing examples include HouseholdTimezoneVersion; Purchase/Receipt facts and allocations; InventoryMovement; Transfer effects and exact lineage; WasteRecord semantics linked to ledger effects; InventoryLedgerBasis and reconciliation outcomes; immutable RecipeVersion/ingredients; Preparation inputs/outputs/allocations/deviations; SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation; conversion/compatibility evidence; HouseholdProductPolicy/storage preferences; committed ShoppingListFulfillment; Alert/AlertTriggerSubject; IdempotencyRecord; AuditEvent; OutboxRecord.
 
 Derived/materializable examples include current StockItem balance, occupancy, EffectiveExpiration, alert/read models and analytical monetary allocations not present in source truth.
 
@@ -883,6 +932,8 @@ DB-01 preserves at least these separations:
 - count observation vs InventoryLedgerBasis vs reconciliation outcome/adjustment;
 - Recipe vs immutable RecipeVersion vs Preparation;
 - shelf-life rule definition vs activation vs EffectiveExpiration projection;
+- HouseholdProductPolicy storage preference vs current StockItem placement;
+- AlertRule condition vs typed rule scope vs concrete Alert trigger evidence vs NotificationDelivery;
 - optional notification preference vs Household AlertRule authority;
 - provider/external identity vs Household authorization;
 - AuditEvent vs domain/inventory history.
