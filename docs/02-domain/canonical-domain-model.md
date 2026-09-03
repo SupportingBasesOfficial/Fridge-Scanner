@@ -39,7 +39,9 @@ A controlled compatibility relationship maps Products that may satisfy an Ingred
 ### Product
 Canonical definition of a stockable food/product identity. A Product may represent a commercial packaged product, loose/unbranded food, a household-defined item, or a reusable identity for prepared food/output. Commercial metadata such as SKU, barcode, brand, manufacturer or Batch is optional and must not be required merely to create valid stock identity.
 
-Product identity is independent from purchase price, Household stock and physical location. A Product may satisfy one or more IngredientConcepts according to controlled compatibility semantics. `Product` therefore does not mean “retail SKU”; it is the canonical stockable subject referenced directly by StockItem.
+Every Product has explicit catalog governance. A globally governed/reusable Product has global catalog scope and no Household owner; ordinary Household members cannot mutate its canonical identity merely because their stock references it. A household-defined Product has Household catalog scope, belongs to exactly one owning Household, and its visibility/edit authority is constrained by that Household. A Household StockItem may reference a global Product or a Product owned by that same Household, but never a Product privately owned by another Household. Promotion, sharing, cloning or canonical merge between household-scoped and global catalog identities requires an explicit governed workflow and must preserve provenance rather than silently changing ownership or visibility.
+
+Product identity is independent from purchase price, Household stock and physical location, but not from its catalog-governance scope. A Product may satisfy one or more IngredientConcepts according to controlled compatibility semantics. `Product` therefore does not mean “retail SKU”; it is the canonical stockable subject referenced directly by StockItem.
 
 ### ProductCategory
 Classifies products and may form a hierarchy.
@@ -54,6 +56,11 @@ Brand and manufacturer are distinct concepts and must not be conflated by the mo
 
 ### MeasurementUnit
 Defines units used by measurable quantities. Quantities must be dimensionally meaningful; mass, volume and count are not interchangeable without an explicit valid conversion rule.
+
+### MeasurementConversionEvidence
+Represents the exact conversion decision used when a committed business fact depends on a contextual, package-equivalence or cross-dimension conversion. It preserves source quantity/unit, target quantity/unit, the exact factor or formula inputs, the conversion profile/rule identity and version, its effective/evaluation context, and provenance sufficient to reproduce the result later.
+
+A committed receipt, movement, reconciliation, preparation allocation, shopping fulfillment or other conserved/reconciled quantity must never be reinterpreted using whatever conversion profile happens to be current later. If its correctness depends on a contextual conversion, the committed fact retains or immutably references the exact MeasurementConversionEvidence used. Corrections to a conversion profile affect future decisions or explicit correction workflows; they do not silently rewrite historical conservation semantics.
 
 ### Money / Currency
 Monetary values carry an exact amount and explicit currency. Binary floating-point representation is not authoritative money semantics. Cross-currency comparison or aggregation requires an explicit conversion rate/source and conversion time/context; the system must never silently treat numerically equal amounts in different currencies as equivalent.
@@ -133,9 +140,11 @@ Every committed reconciliation outcome links back to the InventoryCount/Inventor
 ### ShelfLifeRule
 Represents a versioned rule such as "N days after opening", "N days after preparation", or a rule conditional on storage state. A relative shelf life is a duration/rule, not a calendar date.
 
-Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability may include trigger/event type, storage condition/category and other explicit predicates required by the rule.
+Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability includes a semantic trigger/deadline group identifying which rules are alternatives competing to produce the same kind of deadline for the same authoritative activation fact, plus trigger/event type, storage condition/category and other explicit predicates required by the rule.
 
-When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority resolves ordering. Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates the rule. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
+Precedence is evaluated only among applicable rules inside the same semantic trigger/deadline group. Within such a competing group, exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, explicit priority resolves ordering. Rules activated by independent semantic facts or trigger groups — for example a stock-entry/default deadline and a later opening deadline — do not suppress one another merely because one has a more specific catalog scope. Each independent applicable group may contribute its own expiration candidate, after which candidate-combination semantics choose the operational deadline.
+
+Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates that rule group. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority inside one competing group at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
@@ -143,11 +152,11 @@ Represents meaningful state-changing facts such as opened, frozen, thawed, prepa
 ### EffectiveExpiration
 An explainable materialized projection for a concrete StockItem. Authoritative truth remains SourceExpirationFact records, applicable Batch source facts, lifecycle/storage facts and versioned shelf-life rules.
 
-Each applicable authoritative input produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline.
+Each applicable authoritative input or independent ShelfLifeRule semantic group produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline.
 
 For candidate ordering, a source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source data but is interpreted operationally as the end of that local calendar day in the canonical Household timezone applicable to the StockItem. If the source itself supplies an explicit timezone/offset or a governed external context requires one, that source context is preserved and used instead. The Household timezone used for interpretation must itself be a governed, versioned/as-of context so later timezone-setting changes do not alter historical recomputation. Instant-valued candidates retain their exact instant. Comparisons normalize these operational instants without mutating or fabricating precision in the original source fact.
 
-The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, combination result, evaluation anchor, date-only interpretation timezone/context and ShelfLifeRule version(s) that participated in selection.
+The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, semantic trigger/deadline groups, group-local precedence decisions, combination result, evaluation anchor, date-only interpretation timezone/context and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -249,6 +258,7 @@ Provides a durable publication boundary for asynchronous side effects when a dat
 ```text
 User ──< HouseholdMembership >── Household
                                 │
+                                ├──< Household-scoped Product (private catalog ownership)
                                 ├──< StorageLocation ──< Compartment
                                 │          ▲                ▲
                                 │          └──── placement ─┤
@@ -256,7 +266,7 @@ User ──< HouseholdMembership >── Household
                                 ├──< Purchase ──< PurchaseItem ──< ReceiptItem
                                 ├──< Receipt ──< ReceiptItem ──< InventoryMovement
                                 │                         └──────> StockItem / Batch provenance
-                                ├──< StockItem >──────────────> Product
+                                ├──< StockItem >──────────────> Product [GLOBAL or same-Household]
                                 │       ├──── optional ───────> Batch ─────> Product
                                 │       ├──< SourceExpirationFact ── optional provenance ─> Batch/ReceiptItem
                                 │       ├── placement ────────> StorageLocation XOR Compartment
@@ -278,6 +288,7 @@ User ──< HouseholdMembership >── Household
                                 │       └──< ImportRun ──< ExternalReference
                                 └──< HouseholdProductPolicy >── Product
 
+GLOBAL catalog ──< Product
 IngredientConcept ──< RecipeIngredient >── Recipe
         │
         ├──< ShelfLifeRule
@@ -288,7 +299,8 @@ Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         ├──> ProductCategory
         └── measurement/catalog metadata
 
-ShelfLifeRule ── scoped applicability / deterministic activation-time selection ──> Product | IngredientConcept | governed classification
+MeasurementConversionEvidence ── exact version/factor/context ──> committed reconciled/conserved quantities
+ShelfLifeRule ── group-local precedence / activation-time selection ──> Product | IngredientConcept | governed classification
 StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
 ```
 
@@ -300,12 +312,15 @@ The canonical model rejects these conflations:
 
 - global `User.role` as household authority;
 - Product as synonymous with retail SKU or commercial packaging;
+- household-defined Product without explicit Household ownership/visibility/edit authority;
+- a Household silently mutating a globally governed Product or referencing another Household's private Product;
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - ProductIdentifier uniqueness without scheme/issuer namespace semantics;
 - Product as owner of a single current price;
 - monetary amount without explicit currency or silent cross-currency conversion;
 - unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
+- committed contextual/cross-dimension conversion that later resolves against the current profile instead of preserving the exact version/factor/context used;
 - Purchase as proof that stock physically entered inventory;
 - ReceiptItem linked to a different-Product PurchaseItem without explicit substitution semantics;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
@@ -326,7 +341,8 @@ The canonical model rejects these conflations:
 - provider identity, credentials or notification destination treated as Household authorization;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
-- ShelfLifeRule without explicit applicability, deterministic precedence and an activation-class-specific stable evaluation anchor;
+- ShelfLifeRule precedence applied globally across independent semantic trigger/deadline groups;
+- ShelfLifeRule without explicit applicability, deterministic group-local precedence and an activation-class-specific stable evaluation anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
