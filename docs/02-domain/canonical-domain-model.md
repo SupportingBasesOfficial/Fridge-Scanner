@@ -159,7 +159,7 @@ Precedence is evaluated only among applicable rules inside the same semantic tri
 
 Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates that rule group. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority inside one competing group at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
 
-Every relative rule also preserves the temporal arithmetic necessary to derive one deterministic deadline: duration amount/unit, temporal basis (`ELAPSED` or `LOCAL_CALENDAR`), endpoint semantics, and the governed timezone/version context required for calendar arithmetic. `ELAPSED` arithmetic operates on the instant timeline: seconds, minutes and hours are exact elapsed durations, an elapsed day is exactly 24 hours and an elapsed week is exactly seven elapsed days; month/year units are invalid in elapsed mode. `LOCAL_CALENDAR` arithmetic adds calendar days/weeks/months/years in the governed IANA timezone anchored to the activation fact unless the rule preserves a more specific governed timezone context. It preserves the activation local wall-clock time unless the rule declares another endpoint. A resulting time in a DST gap resolves to the first valid instant after the gap; an ambiguous overlap resolves to the earlier occurrence. End-of-local-day is the exclusive start of the following local calendar day. A deadline expires at the boundary and is valid strictly before it. Rules missing the temporal semantics needed to derive one instant are invalid and must not be published/applied.
+Every relative rule also preserves the temporal arithmetic necessary to derive one deterministic deadline: duration amount/unit, temporal basis (`ELAPSED` or `LOCAL_CALENDAR`), endpoint semantics, and the governed timezone/version context required for calendar arithmetic. `ELAPSED` arithmetic operates on the instant timeline: seconds, minutes and hours are exact elapsed durations, an elapsed day is exactly 24 hours and an elapsed week is exactly seven elapsed days; month/year units are invalid in elapsed mode. `LOCAL_CALENDAR` arithmetic adds calendar days/weeks/months/years in the governed IANA timezone anchored to the activation fact unless the rule preserves a more specific governed timezone context. It preserves the activation local wall-clock time unless the rule declares another endpoint. For month/year units, the full duration amount is applied to the original anchored local date using proleptic-Gregorian year/month arithmetic; the original day-of-month is retained when valid and otherwise clamps to the final valid day of the target month (for example, January 31 plus one month becomes February 28 or 29, and February 29 plus one year becomes February 28). The calculation must not iterate through intermediate clamped dates, so equivalent full-amount evaluation cannot drift by library behavior. After calendar-date resolution, a resulting time in a DST gap resolves to the first valid instant after the gap; an ambiguous overlap resolves to the earlier occurrence. End-of-local-day is the exclusive start of the following local calendar day. A deadline expires at the boundary and is valid strictly before it. Rules missing the temporal semantics needed to derive one instant are invalid and must not be published/applied.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
@@ -178,16 +178,16 @@ Expiration is a state/condition. Disposal is a separate physical action and must
 ## 7. Recipes and preparations
 
 ### Recipe
-Reusable preparation definition. A Recipe is not tied to a physical stock batch or household storage location. Changes to a reusable Recipe create a new immutable RecipeVersion or equivalent immutable snapshot for future executions rather than rewriting the definition used by committed Preparations.
+Reusable preparation definition with explicit catalog governance. A Recipe has exactly one scope: a globally governed/reusable Recipe has no Household owner and ordinary Household authority cannot mutate it; a household-scoped Recipe belongs to exactly one owning Household and its visibility/edit authority is constrained to that Household. A Recipe is not tied to a physical stock batch or household storage location. Promotion, sharing or cloning across scopes is an explicit governed workflow that preserves provenance and never silently changes ownership or visibility. Changes to a reusable Recipe create a new immutable RecipeVersion or equivalent immutable snapshot for future executions rather than rewriting the definition used by committed Preparations.
 
 ### RecipeVersion
-Represents an immutable execution-time snapshot/version of a Recipe, including the exact RecipeIngredient lines, quantities, units, ordering/identity and governed constraints applicable to that version. Historical Preparations reference this immutable version/snapshot so later Recipe edits cannot change past execution semantics.
+Represents an immutable execution-time snapshot/version of a Recipe, including the exact RecipeIngredient lines, quantities, units, ordering/identity and governed constraints applicable to that version. A RecipeVersion inherits the Recipe's scope and owner; it cannot widen visibility, edit authority or reference permissions independently. Historical Preparations reference this immutable version/snapshot so later Recipe edits cannot change past execution semantics.
 
 ### RecipeIngredient
-Defines an `IngredientConcept`, quantity, unit and optional constraints for a Recipe version. It does not reference concrete stock. An exact Product constraint is permitted only when the recipe genuinely requires a specific product.
+Defines an `IngredientConcept`, quantity, unit and optional constraints for a Recipe version. It does not reference concrete stock. An exact Product constraint is permitted only when the recipe genuinely requires a specific product and the Product is visible within the Recipe's catalog scope: a global Recipe may constrain only a global Product, while a household-scoped Recipe may constrain a global Product or a Product owned by that same Household, never another Household's private Product. The same boundary applies to any other recipe metadata that directly references household-scoped catalog data.
 
 ### Preparation
-Concrete execution of a Recipe or ad-hoc preparation inside a Household. A recipe-based Preparation references exactly one immutable RecipeVersion/snapshot and preserves the scaling/yield inputs/context used to derive effective requirements for that execution. An ad-hoc Preparation may omit Recipe/RecipeVersion provenance.
+Concrete execution of a Recipe or ad-hoc preparation inside a Household. A recipe-based Preparation may execute a globally governed RecipeVersion or a RecipeVersion owned by that same Household; it must never execute or infer visibility of another Household's private RecipeVersion. It references exactly one immutable RecipeVersion/snapshot and preserves the scaling/yield inputs/context used to derive effective requirements for that execution. An ad-hoc Preparation may omit Recipe/RecipeVersion provenance.
 
 ### PreparationInput
 Represents one measurable stock input consumed by a Preparation. It identifies the concrete source StockItem, Product, consumed quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-input InventoryMovement decrement effect(s).
@@ -302,7 +302,8 @@ User ──< HouseholdMembership >── Household
                                 │       └── per-line observation/as-of ──> reconciliation adjustment InventoryMovement
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
-                                ├──< Preparation ──> RecipeVersion ──> Recipe
+                                ├──< Household-scoped Recipe ──< RecipeVersion
+                                ├──< Preparation ──> RecipeVersion [GLOBAL or same-Household] ──> Recipe
                                 │              ├──< PreparationInput ──< InventoryMovement >── StockItem
                                 │              │          ├──< PreparationInputAllocation >── RecipeIngredient snapshot
                                 │              │          │              └── CompatibilityDecisionEvidence
@@ -317,6 +318,7 @@ User ──< HouseholdMembership >── Household
                                 └──< HouseholdProductPolicy >── Product
 
 GLOBAL catalog ──< Product
+              └──< Recipe ──< RecipeVersion
 IngredientConcept ──< RecipeIngredient >── RecipeVersion ──> Recipe
         │
         ├──< ShelfLifeRule
@@ -379,9 +381,11 @@ The canonical model rejects these conflations:
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule precedence applied globally across independent semantic trigger/deadline groups;
 - ShelfLifeRule without explicit applicability, deterministic group-local precedence and an activation-class-specific stable evaluation anchor;
-- relative ShelfLifeRule arithmetic that leaves elapsed-vs-calendar basis, timezone/DST handling or endpoint semantics implicit;
+- relative ShelfLifeRule arithmetic that leaves elapsed-vs-calendar basis, month/year invalid-date rollover, timezone/DST handling or endpoint semantics implicit;
 - EffectiveExpiration date-only interpretation whose timezone version is selected from calculation time instead of the preserved SourceExpirationFact domain/source anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
+- Recipe/RecipeVersion without explicit global-or-Household governance scope, ownership, visibility and edit authority;
+- a global Recipe referencing a private Household Product, or a Household Recipe/Preparation referencing another Household's private Recipe/Product;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
