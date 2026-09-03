@@ -74,7 +74,11 @@ Represents a physical receiving operation into a Household. Purchase and Receipt
 ### ReceiptItem
 Represents one received Product/quantity/MeasurementUnit line inside a Receipt. When receipt originates from a Purchase, the ReceiptItem links to the relevant PurchaseItem so partial and incremental receiving can be reconciled at line level.
 
+When a ReceiptItem references a PurchaseItem, both lines must identify the same Product. A received substitution must not masquerade as ordinary provenance to a different purchased Product: substitution requires an explicit governed exception/allocation that records the requested Product, received Product, substituted quantity/MeasurementUnit, reason/approval and provenance before it can reconcile against the PurchaseItem.
+
 A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. Every linked entry effect must represent the same Product as the ReceiptItem, and the sum of the linked committed entry quantities, after valid dimension-safe conversion into one comparison unit, must equal exactly the committed ReceiptItem quantity. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, placement or other identity-affecting state requires a split; splitting may redistribute quantity but must neither create nor destroy it.
+
+Cumulative ordinary ReceiptItems allocated to one PurchaseItem must remain reconcilable to the purchased quantity after valid conversion. Partial receiving is valid. Quantity beyond the purchased amount must remain an explicit over-receipt discrepancy/exception with governed acceptance or correction; it must not silently make the PurchaseItem appear normally fulfilled.
 
 ## 5. Inventory
 
@@ -105,18 +109,20 @@ Represents one atomic business transfer identity backed by linked source-decreme
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
 
 ### InventoryCount
-Represents a physical inventory/counting session scoped to one Household and optionally to a defined counting area such as a StorageLocation or Compartment. The session records an authoritative physical observation time and a corresponding ledger as-of/cutoff point used for reconciliation.
+Represents a physical inventory/counting session scoped to one Household and optionally to a defined counting area such as a StorageLocation or Compartment. A session may carry common timing metadata, but a non-atomic count must not pretend that every line was observed against one instant merely because the lines belong to the same session.
 
-Reconciliation must compare observed quantities with the system state as of that captured cutoff, not whatever balance happens to exist when processing occurs later. If committed movements occur after the cutoff, reconciliation must preserve them: the adjustment is computed against the captured as-of state and committed with concurrency semantics that prevent overwriting or double-accounting for intervening movements. If the captured cutoff can no longer be reconciled safely because required history is unavailable or conflicting, the outcome must be blocked/escalated rather than guessed.
+Each InventoryCountItem records its authoritative physical observation time and the corresponding ledger as-of/cutoff used for that line's reconciliation. A session-level observation time/cutoff may be reused by all lines only when the workflow provides a genuinely atomic/frozen snapshot or equivalent snapshot token that guarantees all observations correspond to the same authoritative inventory state.
+
+Reconciliation compares each observed line with system state as of that line's captured cutoff, not whatever balance happens to exist when processing occurs later. If committed movements occur after a line's cutoff, reconciliation must preserve them: the adjustment is computed against the captured as-of state and committed with concurrency semantics that prevent overwriting or double-accounting for intervening movements. If the captured cutoff can no longer be reconciled safely because required history is unavailable or conflicting, the outcome must be blocked/escalated rather than guessed.
 
 ### InventoryCountItem
-Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
+Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context, and its own authoritative observation time plus ledger as-of/cutoff unless the session proves one common atomic snapshot as defined above. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
 
 When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to represent the observation, but this does not authorize arbitrary allocation across state-distinct holdings.
 
 If more than one existing StockItem is compatible with the observed Product/placement while differing in batch, expiration, package/lifecycle state or other identity-affecting provenance, the discrepancy is ambiguous. The workflow must either capture sufficient count granularity to identify the affected holding(s), or retain the discrepancy in an explicit unresolved/staging state until a governed allocation decision is made. No adjustment may arbitrarily decrement or increment one candidate StockItem merely to force aggregate equality.
 
-Every committed reconciliation outcome links back to the InventoryCount/InventoryCountItem, the captured as-of point, the deterministic allocation/match decision and the committed adjustment movement(s) it produced.
+Every committed reconciliation outcome links back to the InventoryCount/InventoryCountItem, that line's authoritative observation/as-of point, the deterministic allocation/match decision and the committed adjustment movement(s) it produced.
 
 ## 6. Food lifecycle and shelf life
 
@@ -125,7 +131,7 @@ Represents a versioned rule such as "N days after opening", "N days after prepar
 
 Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability may include trigger/event type, storage condition/category and other explicit predicates required by the rule.
 
-When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority resolves ordering. Version/effective-interval selection is evaluated as of the domain occurrence time of the fact that activates the rule. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time. Recomputing later must reuse that same evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
+When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority resolves ordering. Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates the rule. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
@@ -240,7 +246,7 @@ User ──< HouseholdMembership >── Household
                                 │       └── EffectiveExpiration
                                 ├──< InventoryTransfer ── paired conserved effects ──> InventoryMovement
                                 ├──< InventoryCount ──< InventoryCountItem ──> Product
-                                │       └── as-of/cutoff ──> reconciliation adjustment InventoryMovement
+                                │       └── per-line observation/as-of ──> reconciliation adjustment InventoryMovement
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
                                 ├──< Preparation ──< PreparationInput ──< InventoryMovement >── StockItem
@@ -259,7 +265,7 @@ Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         ├──> ProductCategory
         └── measurement/catalog metadata
 
-ShelfLifeRule ── scoped applicability / deterministic as-of selection ──> Product | IngredientConcept | governed classification
+ShelfLifeRule ── scoped applicability / deterministic activation-time selection ──> Product | IngredientConcept | governed classification
 StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
 ```
 
@@ -278,8 +284,10 @@ The canonical model rejects these conflations:
 - monetary amount without explicit currency or silent cross-currency conversion;
 - unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
 - Purchase as proof that stock physically entered inventory;
+- ReceiptItem linked to a different-Product PurchaseItem without explicit substitution semantics;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
-- InventoryCountItem without explicit counted-subject identity;
+- silent over-receipt treated as ordinary PurchaseItem fulfillment;
+- InventoryCountItem without explicit counted-subject identity or its own observation/as-of semantics when the session is not atomic;
 - inventory reconciliation without a captured physical-count as-of/ledger cutoff;
 - ambiguous aggregate count allocated arbitrarily across state-distinct StockItems;
 - InventoryTransfer without same-Product and quantity-conservation semantics;
@@ -288,7 +296,7 @@ The canonical model rejects these conflations:
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
-- ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
+- ShelfLifeRule without explicit applicability, deterministic precedence and an activation-class-specific stable evaluation anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
