@@ -31,9 +31,7 @@ create table fridge.household (
   constraint household_lifecycle_status_nonblank
     check (btrim(lifecycle_status) <> ''),
   constraint household_retired_after_created
-    check (retired_at is null or retired_at >= created_at),
-  constraint household_identity_household_uq
-    unique (household_id, household_id)
+    check (retired_at is null or retired_at >= created_at)
 );
 
 comment on table fridge.household is
@@ -51,7 +49,7 @@ create table fridge.household_role (
 );
 
 comment on table fridge.household_role is
-  'Governed Household-scoped authority role reference. Role meaning is not stored globally on user_profile.';
+  'Governed Household-scoped authority role reference. Concrete role codes are governed reference data and are not invented by DB-02.';
 
 create table fridge.household_timezone_version (
   household_timezone_version_id uuid primary key,
@@ -131,11 +129,11 @@ create table fridge.household_membership (
 );
 
 comment on table fridge.household_membership is
-  'Household-scoped user authority and membership lifecycle. No authority is inferred from user_profile alone.';
+  'Household-scoped user authority and membership lifecycle. An open interval identifies the one current membership record; lifecycle_status does not define cross-row uniqueness.';
 
 create unique index household_membership_one_open_membership_uq
   on fridge.household_membership (household_id, user_id)
-  where effective_to is null and lifecycle_status = 'ACTIVE';
+  where effective_to is null;
 
 create index household_membership_user_household_idx
   on fridge.household_membership (user_id, household_id);
@@ -143,18 +141,8 @@ create index household_membership_user_household_idx
 create index household_membership_household_status_idx
   on fridge.household_membership (household_id, lifecycle_status, user_id);
 
--- Canonical baseline roles are governed reference data. These are domain role codes,
--- not PostgreSQL login/capability roles.
-insert into fridge.household_role (
-  role_code,
-  display_name,
-  description,
-  is_assignable,
-  lifecycle_status
-) values
-  ('OWNER', 'Owner', 'Household owner authority.', true, 'ACTIVE'),
-  ('ADMIN', 'Admin', 'Household administrative authority.', true, 'ACTIVE'),
-  ('MEMBER', 'Member', 'Ordinary Household operating authority.', true, 'ACTIVE'),
-  ('AUDITOR', 'Auditor', 'Household-scoped read/audit authority.', true, 'ACTIVE');
+-- Concrete Household role rows are intentionally not seeded here.
+-- Their business meanings are governed reference data and must be introduced only
+-- by an accepted reference-data contract rather than guessed by physical schema design.
 
 commit;
