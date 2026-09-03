@@ -31,7 +31,7 @@ DB-00: household authority belongs to HouseholdMembership. A platform-level role
 ### Product
 Earlier: category/manufacturer/value were scalar attributes.
 
-DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency and semantic role; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
+DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency and semantic role; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated. A canonical identifier from a globally governed namespace such as GTIN may resolve only to a global Product: a Household-private Product cannot reserve that global key. A Household scan/import may retain an unresolved globally namespaced value as Household-scoped staged evidence with provenance, but it remains outside canonical global uniqueness/resolution until governed resolution links it to a global Product.
 
 ### Product / IngredientConcept compatibility
 Earlier: semantic compatibility could be inferred from current catalog data or names.
@@ -46,7 +46,7 @@ DB-00: Batch and StockItem are distinct concepts. Physical location and mutable 
 ### Stock quantity
 Earlier: `quantidade_atual` was directly mutated by triggers/actions.
 
-DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible. Placement-changing movements also preserve immutable placement facts needed for historical reconstruction instead of relying on current StockItem placement.
+DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible. Where an authoritative source provides a causal sequence/order discriminator needed to distinguish equal occurrence timestamps, that evidence is preserved as part of historical ordering. Placement-changing movements also preserve immutable placement facts needed for historical reconstruction instead of relying on current StockItem placement.
 
 ### Measurement conversion
 Earlier: unit/package conversion could be interpreted as current configuration.
@@ -86,7 +86,7 @@ DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and Effectiv
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
 
-DB-00: each non-atomic InventoryCountItem preserves its own physical observation time and ledger as-of/cutoff; a shared session cutoff is allowed only for a genuinely atomic/frozen snapshot. Reconciliation classifies late-recorded movements by domain occurrence time: pre-observation facts rebase/invalidate the historical reconciliation basis, while genuinely post-observation movements are preserved. Already committed adjustments are corrected through explicit compensating/reconciliation outcomes rather than history mutation. Ambiguous discrepancies remain staged/blocked rather than being arbitrarily allocated across state-distinct StockItems. Historical placement reconstruction uses immutable movement/transfer placement evidence rather than current stock location.
+DB-00: each non-atomic InventoryCountItem preserves its own physical observation time and ledger as-of/cutoff; a shared session cutoff is allowed only for a genuinely atomic/frozen snapshot. Reconciliation classifies late-recorded movements by authoritative domain occurrence ordering: a movement with occurrence time strictly before the observation rebases/invalidates the historical reconciliation basis, while one strictly after is genuinely post-observation and is preserved. When movement and observation timestamps are equal, a trustworthy preserved causal discriminator from the same ordering domain may establish the order; timestamp equality alone is not proof. Without such evidence the case remains staged/blocked rather than being guessed into either side of the observation boundary. Already committed adjustments are corrected through explicit compensating/reconciliation outcomes only for deterministic proven ordering rather than history mutation. Ambiguous discrepancies remain staged/blocked rather than being arbitrarily allocated across state-distinct StockItems. Historical placement reconstruction uses immutable movement/transfer placement evidence rather than current stock location.
 
 ### Shopping / replenishment
 Earlier: shopping intent and purchase fulfillment were underspecified.
@@ -111,7 +111,7 @@ DB-00: expiration may be detected and alerted automatically, but disposal is a p
 ### Scanner / vision / imports
 Earlier: identification/integration outputs could be treated too directly as canonical state.
 
-DB-00: scanner, vision and imported identification results are evidence/proposals with source/provenance. Ambiguous or heuristic output must pass governed matching/review/reconciliation before becoming canonical Product, StockItem or inventory truth. Any integration or import that reads or affects Household-scoped operational data must resolve through an explicit authorized Household scope; every inventory-affecting ImportRun has one target Household, and resulting entities/effects remain inside that boundary.
+DB-00: scanner, vision and imported identification results are evidence/proposals with source/provenance. Ambiguous or heuristic output must pass governed matching/review/reconciliation before becoming canonical Product, StockItem or inventory truth. Any integration or import that reads or affects Household-scoped operational data must resolve through an explicit authorized Household scope; every inventory-affecting ImportRun has one target Household, and resulting entities/effects remain inside that boundary. A globally namespaced identifier observed by a Household remains staged evidence until governed global Product resolution; private Product state cannot consume the global canonical key.
 
 ## Rejected as architecture decisions
 
@@ -133,7 +133,7 @@ DB-00 introduces or makes explicit:
 - explicit global-or-Household IngredientConcept and compatibility-mapping governance;
 - immutable CompatibilityDecisionEvidence for committed concept-based allocations;
 - Product as a stockable identity broader than retail SKU, with explicit global-vs-Household catalog governance;
-- ProductIdentifier with scheme plus issuer/namespace scoping and governed versioned scheme-specific normalization/collision migration;
+- ProductIdentifier with scheme plus issuer/namespace scoping, governed versioned scheme-specific normalization/collision migration, global-namespace ownership restricted to global Products and Household-scoped staged evidence for unresolved global identifiers;
 - MeasurementUnit and dimensional semantics;
 - versioned MeasurementConversionEvidence and exact-rational semantics for committed contextual/package/cross-dimension conversions and conservation;
 - exact Money/Currency semantics plus explicit PurchaseItem pricing basis, line gross/discount/tax-or-charge/net roles and governed rounding/reconciliation;
@@ -141,9 +141,9 @@ DB-00 introduces or makes explicit:
 - one shared physical-receiving PurchaseItem pool across ordinary receipts/substitutions plus a distinct shopping-intent attribution pool;
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch, with a preserved domain/source temporal anchor for deterministic date-only timezone selection;
-- InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
+- InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules, preserved causal ordering evidence when supplied and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects with immutable source/destination placement and shelf-life fact lineage per quantity portion;
-- InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
+- InventoryCount with per-line observation/as-of semantics for non-atomic counts, strict pre/post occurrence ordering, causal-discriminator handling for equal timestamps, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, explicitly global-or-Household governed ShelfLifeRule with activation-time concept CompatibilityDecisionEvidence, semantic trigger/deadline groups, explicit relative-duration arithmetic including canonical month/year rollover, and deterministic EffectiveExpiration;
 - explicit global-or-Household Recipe/RecipeVersion catalog governance and cross-scope reference constraints;
 - immutable RecipeVersion/snapshot for committed recipe execution;
