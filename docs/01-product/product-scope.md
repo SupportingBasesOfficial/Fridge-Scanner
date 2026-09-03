@@ -11,7 +11,8 @@ The platform must be able to represent:
 - multiple users participating in multiple households;
 - multiple storage locations per household;
 - physical compartments inside storage locations;
-- a reusable product catalog and multiple product identifiers;
+- a reusable product catalog with explicit global-versus-Household governance and multiple product identifiers;
+- household-defined product identities whose visibility/edit authority remains inside the owning Household unless an explicit governed sharing/promotion workflow applies;
 - physical stock instances and commercial/manufacturing batches without conflating them;
 - purchases and stock receipts as related but distinct concepts;
 - stock movement as a traceable history rather than only a mutable quantity;
@@ -24,7 +25,7 @@ The platform must be able to represent:
 
 ## Household boundary
 
-`Household` is the primary operational data-isolation boundary. The product UI may present this concept as "Casa", but authorization and data integrity must treat it as an explicit boundary.
+`Household` is the primary operational data-isolation boundary. The product UI may present this concept as "Casa", but authorization and data integrity must treat it as an explicit boundary. Globally governed catalog data may be referenced across Households, but a Household must never gain edit authority over global catalog truth or another Household's private catalog entries merely through reference/use.
 
 ## Non-goals for DB-00
 
