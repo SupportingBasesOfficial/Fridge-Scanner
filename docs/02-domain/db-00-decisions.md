@@ -46,7 +46,9 @@ The projection must never become an unexplained second source of truth.
 
 **Decision:** committed authoritative inventory balances must not become negative through ordinary operations or reconciliation.
 
-Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Imports or integrations with incomplete/contradictory data remain in staging/reconciliation state until they can be committed without fabricating negative stock.
+Physical discrepancies are represented through InventoryCount plus explicit adjustment semantics. Every physical count captures its authoritative observation time and a corresponding ledger as-of/cutoff. Reconciliation is computed against that historical state, not the later processing-time balance, and the resulting adjustment must preserve all movements committed after the cutoff through explicit concurrency semantics. If the as-of state cannot be reconstructed safely, reconciliation must block or escalate rather than guess.
+
+Imports or integrations with incomplete/contradictory data remain in staging/reconciliation state until they can be committed without fabricating negative stock.
 
 If a future business case truly requires negative inventory, it requires an explicit domain decision rather than an accidental relaxation of constraints.
 
