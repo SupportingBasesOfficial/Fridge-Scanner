@@ -81,6 +81,11 @@ A stored StockItem has exactly one placement anchor: either one Compartment or o
 
 A Batch must not be used as the physical-location record.
 
+### SourceExpirationFact
+Represents an authoritative expiration or best-before fact observed for a concrete StockItem/package, independent of whether manufacturer Batch identity is known. It records the source value with its original precision/semantics and provenance, such as package label, ReceiptItem/import, user observation or trusted external source.
+
+A SourceExpirationFact may reference a Batch when the fact is genuinely batch-level, but Batch is not required. Stock must never fabricate a Batch merely to retain a printed expiration date.
+
 ### InventoryMovement
 Represents an immutable committed stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return. Corrections are additional compensating/adjustment movements rather than mutation of committed movement history.
 
@@ -105,13 +110,13 @@ Represents a versioned rule such as "N days after opening", "N days after prepar
 
 Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability may include trigger/event type, storage condition/category and other explicit predicates required by the rule.
 
-When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority and version/effective interval resolve ordering. Conflicting equally specific rules with the same effective priority must be rejected or surfaced for governance rather than selected arbitrarily.
+When multiple rules are applicable, selection must be deterministic through governed precedence semantics: exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, an explicit priority resolves ordering. Version/effective-interval selection is evaluated as of the domain occurrence time of the fact that activates the rule. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time. Recomputing later must reuse that same evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
 
 ### EffectiveExpiration
-An explainable materialized projection for a concrete StockItem. Authoritative truth remains the applicable source expiration facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen, including which ShelfLifeRule version(s) participated in selection.
+An explainable materialized projection for a concrete StockItem. Authoritative truth remains SourceExpirationFact records, applicable Batch source facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen, including the evaluation anchor and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -130,7 +135,9 @@ Concrete execution of a Recipe or ad-hoc preparation inside a Household.
 References the concrete StockItem(s) and quantities consumed by a Preparation.
 
 ### PreparationOutput
-Represents food produced by a Preparation and links that output to resulting inventory so lineage is retained.
+Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
+
+One PreparationOutput may create multiple movement effects/StockItems when placement, package, shelf-life or provenance state requires a split. Multiple preparation outputs may later contribute to compatible holdings, but lineage to each originating PreparationOutput must remain recoverable through immutable movement provenance rather than inferred from the current StockItem balance.
 
 This separation creates the invariant: recipe = definition; preparation = execution.
 
@@ -150,7 +157,9 @@ Stores household/product-specific policy such as minimum desired stock or prefer
 Represents future purchase intent and is distinct from Purchase, which represents an acquisition transaction.
 
 ### ShoppingListItem
-Represents desired items and can originate from manual input, policy, recipe planning or future automation.
+Represents one measurable desired item and can originate from manual input, policy, recipe planning or future automation. A resolved line targets exactly one canonical subject: either a Product when a specific catalog item is desired or an IngredientConcept when any compatible Product can satisfy the intent. It carries requested quantity and MeasurementUnit.
+
+Free text may be retained as unresolved user input/provenance, but unresolved text is not a canonical fulfillment identity. Once fulfilled or matched, a ShoppingListItem may link to one or more PurchaseItems so requested and acquired quantities remain traceable without conflating shopping intent with the purchase transaction.
 
 ## 10. Automation, alerts and integrations
 
@@ -196,6 +205,7 @@ User ──< HouseholdMembership >── Household
                                 │                         └──────> StockItem / Batch provenance
                                 ├──< StockItem >──────────────> Product
                                 │       ├──── optional ───────> Batch ─────> Product
+                                │       ├──< SourceExpirationFact ── optional provenance ─> Batch/ReceiptItem
                                 │       ├── placement ────────> StorageLocation XOR Compartment
                                 │       ├──< InventoryMovement
                                 │       ├──< FoodLifecycleEvent
@@ -205,8 +215,9 @@ User ──< HouseholdMembership >── Household
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
                                 ├──< Preparation ──< PreparationInput >── StockItem
-                                │              └──< PreparationOutput ──> StockItem
-                                ├──< ShoppingList ──< ShoppingListItem
+                                │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
+                                ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
+                                │                              └──< fulfillment >── PurchaseItem
                                 └──< HouseholdProductPolicy >── Product
 
 IngredientConcept ──< RecipeIngredient >── Recipe
@@ -219,8 +230,8 @@ Product ──< ProductIdentifier
         ├──> ProductCategory
         └── measurement/catalog metadata
 
-ShelfLifeRule ── scoped applicability / precedence ──> Product | IngredientConcept | governed classification
-StockItem ──< EffectiveExpiration ── provenance ──> ShelfLifeRule version(s)
+ShelfLifeRule ── scoped applicability / deterministic as-of selection ──> Product | IngredientConcept | governed classification
+StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
 ```
 
 `StorageLocation XOR Compartment` means one stored StockItem has one placement anchor, not two competing placement truths. Explicitly unplaced StockItems are the governed exception.
@@ -231,14 +242,16 @@ The canonical model rejects these conflations:
 
 - global `User.role` as household authority;
 - Batch as both manufacturing lot and physical inventory position;
-- Batch as a mandatory bridge between StockItem and Product;
+- Batch as a mandatory bridge between StockItem and Product or source expiration;
 - Product as owner of a single current price;
-- unitless purchased or counted quantities;
+- unitless purchased, counted, prepared-output or shopping quantities;
 - Purchase as proof that stock physically entered inventory;
 - Receipt without line-level received-quantity and inventory-entry provenance;
 - InventoryCountItem without explicit counted-subject identity;
+- PreparationOutput without explicit quantity/unit and authoritative movement provenance;
+- ShoppingListItem without a canonical subject and measurable requested amount;
 - ambiguous StockItem placement with conflicting location/compartment truths;
-- ShelfLifeRule without explicit applicability and deterministic precedence;
+- ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
