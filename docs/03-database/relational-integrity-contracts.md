@@ -2,385 +2,397 @@
 
 ## Purpose
 
-This document translates DB-00 invariants into minimum logical database integrity requirements. It does not prescribe one SQL implementation mechanism. DB-02 must choose keys, checks, deferred constraints, triggers, procedures or transaction orchestration that enforce the same semantics atomically.
+This document translates DB-00 invariants into minimum logical database integrity requirements. DB-02 may choose checks, composite keys, deferred constraints, triggers, procedures or other database mechanisms, but it must enforce equivalent semantics atomically under concurrency.
 
-## 1. Scope and ownership integrity
+## 1. Scope, ownership and temporal context
 
-### C-001 Household parent/child equality
+### C-001 — Household parent/child equality
 
-Whenever both child and parent carry Household scope, their `household_id` values must be equal. A child cannot be linked to a parent in another Household and rely on application filtering to hide the mistake.
+Whenever child and parent both carry Household scope, their `household_id` values are equal. Application filtering is not a substitute for relational tenant integrity.
 
-### C-002 Catalog scope XOR
+### C-002 — Catalog scope XOR
 
-For Product, IngredientConcept, Recipe, ShelfLifeRule and scoped compatibility mappings:
+Product, IngredientConcept, Recipe, ShelfLifeRule and scoped compatibility mapping obey:
 
-- GLOBAL => `owner_household_id` absent;
-- HOUSEHOLD => `owner_household_id` present;
-- no third ambiguous state is valid.
+- GLOBAL => owner Household absent;
+- HOUSEHOLD => exactly one owner Household.
 
-### C-003 Cross-scope catalog references
+### C-003 — Cross-scope catalog references
 
-A GLOBAL catalog record may reference only GLOBAL records where DB-00 requires global visibility. A HOUSEHOLD catalog record may reference GLOBAL or records owned by that same Household, never records owned by another Household.
+GLOBAL consumers reference only globally visible catalog entities where DB-00 requires global visibility. Household consumers may reference GLOBAL or same-Household entities, never another Household's private data.
 
-### C-004 Stock Product visibility
+### C-004 — Stock Product visibility
 
-A StockItem may reference only:
+StockItem references GLOBAL Product or Product owned by the same Household only.
 
-- a GLOBAL Product; or
-- a Product owned by the StockItem Household.
+### C-005 — Provider identity is not Household authority
 
-### C-005 Household authorization is not provider identity
+Integration/provider/account/destination identifiers never replace explicit Household scope for Household-affecting facts.
 
-Integration/provider/account/destination identifiers cannot substitute for persisted Household scope on Household-affecting operational facts.
+### C-006 — Household timezone intervals
 
-### C-006 Household timezone version intervals
+HouseholdTimezoneVersion effective intervals cannot overlap ambiguously for one Household. Historical facts that used Household timezone semantics retain the exact selected version.
 
-HouseholdTimezoneVersion effective intervals for one Household must not overlap ambiguously. A historical fact that used Household timezone semantics retains the exact selected version; later timezone changes cannot reinterpret committed history.
+## 2. Placement
 
-## 2. Placement integrity
+### C-007 — StockItem placement XOR
 
-### C-007 StockItem placement XOR
+Exactly one current placement mode exists: direct StorageLocation, Compartment, or explicit governed unplaced state.
 
-A stored StockItem has exactly one current placement mode:
+### C-008 — Placement Household equality
 
-1. direct StorageLocation;
-2. Compartment;
-3. explicit governed unplaced state.
+Compartment and parent StorageLocation share Household; StockItem placement resolves to StockItem Household.
 
-If Compartment is selected, a second direct StorageLocation value is not a competing authoritative truth.
+### C-009 — Historical placement immutability
 
-### C-008 Compartment parent scope
+Placement-sensitive movement/transfer effects retain occurrence-time placement snapshots. Current StockItem placement cannot rewrite history.
 
-Compartment and its StorageLocation must belong to the same Household. StockItem placement must resolve to the StockItem Household.
+## 3. Product and identifiers
 
-### C-009 Historical placement is immutable
+### C-010 — Batch Product agreement
 
-Placement-sensitive InventoryMovement/InventoryTransfer effects preserve historical source/destination placement snapshots. Later changes to StockItem current placement cannot rewrite these facts.
+If StockItem references Batch, both reference the same Product.
 
-## 3. Product and identifier integrity
+### C-011 — Global identifier restriction
 
-### C-010 Batch Product agreement
+Globally namespaced canonical ProductIdentifier references only GLOBAL Product.
 
-If StockItem references Batch, `batch.product_id = stock_item.product_id`.
+### C-012 — Identifier uniqueness domain
 
-### C-011 Global identifier restriction
+Canonical ProductIdentifier uniqueness is governed by `(scheme, issuer_or_namespace, normalization_rule_version, normalized_value)`, omitting issuer only for a scheme that defines one global namespace.
 
-A canonical ProductIdentifier from a globally namespaced scheme may reference only a GLOBAL Product.
+### C-013 — Staged claims do not reserve canonical keys
 
-### C-012 Identifier candidate key
+StagedIdentifierClaim never participates in canonical global identifier uniqueness until governed resolution/promotion.
 
-Canonical ProductIdentifier uniqueness is enforced within the governed tuple:
+### C-014 — Normalization history is non-destructive
 
-`(scheme, issuer_or_namespace, normalization_rule_version, normalized_value)`
+Normalization-rule changes create governed new versions/candidates; historical source/normalized values are not mutated in place.
 
-with issuer/namespace omitted only when the scheme itself defines one global namespace.
+## 4. Exact quantities, movements and money
 
-### C-013 Staged claims do not reserve canonical keys
+### C-015 — Exact rational authority
 
-StagedIdentifierClaim is Household-scoped evidence and must not participate in canonical ProductIdentifier uniqueness until governed promotion/resolution succeeds.
+Conserved/reconciled quantities and operative conversion factors use lossless rational semantics. Binary floating point, display rounding or implementation-specific scale cannot decide equality.
 
-### C-014 Normalization history is non-destructive
+### C-016 — Quantity requires MeasurementUnit
 
-Changing normalization rules creates a new governed version and migration/resolution state. Historical source and normalized values are not overwritten in place.
+Every measurable PurchaseItem, ReceiptItem, InventoryMovement, InventoryCountItem, PreparationInput, PreparationOutput, ShoppingListItem, Waste effect allocation and measurable HouseholdProductPolicy threshold carries/resolves a MeasurementUnit.
 
-## 4. Exact quantity integrity
+### C-017 — Conversion evidence
 
-### C-015 Authoritative quantity representation
+A committed contextual/package/cross-dimension conversion affecting conservation/reconciliation retains immutable MeasurementConversionEvidence.
 
-Conserved/reconciled quantities and operative conversion factors must have exact rational semantics. Binary floating point, display rounding or implementation-specific decimal scale may not decide equality.
+### C-018 — Movement StockItem agreement
 
-### C-016 Quantity requires unit
+When InventoryMovement references StockItem, Household and Product match that StockItem.
 
-Every measurable PurchaseItem, ReceiptItem, InventoryMovement, InventoryCountItem, PreparationInput, PreparationOutput, ShoppingListItem and measurable HouseholdProductPolicy threshold carries/resolves a MeasurementUnit.
+### C-019 — Movement sign semantics
 
-### C-017 Conversion evidence
+Committed InventoryMovement is non-zero and its sign agrees with movement kind. A non-quantity event belongs in another relation, not a zero-quantity ledger row.
 
-A committed cross-dimension, package-equivalence or contextual conversion that affects conservation/reconciliation must retain immutable MeasurementConversionEvidence identifying source, target, exact factor/formula inputs, rule/profile version, evaluation context and provenance.
+### C-020 — Money role and currency
 
-### C-018 Movement Product/Household agreement
+PurchaseMoneyFact and PurchaseItemMoneyFact carry explicit semantic role, exact amount and currency. Numerically equal values in different roles/currencies are not interchangeable.
 
-When InventoryMovement references a StockItem, movement Household and Product must equal StockItem Household and Product.
+### C-021 — Pricing-basis reconciliation
 
-### C-019 Movement sign semantics
+When PurchaseItem basis/unit price exists, authoritative line gross reconciles to exact purchased quantity/basis under preserved conversion and currency rounding policy or an explicit pricing discrepancy remains recorded.
 
-Committed InventoryMovement quantity must be non-zero and its sign must agree with the movement semantic class. A future non-quantity event must use a different domain record rather than a zero-quantity InventoryMovement.
+## 5. Receiving
 
-## 5. Purchase and receiving integrity
+### C-022 — Receipt parent Purchase consistency
 
-### C-020 Receipt parent Purchase consistency
+If Receipt identifies a Purchase, every receiving/substitution allocation under that Receipt targets a PurchaseItem of that Purchase.
 
-If `receipt.purchase_id` is present, every ordinary or substitution allocation under that Receipt targets a PurchaseItem belonging to that Purchase. A Receipt without a prior Purchase remains valid.
+### C-023 — Ordinary receiving Product equality
 
-### C-021 Ordinary receipt allocation subject equality
+PurchaseItemReceiptAllocation requires PurchaseItem Product = ReceiptItem Product.
 
-Every PurchaseItemReceiptAllocation requires PurchaseItem Product to equal ReceiptItem Product.
+### C-024 — Substitution is explicit
 
-### C-022 Substitution is explicit
+Different-Product receiving consumes PurchaseItem allowance only through PurchaseItemSubstitutionAllocation. Requested Product = PurchaseItem Product and received Product = ReceiptItem Product.
 
-A different received Product may consume a PurchaseItem receiving allowance only through PurchaseItemSubstitutionAllocation preserving requested Product, received Product, exact quantity/unit, reason/approval and provenance.
+### C-025 — ReceiptItem source allocation conservation
 
-Requested Product must equal PurchaseItem Product. Received Product must equal ReceiptItem Product.
+For one ReceiptItem, ordinary + substitution allocations cannot exceed physically received quantity. Unallocated remainder may remain ad-hoc/unattributed, but cannot be double-attributed.
 
-### C-023 ReceiptItem attribution conservation
+### C-026 — PurchaseItem receiving pool conservation
 
-For one ReceiptItem, cumulative ordinary receipt allocations plus substitution allocations cannot exceed the quantity physically received on that ReceiptItem. Any remaining quantity is unallocated/ad-hoc receiving evidence, not silently attributed to a PurchaseItem.
+For one PurchaseItem, ordinary + substitution allocations cannot exceed purchased quantity as normal fulfillment. Excess is explicit receiving exception state.
 
-### C-024 Receipt effect conservation
+### C-027 — ReceiptItem ledger materialization
 
-For a committed ReceiptItem, ReceiptItemInventoryEffect rows and their linked inventory-entry effects:
+Every ReceiptItemInventoryEffect:
 
-- are in the same Household;
-- represent the same Product;
-- each refer to a valid inventory-entry movement;
-- sum exactly to ReceiptItem quantity after governed exact conversion.
+- belongs to same Household/Product as ReceiptItem;
+- points to a positive inventory-entry InventoryMovement;
+- has a quantity portion exactly reconciling to that movement after governed conversion.
 
-A ReceiptItem that physically entered stock cannot be considered committed/materialized without this exact effect accounting.
+Across all effects, portions sum exactly to ReceiptItem quantity.
 
-### C-025 One entry movement is not double-materialized
+### C-028 — Receipt entry movement single semantic ownership
 
-An InventoryMovement used as a ReceiptItem inventory-entry effect belongs to one ReceiptItem materialization role. It cannot simultaneously materialize unrelated ReceiptItems.
+An InventoryMovement used as ReceiptItem inventory-entry effect cannot simultaneously materialize another ReceiptItem.
 
-### C-026 Receiving pool conservation
+### C-029 — Receiving vs shopping pools
 
-For one PurchaseItem, cumulative ordinary receiving allocations plus governed substitutions cannot exceed purchased quantity as normal fulfillment. Excess exists only through an explicit receiving exception/discrepancy flow.
+Physical receiving/substitution and ShoppingListFulfillment are separate allocation dimensions. A purchased unit may participate once in each dimension; double-counting inside either pool is forbidden.
 
-### C-027 Shopping pool is independent
+## 6. Inventory ledger, transfer and lineage
 
-ShoppingListFulfillment uses a separate attribution pool from physical receiving. The same purchased unit may participate once in each semantic dimension, while double-counting within either pool is forbidden.
+### C-030 — InventoryMovement immutability
 
-### C-028 Pricing basis reconciliation
+Committed movement meaning, Product, quantity, occurrence/causal-order evidence and historical placement/provenance are append-only/correct-by-compensation.
 
-If a PurchaseItem has a basis/unit price, authoritative line gross must reconcile to exact purchased quantity and basis quantity under the preserved conversion and currency rounding policy, or an explicit pricing discrepancy must remain recorded.
+### C-031 — Ledger authority
 
-### C-029 Money role and currency integrity
+Current StockItem balance, if materialized, reconciles to InventoryMovement and is never independent authoritative quantity truth.
 
-PurchaseMoneyFact and PurchaseItemMoneyFact require explicit semantic role, exact amount and currency. Numerically equal amounts of different roles or currencies are not interchangeable facts.
+### C-032 — Transfer pair completeness
 
-## 6. Inventory ledger and lineage integrity
+Each committed InventoryTransfer has exactly one source-decrement and one destination-increment movement through one InventoryTransferEffect; those movements fill that transfer role at most once.
 
-### C-030 InventoryMovement immutability
+### C-033 — Transfer conservation
 
-Committed movement kind, Product, quantity, occurrence identity, causal-order evidence and historical placement/provenance cannot be silently updated/deleted. Corrections use compensating/new movements.
+Transfer effects share Household/Product, preserve source/destination placement snapshots, have correct signs and conserve exactly transferred quantity.
 
-### C-031 Ledger is authoritative
+### C-034 — Lineage Product identity
 
-Current StockItem balance, if materialized, is not independent truth and must reconcile to committed InventoryMovement history for the StockItem/lineage.
+Same-Product InventoryQuantityLineage edges share Product across source/destination endpoints and cannot silently transform Product identity.
 
-### C-032 Transfer pair completeness
+### C-035 — Source-side lineage closure
 
-Every committed InventoryTransfer has exactly one InventoryTransferEffect record containing one source-decrement and one destination-increment movement. Each movement can fill that transfer-effect role at most once.
+For a movement/effect declared as a same-Product lineage-redistribution source, outgoing lineage edges for that operation sum **exactly** to the redistributed source quantity. A disappeared remainder is invalid; real consumption, waste or transformation is represented by its own explicit effect/domain operation.
 
-### C-033 Transfer conservation
+### C-036 — Destination-side lineage closure
 
-Source and destination transfer effects:
+For every destination effect declared lineage-derived, incoming lineage edges sum exactly to destination quantity.
 
-- share Household;
-- share Product;
-- preserve source/destination placement snapshots;
-- have the correct decrement/increment signs;
-- conserve exactly the transferred quantity after governed conversion.
+### C-037 — Preparation is not ordinary same-Product lineage
 
-### C-034 Lineage edge Product integrity
+Product-transforming Preparation uses explicit Preparation input/output conservation; it cannot be represented as a same-Product InventoryQuantityLineage shortcut.
 
-A same-Product InventoryQuantityLineage edge has one Product identity shared by its source and destination movement/StockItem endpoints. Same-Product split/transfer/merge lineage cannot silently transform Product identity.
+### C-038 — Shelf-life lineage propagation
 
-### C-035 Source-side lineage conservation
+All applicable SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation evidence for a conserved source portion propagates to destination portion through QuantityLineageShelfLifeFact.
 
-For each source movement/effect participating in same-Product redistribution, outgoing lineage quantities cannot exceed the source conserved quantity after exact conversion.
+## 7. Waste and disposal
 
-### C-036 Destination-side lineage conservation
+### C-039 — Waste semantic/ledger separation
 
-For each destination movement/effect declared lineage-derived, incoming lineage quantities reconcile exactly to the destination quantity unless the operation is an explicitly modeled Product-transforming domain process such as Preparation. Product transformation cannot masquerade as ordinary same-Product lineage.
+WasteRecord stores reason/classification/provenance. Authoritative stock reduction remains InventoryMovement.
 
-### C-037 Shelf-life lineage propagation
+### C-040 — Waste movement integrity
 
-Every applicable SourceExpirationFact, FoodLifecycleEvent and already-activated ShelfLifeRuleActivation for a conserved source portion propagates through QuantityLineageShelfLifeFact to the destination portion. Redistribution cannot reset expiry/lifecycle state.
+Every WasteRecordMovement:
 
-## 7. Inventory count integrity
+- shares Household with WasteRecord;
+- points to a stock-reducing waste/disposal InventoryMovement;
+- carries a quantity portion exactly reconciling to that movement after governed conversion.
 
-### C-038 Historical basis is first-class
+### C-041 — Waste movement single semantic ownership
 
-Every InventoryCountItem references an immutable InventoryLedgerBasis describing the captured historical ledger cutoff/watermark and ordering context used for reconciliation. Processing time/current balance cannot substitute for that basis.
+One waste/disposal InventoryMovement cannot be reused as the quantity effect of unrelated WasteRecords.
 
-### C-039 Per-line observation basis
+## 8. Inventory count and reconciliation
 
-Non-atomic counts preserve authoritative observation time and ledger basis per InventoryCountItem. A session-level basis may be reused only when one authoritative frozen/atomic snapshot or equivalent trustworthy token applies to all lines.
+### C-042 — Historical basis is first-class
 
-### C-040 Count subject identity
+Each InventoryCountItem references immutable InventoryLedgerBasis. Processing-time/current balance cannot substitute for captured cutoff/watermark/ordering context.
 
-Each InventoryCountItem identifies Product, observed exact quantity/unit and placement when relevant; an existing StockItem link is optional so newly discovered stock remains representable.
+### C-043 — Per-line observation basis
 
-### C-041 Ambiguous holding allocation
+Non-atomic count sessions preserve observation time and basis per line. One basis may be shared only when a genuinely atomic/frozen snapshot or equivalent authoritative token applies to all lines.
 
-When an aggregate count cannot deterministically distinguish state-distinct StockItems, no arbitrary adjustment allocation may commit. The item remains unresolved/staged or is recounted/resolved through explicit evidence.
+### C-044 — Count subject identity
 
-### C-042 Late-event ordering
+InventoryCountItem identifies Product, exact observed quantity/unit and placement when relevant; existing StockItem link is optional for newly discovered stock.
 
-Historical reconciliation classifies movements by authoritative domain occurrence ordering, not recording/commit time.
+### C-045 — Ambiguous holding allocation
 
-### C-043 Equal-time ambiguity
+Aggregate discrepancy across state-distinct StockItems cannot be allocated arbitrarily. It remains unresolved/staged unless deterministic evidence permits InventoryCountAllocation.
 
-Equal occurrence timestamps alone do not prove causal order. They may be ordered only by a trustworthy ordering discriminator from the same ordering domain. Without it, the case remains ambiguous and cannot authorize guessed rebase, post-observation preservation or compensation.
+### C-046 — Late-event ordering
 
-### C-044 Reconciliation adjustment provenance
+Reconciliation classifies movements by authoritative domain occurrence/causal order, not recording time.
 
-Any committed count adjustment references the exact count item, InventoryLedgerBasis and reconciliation outcome/evidence that justified it.
+### C-047 — Equal-time ambiguity
 
-### C-045 Late pre-observation correction
+Equal timestamps alone are not causal proof. Ordering requires trustworthy discriminator from the same ordering domain; otherwise case remains ambiguous.
 
-If a later-recorded movement is proven to precede the observation, it invalidates/rebases the historical basis. If a prior adjustment already committed, immutable history stays and only an explicit compensating/reconciliation outcome may correct it when deterministic; otherwise the case blocks/escalates.
+### C-048 — Reconciliation adjustment provenance and uniqueness
 
-## 8. Recipe and preparation integrity
+Any count adjustment references exact InventoryCountItem, InventoryLedgerBasis and InventoryReconciliationOutcome. One adjustment InventoryMovement cannot serve unrelated reconciliation outcomes.
 
-### C-046 RecipeVersion immutability
+### C-049 — Late pre-observation correction
 
-A Recipe-based Preparation references one immutable RecipeVersion/snapshot. Ingredient lines and constraints used by committed Preparations cannot be reinterpreted by editing the current Recipe.
+A later-recorded but proven pre-observation movement rebases/invalidates historical basis. Already committed history is corrected only through explicit compensating/reconciliation outcome when deterministic; otherwise block/escalate.
 
-### C-047 Recipe scope visibility
+## 9. Recipes and preparation
 
-A GLOBAL RecipeVersion references only GLOBAL catalog entities. A Household RecipeVersion may reference GLOBAL or same-Household catalog entities. Preparation may execute only GLOBAL or same-Household RecipeVersion.
+### C-050 — RecipeVersion immutability
 
-### C-048 Preparation input movement conservation
+Recipe-based Preparation references immutable RecipeVersion/snapshot; later Recipe edits cannot reinterpret history.
 
-PreparationInputMovement rows and linked decrement InventoryMovements share Household/Product and sum exactly to the PreparationInput consumed quantity after governed conversion.
+### C-051 — Recipe catalog visibility
 
-### C-049 Source-side preparation accounting
+GLOBAL RecipeVersion references only GLOBAL catalog data. Household RecipeVersion may reference GLOBAL or same-Household data. Preparation executes only GLOBAL or same-Household version.
 
-For recipe-based PreparationInput:
+### C-052 — PreparationInput movement conservation
 
-`sum(recipe allocations) + sum(explicit source-side deviations) = committed input quantity`
+Each PreparationInputMovement:
 
-No unclassified remainder is valid.
+- points to one decrement movement in same Household/Product/source lineage;
+- carries a quantity portion exactly reconciling to that movement;
+- uses an InventoryMovement unique within this semantic materialization role.
 
-### C-050 Recipe-line target accounting
+All linked portions sum exactly to PreparationInput quantity.
 
-Allocations into each RecipeIngredient reconcile against the effective scaled requirement. Any allowed underage, overage, tolerance or substitution is an explicit governed deviation preserving expected/actual quantity, unit, policy/reason and provenance/approval.
+### C-053 — Preparation input source-side accounting
 
-### C-051 Compatibility evidence
+For recipe-based input: `sum(recipe allocations) + sum(explicit source deviations) = committed input quantity`. No unclassified remainder.
 
-Concept-based PreparationInputAllocation requires immutable CompatibilityDecisionEvidence proving Product-to-IngredientConcept compatibility at the decision point.
+### C-054 — Recipe-line target accounting
 
-### C-052 Preparation output conservation
+Allocations into each RecipeIngredient reconcile to preserved scaled requirement. Allowed under/over/tolerance/substitution is explicit governed deviation.
 
-PreparationOutputMovement rows and linked increment InventoryMovements share Household/Product and sum exactly to PreparationOutput quantity.
+### C-055 — Compatibility evidence
 
-### C-053 Preparation is the Product-transformation boundary
+Concept-based PreparationInputAllocation retains immutable CompatibilityDecisionEvidence.
 
-Input-to-output Product transformation is represented through Preparation input/output conservation semantics, not through same-Product InventoryQuantityLineage edges. This separation must remain explicit.
+### C-056 — PreparationOutput movement conservation
 
-## 9. Shelf-life integrity
+Each PreparationOutputMovement:
 
-### C-054 Rule scope visibility
+- points to one increment movement in same Household/Product;
+- carries a quantity portion exactly reconciling to that movement;
+- uses an InventoryMovement unique within this semantic materialization role.
 
-GLOBAL ShelfLifeRule references only GLOBAL catalog targets. Household ShelfLifeRule references GLOBAL or same-Household targets and applies only within its owning Household.
+All linked portions sum exactly to PreparationOutput quantity.
 
-### C-055 Stable activation evidence
+## 10. Shelf life
 
-ShelfLifeRuleActivation preserves exact rule version, authoritative activation anchor, selected HouseholdTimezoneVersion when applicable, more-specific source temporal context and concept compatibility evidence when applicable. Recalculation does not substitute current rule/mapping/timezone state.
+### C-057 — Rule scope visibility
 
-### C-056 Group-local precedence
+GLOBAL ShelfLifeRule references only global catalog targets. Household ShelfLifeRule references GLOBAL or same-Household targets and applies only inside its Household.
 
-Rule competition/precedence is evaluated only within the same semantic trigger/deadline group. Independent trigger groups may each contribute expiration candidates.
+### C-058 — Current DB-01 applicability target is typed
 
-### C-057 Deterministic temporal arithmetic
+Current DB-01 ShelfLifeRule target is Product XOR IngredientConcept. A future governed classification is invalid until a reviewed typed classification relation/version/reference contract is added. Generic classification IDs are forbidden.
 
-Relative shelf-life rules retain temporal basis, amount/unit, timezone/version context, endpoint semantics and the accepted DB-00 calendar/DST/month-end rules. Physical implementation cannot delegate ambiguous behavior to a date-library default.
+### C-059 — Stable activation evidence
 
-### C-058 Effective-expiration candidate XOR
+ShelfLifeRuleActivation preserves exact rule version, authoritative activation anchor, exact HouseholdTimezoneVersion when applicable, more-specific source temporal context and concept CompatibilityDecisionEvidence when applicable.
 
-Each EffectiveExpirationCandidate references exactly one candidate source: SourceExpirationFact XOR ShelfLifeRuleActivation. The candidate must belong to the same Household and applicable StockItem/lineage history.
+### C-060 — Group-local precedence
 
-### C-059 Effective expiration reproducibility
+Precedence applies only inside the same semantic trigger/deadline group; independent groups may each contribute candidates.
 
-EffectiveExpiration is a projection over preserved source/rule candidates and evidence. It must be reproducible from authoritative facts and versioned decision context.
+### C-061 — Deterministic temporal arithmetic
 
-## 10. Shopping integrity
+Relative rules preserve amount/unit, elapsed-vs-calendar basis, endpoint, timezone/version and accepted DB-00 DST/month-end semantics. Library defaults cannot decide domain meaning.
 
-### C-060 Shopping subject XOR
+### C-062 — EffectiveExpiration candidate XOR
 
-Resolved ShoppingListItem selects exactly one canonical subject: Product XOR IngredientConcept. Free text may remain provenance only.
+Each EffectiveExpirationCandidate references exactly one SourceExpirationFact XOR ShelfLifeRuleActivation and must be applicable to same Household/StockItem lineage history.
 
-### C-061 Product-target fulfillment
+### C-063 — EffectiveExpiration reproducibility
 
-A Product-targeted ShoppingListItem may be fulfilled only by PurchaseItems of that exact Product.
+EffectiveExpiration is derived/materializable and reproducible from authoritative facts plus preserved rule/compatibility/timezone evidence.
 
-### C-062 Concept-target fulfillment
+## 11. Shopping
 
-An IngredientConcept-targeted ShoppingListItem may be fulfilled only with immutable CompatibilityDecisionEvidence supporting the purchased Product at the decision point.
+### C-064 — Shopping subject XOR
 
-### C-063 Shopping allocation conservation
+Resolved ShoppingListItem targets Product XOR IngredientConcept. Free text is provenance only.
 
-Cumulative ShoppingListFulfillment quantity drawn from a PurchaseItem cannot exceed purchased quantity within the shopping-intent pool after governed exact conversion.
+### C-065 — Product-target fulfillment
 
-## 11. Alerts, integrations and imports
+Product-targeted ShoppingListItem is fulfilled only by exact Product PurchaseItem.
 
-### C-064 Alert ownership chain
+### C-066 — Concept-target fulfillment
 
-AlertRule, Alert and NotificationDelivery for Household-derived conditions remain in the same Household. Alert preserves originating rule/trigger context; delivery preserves exactly one Alert and recipient/destination attempt provenance.
+IngredientConcept-targeted ShoppingListItem requires immutable CompatibilityDecisionEvidence for purchased Product.
 
-### C-065 Typed business subjects where referential integrity matters
+### C-067 — Shopping pool conservation
 
-Alert or other operational subject links that require referential integrity use typed FK/association structures. An unconstrained generic `entity_type/entity_id` pair must not replace enforceable business relationships merely for schema convenience.
+ShoppingListFulfillment allocations from one PurchaseItem cannot exceed purchased quantity within the shopping-intent pool after exact conversion.
 
-### C-066 Import Household binding
+## 12. Alerts, integrations and imports
 
-Every inventory-affecting ImportRun identifies exactly one target Household. ExternalReference and all produced canonical operational facts remain within that boundary.
+### C-068 — Alert ownership chain
 
-### C-067 External reference namespace
+Household AlertRule, Alert and NotificationDelivery share Household; Alert preserves originating rule/trigger and delivery preserves one Alert/recipient attempt.
 
-ExternalReference uniqueness/resolution is scoped by provider/integration namespace, reference type/value and Household when operationally Household-scoped. An unqualified external value cannot become global authority.
+### C-069 — Typed operational subjects
 
-### C-068 Secret separation
+Referentially significant operational target links use typed FKs/associations. Generic type/id pairs cannot replace domain referential integrity.
 
-Integration credentials/secrets are represented by secure secret references, not arbitrary domain JSON containing secret material.
+### C-070 — Global notification preference boundary
 
-## 12. Idempotency, audit and outbox
+A future user-global preference may influence delivery behavior only. It cannot grant Household authority and is not required by current DB-01.
 
-### C-069 Idempotency candidate identity
+### C-071 — Import Household binding
 
-Idempotency logical uniqueness is scoped by target scope identity/Household where applicable, principal, operation/command identity and client key. Client key alone is never a cross-tenant key.
+Every inventory-affecting ImportRun has exactly one target Household; ExternalReference and produced operational facts remain within that boundary.
 
-### C-070 Idempotency fingerprint conflict
+### C-072 — External reference namespace
 
-Reuse of the same scoped idempotency identity with a different canonical semantic request fingerprint, target or command version is rejected and cannot overwrite/reinterpret the original outcome.
+ExternalReference resolution/uniqueness is scoped by provider/integration namespace, type/value and Household when operationally Household-scoped.
 
-### C-071 Authorization before replay
+### C-073 — Secret separation
 
-Stored idempotent results are not disclosed merely because a client knows the key; current authorization is re-established on every retry.
+Integration secrets are secure references, not arbitrary domain JSON secret payloads.
 
-### C-072 Mutation and outbox atomicity
+## 13. Idempotency, audit and outbox
 
-When a committed business mutation requires asynchronous publication, its OutboxRecord is committed in the same database transaction boundary as the authoritative mutation. External publication occurs after that durable boundary.
+### C-074 — Scoped idempotency identity
 
-### C-073 Audit is not ledger
+Idempotency uniqueness includes target scope/Household identity when applicable, principal, operation/command and client key. Client key alone is never cross-tenant identity.
 
-AuditEvent cannot substitute for InventoryMovement or other domain history. Inventory/domain facts remain valid independently from audit/log storage concerns.
+### C-075 — Idempotency fingerprint conflict
 
-## 13. Transaction-boundary contracts
+Same scoped identity with different semantic request fingerprint, target or command version is conflict, never overwrite/re-execution.
 
-The following operations require one atomic logical database transaction or an equivalent serializable single-winner contract:
+### C-076 — Authorization before idempotent replay
 
-- creating a ReceiptItem materialization with its ReceiptItemInventoryEffect rows and entry movements;
-- allocating ReceiptItems ordinarily or by substitution against PurchaseItem receiving pools;
-- committing an InventoryTransfer, paired source/destination effects and required lineage;
-- committing an inventory-count adjustment and reconciliation outcome against one captured InventoryLedgerBasis;
-- committing Preparation input/output facts, allocations/deviations and authoritative movement effects;
-- consuming a ShoppingListFulfillment allocation from a PurchaseItem attribution pool;
-- creating or observing the winner of an IdempotencyRecord execution;
-- committing a business mutation with its OutboxRecord.
+Current authorization is re-established before stored idempotent result is disclosed.
 
-No implementation may rely on a check-then-write sequence that allows concurrent transactions to over-allocate a ReceiptItem, PurchaseItem receiving pool, PurchaseItem shopping pool, Preparation quantity, duplicate an idempotent mutation or violate Household scope between validation and commit.
+### C-077 — Mutation/outbox atomicity
 
-## 14. Delete/update semantics
+Required OutboxRecord commits in the same durable database transaction as authoritative business mutation; external publication follows that boundary.
 
-DB-02 must classify foreign-key deletion behavior explicitly. Default logical policy:
+### C-078 — Audit is not ledger
 
-- authoritative/history-bearing facts: RESTRICT ordinary parent deletion or preserve tombstoned identity;
-- pure dependent drafts/transient staging: governed cascade may be allowed before commit;
-- catalog entities referenced by committed history: retire/version/tombstone instead of hard-delete when deletion would destroy reproducibility;
-- HouseholdTimezoneVersion referenced by history: immutable/restricted from destructive deletion;
-- Household deletion: explicit lifecycle/data-retention workflow, never uncontrolled relational cascade across audit/history.
+AuditEvent cannot substitute for InventoryMovement or domain history. Generic audit target identity is evidentiary metadata only.
 
-## 15. Gate rule
+## 14. Transaction-boundary contracts
 
-A physical schema is not DB-01 compliant merely because every relation exists. It is compliant only if these constraints remain enforceable under concurrency, retries, delayed/offline facts, historical rule/timezone changes and the reconciliation edge cases defined by DB-00.
+One atomic logical database transaction or equivalent serializable single-winner contract is required for at least:
+
+- ReceiptItem materialization with ReceiptItemInventoryEffect and entry movements;
+- ordinary/substitution receiving allocations against both ReceiptItem source and PurchaseItem receiving pools;
+- InventoryTransfer paired effects and required lineage;
+- same-Product redistribution lineage closure;
+- WasteRecord plus committed waste movements when created as one operation;
+- InventoryCount adjustment/reconciliation against captured InventoryLedgerBasis;
+- Preparation inputs/outputs, movement links, allocations/deviations and conservation;
+- ShoppingListFulfillment allocation;
+- Idempotency winner creation/observation;
+- business mutation + OutboxRecord.
+
+Check-then-write application sequences that allow concurrent over-allocation, duplicate movement reuse, idempotent duplication or Household mismatch are non-compliant.
+
+## 15. Delete/update semantics
+
+DB-02 explicitly chooses physical delete behavior under these logical defaults:
+
+- authoritative/history-bearing facts: ordinary deletion restricted or identity tombstoned;
+- transient uncommitted staging: governed cascade may be allowed;
+- catalog/rule/evidence/timezone records referenced by history: retire/version/tombstone, not destructive deletion;
+- Household deletion: explicit retention/lifecycle workflow, never uncontrolled cascade through ledger/audit/history.
+
+## 16. Gate rule
+
+A physical schema is DB-01 compliant only if these contracts remain enforceable under concurrency, retries, delayed/offline facts, historical rule/timezone changes and DB-00 reconciliation edge cases. Existence of similarly named tables alone is insufficient.
