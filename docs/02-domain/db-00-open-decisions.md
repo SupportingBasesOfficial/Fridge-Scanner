@@ -2,7 +2,7 @@
 
 ## Status
 
-The ten DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-010. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
+The eleven DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-011. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
 No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
@@ -38,7 +38,7 @@ Resolution: `Household` is the canonical architecture/code term. User interfaces
 
 ### OD-008 — PurchaseItem monetary basis → resolved by D-008
 
-Resolution: purchase-line money is modeled by explicit semantic role rather than a generic ambiguous price. Unit/basis price identifies its pricing quantity/unit; gross, discount, tax/line charges and net are explicit and reconciled under a governed rounding policy. Purchase-level charges remain distinct unless an explicit derived allocation preserves its method and provenance.
+Resolution: purchase-line money is modeled by explicit semantic role rather than a generic ambiguous price. Unit/basis price identifies its pricing quantity/unit and must extend against exactly converted purchased quantity into line gross under the governed rounding policy, or preserve an explicit pricing discrepancy; gross, discount, tax/line charges and net are explicit and reconciled under that policy. Purchase-level charges remain distinct unless an explicit derived allocation preserves its method and provenance.
 
 ### OD-009 — Recipe catalog governance → resolved by D-009
 
@@ -47,6 +47,10 @@ Resolution: Recipe and RecipeVersion have explicit global-or-Household scope. Ve
 ### OD-010 — PurchaseItem allocation dimensions → resolved by D-010
 
 Resolution: receipt/substitution allocations share one physical-receiving pool, while ShoppingListFulfillment uses a separate shopping-intent pool. Each pool independently prevents double counting against PurchaseItem quantity; a unit may occur once in each because arrival evidence and intent attribution are different facts.
+
+### OD-011 — Idempotency scope and request identity → resolved by D-011
+
+Resolution: idempotency identity is bound to target Household/system scope, authenticated principal, operation and client key, with a canonical fingerprint of the complete normalized request. Matching retries reuse the original outcome after authorization; mismatched reuse is rejected, and another tenant's record cannot suppress execution or disclose results.
 
 ## Decisions deliberately deferred to later phases
 
