@@ -20,43 +20,45 @@ Any new reviewer finding that can produce materially different relational models
 
 ### O-001 — Polymorphic historical subject references — CLOSED
 
-**Resolution:** referentially significant business relationships use typed FKs/association relations; unconstrained generic `entity_type/entity_id` cannot replace domain integrity. Generic stable target identity remains allowed only as evidentiary metadata such as AuditEvent target identity.
+Referentially significant business relationships use typed FKs/association relations. Generic stable target identity remains allowed only as evidentiary metadata such as AuditEvent target identity.
 
 ### O-002 — Quantity-lineage granularity — CLOSED
 
-**Resolution:** `inventory_quantity_lineage` is an explicit conserved source-movement → destination-movement edge carrying optional endpoint StockItems, Product and exact quantity portion. `quantity_lineage_shelf_life_fact` attaches inherited expiration/lifecycle/rule evidence to that exact edge. Product-transforming Preparation is excluded from same-Product lineage.
+`inventory_quantity_lineage` is an exact conserved source-movement → destination-movement edge with Product/quantity; shelf-life evidence attaches to that edge. Product-transforming Preparation is excluded from same-Product lineage.
 
 ### O-003 — Count historical basis identity — CLOSED
 
-**Resolution:** introduced immutable `inventory_ledger_basis`. Every InventoryCountItem references the exact historical cutoff/watermark/ordering context used for reconciliation. One basis can be shared across lines only under a genuinely atomic/frozen snapshot or equivalent authoritative token.
+Introduced immutable `inventory_ledger_basis`; each CountItem references exact historical cutoff/watermark/ordering context. Shared basis requires genuinely atomic/frozen authoritative snapshot.
 
 ### O-004 — Rule applicability to governed classification — CLOSED
 
-**Resolution:** current DB-01 has concrete referential targets Product XOR IngredientConcept. DB-00's “another governed classification introduced later” is a future extension point, not permission for a generic/untyped classification target. ProductCategory is not silently promoted into a universal ShelfLifeRule taxonomy.
+Current ShelfLifeRule has Product XOR IngredientConcept targets. Future governed classification requires reviewed typed schema evolution; ProductCategory is not silently promoted to a universal taxonomy.
 
 ### O-005 — Global notification preferences — CLOSED / DEFERRED FEATURE
 
-**Resolution:** no `user_notification_preference` relation is required for DB-01 acceptance. If introduced later, it is separate user-level preference data affecting delivery behavior only and cannot replace Household AlertRule/Alert authorization.
+No global preference relation is required now. A future preference affects delivery only and cannot replace Household AlertRule/Alert authorization.
 
 ### O-006 — Receipt allocation and line-to-ledger provenance — CLOSED
 
-**Resolution:** ordinary same-Product receiving uses `purchase_item_receipt_allocation`; substitution uses a separate allocation relation; `receipt_item_inventory_effect` links each physically received quantity portion to the InventoryMovement effect that materialized it. ReceiptItem source quantity and PurchaseItem receiving pool have independent conservation constraints.
+Ordinary receiving uses `purchase_item_receipt_allocation`; substitutions are separate; `receipt_item_inventory_effect` links physical received portions to ledger effects. Source and receiving-pool conservation are independent.
 
 ### O-007 — Household timezone historical reproducibility — CLOSED
 
-**Resolution:** introduced versioned `household_timezone_version` with non-ambiguous effective intervals. Historical expiration/source-rule evidence references the exact selected version when Household timezone semantics participate.
+Introduced versioned `household_timezone_version` with non-ambiguous intervals and exact historical references when Household timezone participates.
 
 ### O-008 — HouseholdProductPolicy preferred-storage semantics — CLOSED
 
-**Resolution:** preferred storage defaults are no longer generic policy metadata. `household_product_storage_preference` is a ranked typed child targeting exactly one same-Household StorageLocation, same-Household Compartment or governed StorageLocation kind. The preference is explicitly not StockItem placement truth and cannot itself move stock.
+Preferred storage defaults use ranked typed `household_product_storage_preference`: same-Household StorageLocation XOR Compartment XOR governed StorageLocation kind. It is policy, not placement truth.
 
 ### O-009 — Alert subject/scope relational representation — CLOSED
 
-**Resolution:** every Household AlertRule has one typed primary `alert_rule_subject`; every committed Alert retains typed `alert_trigger_subject` evidence. Current subject kinds are Household, Product, StockItem, StorageLocation, Compartment and HouseholdProductPolicy. Future subject kinds require reviewed typed schema evolution.
+Every Household AlertRule has typed primary `alert_rule_subject`; committed Alert retains typed `alert_trigger_subject`. Future subject kinds require reviewed typed extension.
+
+### O-010 — ExternalReference canonical-target semantics — CLOSED
+
+DB-00 defines ExternalReference as external import/reconciliation provenance, not a universal polymorphic canonical-target relation. DB-01 therefore removes any generic canonical target pointer. A canonical domain fact that must retain external provenance uses its own typed FK/provenance association (or a dedicated typed relation) with reviewed cardinality. Future import target classes are schema evolution, not metadata.
 
 ## C. Explicitly deferred to DB-02 — not DB-01 blockers
-
-The following choices must be made during physical-schema design and must conform to DB-01; they do not justify weakening or delaying the logical contracts:
 
 - concrete primary-key type and UUID version;
 - exact SQL encoding of rational numbers;
@@ -77,30 +79,31 @@ The following choices must be made during physical-schema design and must confor
 
 ## D. Rejected “open decisions”
 
-These are already closed by DB-00/DB-01 and must not be reopened as implementation convenience:
+Already closed and must not be reopened for implementation convenience:
 
-- whether StockItem can be the sole mutable quantity truth — no;
-- whether Household roles belong globally on User — no;
-- whether Batch is mandatory for stock identity — no;
-- whether private Products can own global GTIN-like keys — no;
-- whether ReceiptItem↔PurchaseItem allocation quantity may remain implicit — no;
-- whether ReceiptItem may materialize inventory without explicit ledger-effect provenance — no;
-- whether ambiguous count discrepancies may be auto-allocated — no;
-- whether reconciliation may use current/processing-time balance instead of a captured historical basis — no;
-- whether receipt and shopping allocations share one pool — no;
-- whether current conversion/compatibility/timezone rules may reinterpret committed history — no;
-- whether InventoryTransfer can be represented only by changing current placement — no;
-- whether vague many-to-many lineage is sufficient for quantity-portion inheritance — no;
-- whether Product-transforming Preparation is ordinary same-Product quantity lineage — no;
-- whether Recipe edits may reinterpret committed Preparation — no;
-- whether exact conservation may rely on floating point/display rounding — no;
-- whether provider identity can imply Household authority — no;
-- whether an idempotency key is globally unique without scope/fingerprint — no;
-- whether generic polymorphic IDs may replace enforceable business FKs — no;
-- whether ProductCategory may be assumed to be the universal future classification taxonomy — no;
-- whether optional global notification preferences grant or imply Household authority — no;
-- whether preferred storage defaults may remain opaque policy metadata — no;
-- whether AlertRule scope or Alert trigger subject may be deferred to generic DB-02 IDs — no.
+- StockItem as sole mutable quantity truth — no;
+- Household roles globally on User — no;
+- Batch mandatory for stock identity — no;
+- private Products owning global GTIN-like keys — no;
+- implicit ReceiptItem↔PurchaseItem allocation quantity — no;
+- ReceiptItem materialization without explicit ledger-effect provenance — no;
+- arbitrary count allocation — no;
+- processing-time/current balance as count basis — no;
+- one shared receipt/shopping allocation pool — no;
+- current conversion/compatibility/timezone rules reinterpreting history — no;
+- transfer represented only by changing current placement — no;
+- vague many-to-many lineage for quantity inheritance — no;
+- Product-transforming Preparation as ordinary same-Product lineage — no;
+- Recipe edits reinterpreting committed Preparation — no;
+- floating point/display rounding deciding conservation — no;
+- provider identity implying Household authority — no;
+- globally unscoped idempotency key — no;
+- generic polymorphic IDs replacing enforceable business FKs — no;
+- ProductCategory assumed as universal future shelf taxonomy — no;
+- global notification preference granting Household authority — no;
+- preferred storage defaults remaining opaque policy metadata — no;
+- AlertRule/Alert subject identity deferred to generic DB-02 IDs — no;
+- ExternalReference acting as a universal polymorphic canonical-target pointer — no.
 
 ## Exit criterion
 
