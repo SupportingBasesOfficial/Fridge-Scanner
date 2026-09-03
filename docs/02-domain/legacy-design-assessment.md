@@ -31,7 +31,7 @@ DB-00: household authority belongs to HouseholdMembership. A platform-level role
 ### Product
 Earlier: category/manufacturer/value were scalar attributes.
 
-DB-00: price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
+DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
 
 ### Batch / lot
 Earlier: `Lote` combined product batch, compartment, quantity, package state and expiration.
@@ -41,7 +41,7 @@ DB-00: Batch and StockItem are distinct concepts. Physical location and mutable 
 ### Stock quantity
 Earlier: `quantidade_atual` was directly mutated by triggers/actions.
 
-DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable.
+DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible.
 
 ### Consumption / movement / disposal
 Earlier: separate operational tables each mutated the current quantity.
@@ -51,7 +51,7 @@ DB-00: their stock effect is unified under InventoryMovement semantics while dom
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock.
 
-DB-00: Purchase and Receipt are separate concepts. ReceiptItem carries received Product/quantity/unit, optional PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation.
+DB-00: Purchase and Receipt are separate concepts. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment.
 
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
@@ -61,17 +61,17 @@ DB-00: RecipeIngredient targets IngredientConcept, which expresses the semantic 
 ### Preparation execution
 Earlier: recipe definition and execution/stock effects were not cleanly separated.
 
-DB-00: PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation across stock changes.
+DB-00: PreparationInput and PreparationOutput carry measurable quantities and link to authoritative InventoryMovement effects, preserving exact lineage and conservation across stock changes. For recipe-based execution, PreparationInputAllocation maps measurable input quantity to the exact RecipeIngredient line it fulfills, preserving repeated-line identity, compatibility constraints and partial/multiple-source fulfillment.
 
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch; rule version selection and candidate combination are deterministic and provenance-preserving.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch; rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
 
-DB-00: InventoryCount records physical observation time plus a ledger as-of/cutoff. Reconciliation preserves intervening movements and must stage/block ambiguous discrepancies rather than arbitrarily allocate them across state-distinct StockItems.
+DB-00: each non-atomic InventoryCountItem preserves its own physical observation time and ledger as-of/cutoff; a shared session cutoff is allowed only for a genuinely atomic/frozen snapshot. Reconciliation classifies late-recorded movements by domain occurrence time: pre-observation facts rebase/invalidate the historical reconciliation basis, while genuinely post-observation movements are preserved. Already committed adjustments are corrected through explicit compensating/reconciliation outcomes rather than history mutation. Ambiguous discrepancies remain staged/blocked rather than being arbitrarily allocated across state-distinct StockItems.
 
 ### Shopping / replenishment
 Earlier: shopping intent and purchase fulfillment were underspecified.
@@ -91,7 +91,7 @@ DB-00: expiration may be detected and alerted automatically, but disposal is a p
 ### Scanner / vision / imports
 Earlier: identification/integration outputs could be treated too directly as canonical state.
 
-DB-00: scanner, vision and imported identification results are evidence/proposals with source/provenance. Ambiguous or heuristic output must pass governed matching/review/reconciliation before becoming canonical Product, StockItem or inventory truth.
+DB-00: scanner, vision and imported identification results are evidence/proposals with source/provenance. Ambiguous or heuristic output must pass governed matching/review/reconciliation before becoming canonical Product, StockItem or inventory truth. Any integration or import that reads or affects Household-scoped operational data must resolve through an explicit authorized Household scope; every inventory-affecting ImportRun has one target Household, and resulting entities/effects remain inside that boundary.
 
 ## Rejected as architecture decisions
 
@@ -110,22 +110,23 @@ They remain open until later phases select technology based on accepted requirem
 DB-00 introduces or makes explicit:
 
 - IngredientConcept and controlled Product compatibility for recipe/planning semantics;
+- Product as a stockable identity broader than retail SKU;
 - ProductIdentifier with scheme plus issuer/namespace scoping;
 - MeasurementUnit and dimensional semantics;
 - exact Money/Currency semantics for transaction values;
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch;
-- InventoryMovement, conservation rules and reconcilable balances;
+- InventoryMovement with occurrence/recording time, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects;
-- InventoryCount with observation time, ledger cutoff, explicit reconciliation and ambiguity staging;
+- InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
 - FoodLifecycleEvent, ShelfLifeRule and deterministic EffectiveExpiration;
-- Preparation, PreparationInput and PreparationOutput with durable lineage;
+- Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
 - idempotency, concurrency and cross-household isolation invariants;
 - source/provenance and distinct occurrence/recording time;
 - scanner/vision/import evidence governance;
-- integration normalization/import lifecycle;
+- Household-scoped integration/import normalization lifecycle;
 - Outbox as a possible durable async publication boundary.
 
 ## Status of earlier DDL
