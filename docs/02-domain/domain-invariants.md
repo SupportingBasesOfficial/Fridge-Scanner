@@ -37,7 +37,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 17. Stock-changing commands must define atomic concurrency behavior so two valid concurrent actions cannot silently produce an invalid balance.
 18. Retrying an idempotent stock-changing command with the same identity must not apply the quantity delta twice.
 19. Committed historical movement records are immutable for business truth; corrections are represented by explicit compensating/adjustment semantics rather than rewriting committed history.
-20. Physical inventory reconciliation must create an explicit adjustment or equivalent auditable outcome rather than silently overwriting history.
+20. Physical inventory reconciliation must create an explicit adjustment or equivalent auditable outcome rather than silently overwriting history. Each InventoryCountItem must identify the counted Product, observed quantity and MeasurementUnit, plus placement when relevant to the count scope. It may reference an existing StockItem when matched, but unmatched newly discovered physical stock must remain representable without fabricating an existing StockItem; the count line must still carry enough subject identity to produce a deterministic reconciliation outcome.
 
 ## Purchase and receiving
 
@@ -55,7 +55,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 ## Shelf life and food lifecycle
 
 28. Relative shelf life is a rule/duration triggered by an event; it is not stored as if it were an absolute calendar date.
-29. Effective expiration of a concrete StockItem must be explainable from source expiration and applicable lifecycle/storage rules.
+29. Effective expiration of a concrete StockItem must be explainable from source expiration and applicable lifecycle/storage rules. Every ShelfLifeRule must have explicit governed applicability and version/effective-interval semantics, and rule selection must be deterministic: more specific scope outranks broader scope, then explicit priority and version/effective interval resolve ordering. Equally specific conflicting rules with the same effective priority must be rejected or surfaced for governance rather than chosen arbitrarily. EffectiveExpiration must retain provenance to the selected ShelfLifeRule version(s).
 30. Opening, freezing, thawing, preparing or other lifecycle changes may alter shelf-life semantics without changing Product identity.
 31. Expiration does not prove physical disposal.
 32. A scheduled job may detect/flag expiration and create alerts, but it must not assert that food was physically discarded without an explicit domain action or trusted external evidence.
