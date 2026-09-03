@@ -187,3 +187,15 @@ Working decision register for DB-01. These decisions refine persistence shape wi
 **Decision:** business relationships that require referential integrity use explicit typed FK/association structures. Generic type/id pairs are permitted only for evidentiary metadata such as AuditEvent targets where they do not substitute for domain integrity.
 
 **Reason:** schema convenience must not erase enforceable referential semantics.
+
+## L-031 — Future governed classification is an explicit schema extension point
+
+**Decision:** the current DB-01 ShelfLifeRule model has concrete referential applicability targets for Product and IngredientConcept. The DB-00 phrase “another governed classification introduced later” does not authorize a generic untyped classification ID now.
+
+**Reason:** DB-00 explicitly frames additional classification as future governance. A future target becomes valid only when its typed relation, ownership/versioning and reference constraints are introduced through reviewed schema evolution. ProductCategory is not silently assumed to be that universal taxonomy.
+
+## L-032 — Global notification preferences are optional future user-level data
+
+**Decision:** DB-01 does not require a `user_notification_preference` relation for acceptance.
+
+**Reason:** DB-00 permits such a preference but does not require it. If introduced later, it influences NotificationDelivery behavior only and cannot grant Household operational authority or replace Household AlertRule/Alert ownership.
