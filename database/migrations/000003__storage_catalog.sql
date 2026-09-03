@@ -204,8 +204,6 @@ create table fridge.product_ingredient_compatibility (
   ingredient_concept_id uuid not null,
   effective_from timestamptz not null,
   effective_to timestamptz,
-  priority integer not null default 0,
-  constraint_metadata jsonb,
   lifecycle_status text not null default 'ACTIVE',
   recorded_at timestamptz not null default clock_timestamp(),
   constraint compatibility_owner_fk
@@ -234,7 +232,7 @@ create table fridge.product_ingredient_compatibility (
 );
 
 comment on table fridge.product_ingredient_compatibility is
-  'Versioned governed Product↔IngredientConcept mapping. GLOBAL-only and same-Household visibility rules are enforced by the governed mutation boundary because the allowed reference set is GLOBAL OR same-Household.';
+  'Versioned governed Product↔IngredientConcept mapping. The initial DB-02 schema supports unconditional compatibility only. Any future invariant-bearing compatibility constraints require a reviewed typed/versioned relational extension; they may not be hidden in JSON. GLOBAL-only and same-Household visibility rules are enforced by the governed mutation boundary.';
 
 create index compatibility_product_concept_effective_idx
   on fridge.product_ingredient_compatibility (
@@ -251,8 +249,8 @@ create table fridge.compatibility_decision_evidence (
   ingredient_concept_id uuid not null,
   compatibility_mapping_id uuid not null,
   evaluation_anchor timestamptz not null,
-  decision_context jsonb,
-  approval_context jsonb,
+  approved_by_user_id uuid,
+  approval_reason text,
   provenance text,
   recorded_at timestamptz not null default clock_timestamp(),
   constraint compatibility_evidence_household_fk
@@ -270,11 +268,15 @@ create table fridge.compatibility_decision_evidence (
   constraint compatibility_evidence_mapping_fk
     foreign key (compatibility_mapping_id)
     references fridge.product_ingredient_compatibility (compatibility_mapping_id)
+    on update restrict on delete restrict,
+  constraint compatibility_evidence_approver_fk
+    foreign key (approved_by_user_id)
+    references fridge.user_profile (user_id)
     on update restrict on delete restrict
 );
 
 comment on table fridge.compatibility_decision_evidence is
-  'Immutable historical compatibility decision evidence. Endpoint identity/version consistency is verified by the governed commit routine before application roles receive write access.';
+  'Immutable historical compatibility decision evidence for the currently supported unconditional mapping contract. Mapping endpoint identity/version and Household visibility are verified by the governed commit routine before application roles receive write access. Future typed compatibility constraints must add typed evidence, not opaque JSON.';
 
 create index compatibility_evidence_household_idx
   on fridge.compatibility_decision_evidence (household_id, evaluation_anchor desc)
