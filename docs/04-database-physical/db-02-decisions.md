@@ -96,11 +96,15 @@ Currency-specific scale/rounding policy is applied only at governed monetary bou
 
 ## P-017 — Current-balance materialization
 
-**Decision:** initial physical contract permits a recomputable balance projection maintained transactionally or asynchronously only if staleness semantics are explicit. Authoritative mutation validation must use committed ledger truth or a transactionally equivalent locked aggregate, not an eventually consistent cache.
+**Decision:** initial physical contract uses an exact ordinary SQL view over committed InventoryMovement as the canonical current-balance read projection. It is read-only and derives every balance from ledger truth.
+
+**Evolution:** a transactionally or asynchronously maintained projection table may be introduced later only after measured need; it remains disposable/rebuildable and cannot be used as authoritative mutation truth unless the transaction also proves equivalence to the locked ledger aggregate.
 
 ## P-018 — EffectiveExpiration materialization
 
-**Decision:** EffectiveExpiration is a recomputable projection with derivation/version/status and candidate provenance. It may be stored for reads but can be invalidated/rebuilt from authoritative source/rule/lineage evidence.
+**Decision:** initial physical contract stores EffectiveExpiration as a derived projection table with derivation version, status, recomputation provenance and candidate links. It is explicitly invalidatable/rebuildable from authoritative SourceExpirationFact, lifecycle, rule-activation and lineage evidence.
+
+**Reason:** expiration is read-heavy and its derivation graph is non-trivial; persisted projection avoids repeatedly rebuilding the graph while preserving DB-00's non-authoritative semantics.
 
 ## P-019 — Time representation
 
@@ -160,8 +164,38 @@ Currency-specific scale/rounding policy is applied only at governed monetary bou
 
 ## P-033 — Schema namespaces
 
-**Decision:** canonical application tables/functions live in explicit application-owned schemas rather than relying on an uncontrolled default `public` namespace. Provider-managed schemas remain separate. Exact namespace names are fixed by the SQL baseline before migration acceptance.
+**Decision:** canonical application objects use schema `fridge`; privileged implementation helpers use `fridge_internal`. Canonical truth does not depend on uncontrolled `public`. Provider-managed schemas remain separate.
 
 ## P-034 — Extension posture
 
 **Decision:** no extension is accepted merely for convenience. Core PostgreSQL is sufficient for the initial DB-02 contracts; any later extension requires an explicit decision recording portability, backup, upgrade and hosted-provider compatibility.
+
+## P-035 — Transaction functions own decisions; deferred guards own postconditions
+
+**Decision:** transaction-safe mutation routines are the single business-decision implementation for cross-row operations. Deferred constraint triggers, when used, independently verify narrow mathematical/relational postconditions at transaction end; they must not reimplement policy selection, substitutions, compatibility decisions or reconciliation classification.
+
+**Reason:** this gives defense in depth without creating two diverging business-rule engines.
+
+## P-036 — Initial database privilege classes
+
+**Decision:** the provider-neutral capability model is `fridge_owner`, `fridge_migrator`, `fridge_app`, `fridge_worker`, and `fridge_readonly`.
+
+- `fridge_owner`: NOLOGIN ownership capability for canonical schemas/objects where the hosting environment permits it.
+- `fridge_migrator`: schema-evolution capability used only by deployment tooling.
+- `fridge_app`: normal backend transaction role, subject to RLS and restricted mutation entry points.
+- `fridge_worker`: background-job role, also constrained to explicit operations/Household scope.
+- `fridge_readonly`: operational read capability with RLS unless an explicitly governed support context exists.
+
+Login credentials are environment bindings to these capabilities, not the capabilities themselves.
+
+## P-037 — Supabase privilege mapping boundary
+
+**Decision:** Supabase `anon` and `authenticated` receive no direct canonical table privileges by default. Browser/mobile Data API exposure, if later desired, occurs only through explicitly reviewed views/RPC contracts. Supabase `service_role` is not the normal database application authority and must not be used to bypass RLS as the ordinary request path.
+
+Provider administrator roles may create/own capability roles as required by the hosted environment, but provider role names never become domain authorization semantics.
+
+## P-038 — Trusted RLS context threat boundary
+
+**Decision:** custom per-transaction context is defense against accidental cross-tenant queries by trusted backend/worker connections, not cryptographic proof against a fully compromised database credential. Only server-side components holding the database capability may set it; untrusted browser/mobile clients never receive those credentials.
+
+**Reason:** PostgreSQL custom GUCs are not an authentication mechanism. Authentication/current authority remains established at the service boundary; RLS plus structural FKs limits blast radius and accidental scope errors.
