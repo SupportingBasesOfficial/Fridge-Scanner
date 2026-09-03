@@ -38,102 +38,152 @@ Working decision register for DB-01. These decisions refine persistence shape wi
 
 **Reason:** historical meaning must survive later rule/profile changes.
 
-## L-006 — Receipt effects are separate ledger facts
+## L-006 — Purchase money is role-bearing relational data
 
-**Decision:** ReceiptItem never acts as the inventory ledger row itself. It links to one or more InventoryMovement entry effects.
+**Decision:** Purchase-level and PurchaseItem-level monetary facts are represented by explicit role-bearing logical facts, not a generic unlabeled `price` numeric.
 
-**Reason:** receiving semantics and ledger semantics have different identities/cardinalities; split placement/batch/provenance requires multiple effects while preserving one received line.
+**Reason:** pricing basis, line gross, discount, tax/charge, net and Purchase-level charges have different semantics and reconciliation rules even when numeric values coincide.
 
-## L-007 — Receiving and shopping fulfillment use distinct allocation relations and pools
+## L-007 — ReceiptItem does not directly own PurchaseItem provenance
 
-**Decision:** physical receiving/substitution and ShoppingList fulfillment are independent semantic allocation dimensions over PurchaseItem quantity.
+**Decision:** ordinary receiving is represented by `purchase_item_receipt_allocation` with explicit quantity/unit; substitutions use a separate `purchase_item_substitution_allocation`.
+
+**Reason:** a direct nullable `receipt_item.purchase_item_id` makes allocation quantity implicit and cannot cleanly represent partial/multi-line source provenance. Explicit allocations let both the ReceiptItem source quantity and PurchaseItem receiving allowance be conserved independently.
+
+## L-008 — ReceiptItem materialization uses an explicit ledger-effect relation
+
+**Decision:** `receipt_item_inventory_effect` links each ReceiptItem quantity portion to the InventoryMovement effect that physically materialized it.
+
+**Reason:** ReceiptItem and InventoryMovement have different identities/cardinalities; a received line may split across placement/batch/state while all entry effects must still sum exactly to what physically arrived.
+
+## L-009 — Receiving and shopping fulfillment use distinct allocation relations and pools
+
+**Decision:** ordinary/substitution receiving and ShoppingList fulfillment are independent semantic allocation dimensions over PurchaseItem quantity.
 
 **Reason:** a purchased unit can both physically arrive and fulfill the shopping intent that caused the purchase without double-counting inside either dimension.
 
-## L-008 — InventoryMovement is the quantity-history authority
+## L-010 — InventoryMovement is the quantity-history authority
 
 **Decision:** StockItem may expose/materialize current balance for read efficiency, but no mutable current quantity field is the sole source of truth.
 
 **Reason:** historical reconstruction, delayed facts, corrections and transfers require immutable ledger history.
 
-## L-009 — Current placement and historical placement are distinct
+## L-011 — Current placement and historical placement are distinct
 
 **Decision:** StockItem stores current placement mode; placement-sensitive movements/transfers preserve immutable effect-time placement snapshots.
 
 **Reason:** changing current StockItem placement cannot rewrite historical per-location truth.
 
-## L-010 — Transfer is a business identity plus paired ledger effects
+## L-012 — Transfer is a business identity plus paired ledger effects
 
 **Decision:** InventoryTransfer has its own identity and exactly one source-decrement plus one destination-increment movement effect, with explicit quantity lineage.
 
 **Reason:** transfer conservation and source/destination placement must be enforceable and auditable as one domain operation without collapsing two ledger effects into one mutable row.
 
-## L-011 — Count reconciliation has explicit outcome identity
+## L-013 — Same-Product quantity lineage is an explicit source→destination conserved edge
 
-**Decision:** InventoryCountItem does not directly mutate stock. Reconciliation produces an explicit `inventory_reconciliation_outcome`, optionally linked to an adjustment movement.
+**Decision:** `inventory_quantity_lineage` identifies source movement, destination movement, optional endpoint StockItems, Product and exact conserved quantity portion.
 
-**Reason:** unresolved/blocked/no-change/adjusted/compensated states and historical basis evidence must be representable without fabricating a ledger effect.
+**Reason:** lineage must be precise enough to enforce source/destination conservation and carry expiry/provenance by quantity portion. A vague many-to-many relationship is insufficient.
 
-## L-012 — Ambiguous count allocation is represented, not guessed
+**Boundary:** Product-transforming Preparation is not represented as same-Product lineage; transformation uses Preparation input/output conservation semantics.
+
+## L-014 — Shelf-life inheritance is attached to exact lineage edges
+
+**Decision:** `quantity_lineage_shelf_life_fact` carries inherited SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation references across conserved redistribution edges.
+
+**Reason:** split/transfer/merge must not reset lifecycle/expiration state or lose which quantity portion inherited which fact.
+
+## L-015 — Count reconciliation has explicit historical basis and outcome identities
+
+**Decision:** each InventoryCountItem references immutable `inventory_ledger_basis`; reconciliation produces explicit `inventory_reconciliation_outcome`, optionally linked to an adjustment movement.
+
+**Reason:** processing-time balance is not the physical count basis, and unresolved/blocked/no-change/adjusted/compensated states must be representable without fabricating a ledger effect.
+
+## L-016 — Session-level count basis is conditional, not assumed
+
+**Decision:** multiple count lines may share one InventoryLedgerBasis only when a genuinely atomic/frozen snapshot or equivalent authoritative token applies to all of them. Otherwise each line has its own basis.
+
+**Reason:** long/offline counting sessions can span intervening stock changes.
+
+## L-017 — Ambiguous count allocation is represented, not guessed
 
 **Decision:** when a count can deterministically allocate among holdings, `inventory_count_allocation` records the decision. Otherwise the count remains unresolved/staged.
 
 **Reason:** arbitrary allocation would corrupt batch, expiry and provenance state.
 
-## L-013 — Recipe executions pin immutable RecipeVersion
+## L-018 — Recipe executions pin immutable RecipeVersion
 
 **Decision:** recipe-based Preparation references an immutable RecipeVersion and PreparationInputAllocation targets immutable RecipeIngredient line identity.
 
 **Reason:** later Recipe edits cannot reinterpret historical preparation fulfillment.
 
-## L-014 — Preparation source-side and target-side accounting are separate constraints
+## L-019 — Preparation source-side and target-side accounting are separate constraints
 
 **Decision:** PreparationInput allocations/deviations exhaust each consumed input, while allocations into each RecipeIngredient independently reconcile to the scaled requirement.
 
 **Reason:** satisfying only one side permits unaccounted consumption or silent over/under-fulfillment.
 
-## L-015 — ShelfLifeRule activation is persisted separately from EffectiveExpiration projection
+## L-020 — Household timezone is versioned historical reference data
+
+**Decision:** persist `household_timezone_version` with non-ambiguous effective intervals; historical shelf-life/source-expiration evidence references the exact selected version when Household timezone participates in interpretation.
+
+**Reason:** changing a Household timezone after an expiration fact/activation cannot change historical EffectiveExpiration recomputation.
+
+## L-021 — ShelfLifeRule activation is persisted separately from EffectiveExpiration projection
 
 **Decision:** persist immutable `shelf_life_rule_activation` decision evidence and derive/materialize `effective_expiration` plus candidates separately.
 
-**Reason:** activation-time rule/mapping/timezone context is historical truth; the final expiration is a recomputable projection over candidates.
+**Reason:** activation-time rule/mapping/timezone context is historical truth; final expiration is a recomputable projection over preserved candidates.
 
-## L-016 — Shelf-life facts propagate through explicit quantity lineage
+## L-022 — EffectiveExpiration candidate source is constrained XOR
 
-**Decision:** split/transfer/merge quantity lineage carries inherited shelf-life fact references for each quantity portion.
+**Decision:** each candidate references exactly one SourceExpirationFact or one ShelfLifeRuleActivation.
 
-**Reason:** moving or splitting stock must not reset opening/expiry state.
+**Reason:** provenance must be relationally unambiguous and candidates from unrelated histories cannot be silently mixed.
 
-## L-017 — ShoppingList subject is relational XOR
+## L-023 — ShoppingList subject is relational XOR
 
 **Decision:** resolved ShoppingListItem targets Product XOR IngredientConcept; unresolved text remains provenance only.
 
 **Reason:** fulfillment compatibility and quantity accounting need a canonical subject.
 
-## L-018 — Integration binding and imported operational scope are persisted
+## L-024 — Integration binding and imported operational scope are persisted
 
 **Decision:** inventory-affecting Integration use resolves to Household scope, and ImportRun directly retains exactly one target Household.
 
 **Reason:** provider identity/credential possession must never become implicit tenant authority.
 
-## L-019 — Idempotency uniqueness is scoped, not global-by-key
+## L-025 — External references remain namespaced
 
-**Decision:** candidate identity is target scope + principal + operation/command + client key, with immutable canonical request fingerprint.
+**Decision:** ExternalReference resolution/uniqueness is scoped by provider/integration namespace, reference type/value and Household where operationally Household-scoped.
+
+**Reason:** the same provider value can be valid in different accounts/tenants and must not become accidental global identity.
+
+## L-026 — Idempotency uniqueness is scoped, not global-by-key
+
+**Decision:** candidate identity is target scope + Household/global scope identity + principal + operation/command + client key, with immutable canonical request fingerprint.
 
 **Reason:** prevents cross-Household collisions and payload mutation under reused keys.
 
-## L-020 — Mutation + outbox share one durable database commit boundary
+## L-027 — Mutation + outbox share one durable database commit boundary
 
 **Decision:** OutboxRecord is logically committed in the same transaction as the authoritative mutation that requires asynchronous publication.
 
 **Reason:** avoids state where business mutation commits but required publication intent is lost, or publication claims a mutation that never committed.
 
-## L-021 — History-bearing referenced records retire/version instead of unsafe hard-delete
+## L-028 — History-bearing referenced records retire/version instead of unsafe hard-delete
 
-**Decision:** catalog/rule/evidence identities referenced by committed history cannot be hard-deleted in a way that destroys reproducibility. Physical FK delete behavior is finalized in DB-02, but the logical requirement is RESTRICT/tombstone/version semantics.
+**Decision:** catalog/rule/evidence/timezone identities referenced by committed history cannot be hard-deleted in a way that destroys reproducibility. Physical FK delete behavior is finalized in DB-02, but the logical requirement is RESTRICT/tombstone/version semantics.
 
-## L-022 — Transactional allocation checks are part of the database contract
+## L-029 — Transactional allocation checks are part of the database contract
 
-**Decision:** receiving pools, shopping pools, preparation conservation, transfer pairs, count adjustments and idempotency winner selection cannot be implemented as non-atomic check-then-write application logic.
+**Decision:** ReceiptItem attribution, PurchaseItem receiving pools, shopping pools, preparation conservation, transfer pairs/lineage, count adjustments and idempotency winner selection cannot be implemented as non-atomic check-then-write application logic.
 
 **Reason:** concurrency is part of correctness, not an optimization detail.
+
+## L-030 — Referentially significant polymorphism must remain typed
+
+**Decision:** business relationships that require referential integrity use explicit typed FK/association structures. Generic type/id pairs are permitted only for evidentiary metadata such as AuditEvent targets where they do not substitute for domain integrity.
+
+**Reason:** schema convenience must not erase enforceable referential semantics.
