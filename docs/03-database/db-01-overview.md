@@ -52,7 +52,7 @@ If a lower layer conflicts with a higher layer, the lower layer is wrong until t
 
 ### R1 — Household isolation is structurally recoverable
 
-Every Household-owned operational relation must carry a direct `household_id` or have one single, non-ambiguous immutable ownership path to a parent that carries it. High-risk operational facts such as inventory movements, counts, receipts, preparations, alerts, imports and idempotency records retain direct Household scope even when it could be derived, because authorization and integrity must not depend on a long mutable join path.
+Every Household-owned operational relation must carry a direct `household_id` or have one single, non-ambiguous immutable ownership path to a parent that carries it. High-risk operational facts such as inventory movements, counts, receipts, preparations, waste, alerts, imports and idempotency records retain direct Household scope even when it could be derived, because authorization and integrity must not depend on a long mutable join path.
 
 ### R2 — Global and Household catalog scopes are explicit
 
@@ -69,7 +69,8 @@ Where DB-00 defines XOR semantics, DB-01 retains them explicitly rather than col
 - Product versus IngredientConcept shopping subject;
 - StorageLocation versus Compartment placement anchor;
 - global versus Household ownership;
-- ordinary receipt provenance versus explicit substitution allocation.
+- ordinary receipt allocation versus explicit substitution allocation;
+- SourceExpirationFact versus ShelfLifeRuleActivation as one expiration candidate source.
 
 ### R5 — Exact quantities are logical rationals
 
@@ -81,7 +82,7 @@ A monetary fact is never a naked numeric value. Logical monetary facts preserve 
 
 ### R7 — Evidence is first-class when history depends on it
 
-Conversion, compatibility, normalization, temporal-selection and reconciliation evidence that can change future interpretation is stored or immutably referenced by committed business facts. History must remain reproducible without consulting only the latest mutable rule/profile.
+Conversion, compatibility, normalization, temporal-selection and reconciliation evidence that can change future interpretation is stored or immutably referenced by committed business facts. History must remain reproducible without consulting only the latest mutable rule/profile/timezone configuration.
 
 ### R8 — Immutable facts are corrected, not rewritten
 
@@ -100,16 +101,18 @@ An application-level check alone is insufficient for invariants that can be expr
 - `logical-relational-model.md` — canonical logical relations and cardinalities.
 - `relational-integrity-contracts.md` — keys, uniqueness, XOR rules, conservation and transaction-level constraints.
 - `db-01-decisions.md` — accepted logical modeling decisions and rationale.
-- `db-01-open-decisions.md` — only unresolved choices that materially change the logical model; physical implementation choices are not treated as DB-01 blockers.
+- `db-01-open-decisions.md` — unresolved logical choices, or an explicit statement that none are currently known; physical implementation choices are not DB-01 blockers.
+- `db-01-review-findings.md` — independent review traceability for findings, corrections and exact review-baseline context.
 
 ## Gate to leave DB-01
 
 DB-01 is complete only when:
 
-1. every DB-00 domain concept that requires durable persistence has a logical home or an explicit reason for remaining derived/transient;
+1. every DB-00 domain concept requiring durable persistence has a logical home or an explicit reason for remaining derived/transient;
 2. every DB-00 relationship/cardinality has one unambiguous relational representation;
 3. Household isolation and catalog visibility can be enforced from persisted scope data;
-4. inventory conservation, receiving, counting, preparation and transfer history have sufficient persisted identity/evidence for deterministic reconstruction;
-5. no relation reintroduces a rejected DB-00 conflation;
-6. all material logical ambiguities are closed or explicitly recorded as DB-01 open decisions;
-7. the exact DB-01 HEAD passes review before merge.
+4. inventory conservation, receiving, waste, counting, preparation, transfer and redistribution history have sufficient persisted identity/evidence for deterministic reconstruction;
+5. historical expiration decisions remain reproducible across rule, compatibility and Household-timezone evolution;
+6. no relation reintroduces a rejected DB-00 conflation;
+7. all material logical ambiguities are closed or explicitly recorded as DB-01 open decisions;
+8. the exact DB-01 HEAD passes panoramic review before merge.
