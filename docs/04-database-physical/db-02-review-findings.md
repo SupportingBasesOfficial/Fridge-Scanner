@@ -40,6 +40,18 @@ The first partial unique index treated only `lifecycle_status = 'ACTIVE'` as cur
 
 **Status:** CLOSED.
 
+## Pass 2 — storage and catalog
+
+### F2-004 — Compatibility invariants were being hidden in JSON
+
+**Severity:** material physical-model integrity gap.
+
+The first storage/catalog migration included `constraint_metadata`, `decision_context` and `approval_context` JSON fields around Product↔IngredientConcept compatibility. Compatibility constraints can change whether a committed Product is valid for a concept, so opaque JSON would make invariant-bearing semantics application-defined and unenforceable.
+
+**Resolution:** removed invariant-bearing compatibility JSON and the invented priority field. The initial DB-02 mapping supports unconditional compatibility only. Any future constraint that changes applicability requires a reviewed typed/versioned relational extension and matching typed decision evidence. Approval/provenance that is not itself a relationship remains explicit scalar/FK evidence.
+
+**Status:** CLOSED.
+
 ## Current review state
 
 All findings recorded above are closed on the branch. DB-02 is **not** CLEAN: the migration lineage is still incomplete and rational execution proof plus future physical-schema red-team remain required.
