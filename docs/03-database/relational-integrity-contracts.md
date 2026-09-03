@@ -301,73 +301,99 @@ Each EffectiveExpirationCandidate references exactly one SourceExpirationFact XO
 
 EffectiveExpiration is derived/materializable and reproducible from authoritative facts plus preserved rule/compatibility/timezone evidence.
 
-## 11. Shopping
+## 11. Replenishment and shopping
 
-### C-064 — Shopping subject XOR
+### C-064 — Product policy visibility and measurement
+
+HouseholdProductPolicy belongs to one Household, references only GLOBAL or same-Household Product, and every measurable threshold carries/resolves MeasurementUnit.
+
+### C-065 — Preferred-storage target XOR
+
+Each HouseholdProductStoragePreference selects exactly one governed target: same-Household StorageLocation XOR same-Household Compartment XOR governed StorageLocation kind. A Compartment target does not carry a competing direct location target.
+
+### C-066 — Storage preference is not placement truth
+
+HouseholdProductStoragePreference is default/preference data only. Creating or editing it cannot move StockItem, create InventoryMovement, or rewrite current/historical placement. Deterministic preference ordering, when active, cannot have ambiguous duplicate rank for the same policy.
+
+### C-067 — Shopping subject XOR
 
 Resolved ShoppingListItem targets Product XOR IngredientConcept. Free text is provenance only.
 
-### C-065 — Product-target fulfillment
+### C-068 — Product-target fulfillment
 
 Product-targeted ShoppingListItem is fulfilled only by exact Product PurchaseItem.
 
-### C-066 — Concept-target fulfillment
+### C-069 — Concept-target fulfillment
 
 IngredientConcept-targeted ShoppingListItem requires immutable CompatibilityDecisionEvidence for purchased Product.
 
-### C-067 — Shopping pool conservation
+### C-070 — Shopping pool conservation
 
 ShoppingListFulfillment allocations from one PurchaseItem cannot exceed purchased quantity within the shopping-intent pool after exact conversion.
 
-## 12. Alerts, integrations and imports
+## 12. Alerts and notifications
 
-### C-068 — Alert ownership chain
+### C-071 — AlertRule primary subject is typed
 
-Household AlertRule, Alert and NotificationDelivery share Household; Alert preserves originating rule/trigger and delivery preserves one Alert/recipient attempt.
+Every Household AlertRule has exactly one primary AlertRuleSubject. `subject_kind` and typed target are consistent: HOUSEHOLD has no entity FK; PRODUCT, STOCK_ITEM, STORAGE_LOCATION, COMPARTMENT and HOUSEHOLD_PRODUCT_POLICY each require exactly their corresponding typed FK and no competing target.
 
-### C-069 — Typed operational subjects
+### C-072 — AlertRule subject Household/visibility
 
-Referentially significant operational target links use typed FKs/associations. Generic type/id pairs cannot replace domain referential integrity.
+Operational AlertRuleSubject targets belong to the rule Household. Product targets are GLOBAL or same-Household visible Products. Future target kinds require reviewed typed schema evolution before use.
 
-### C-070 — Global notification preference boundary
+### C-073 — Alert trigger explainability
+
+Every committed Alert retains at least one primary AlertTriggerSubject. Trigger subjects are typed, same-Household/visible, and consistent with the originating AlertRule scope/condition. A generic entity ID cannot replace this relation.
+
+### C-074 — Alert ownership chain
+
+AlertRule, Alert, AlertRuleSubject, AlertTriggerSubject and NotificationDelivery for a Household alert all resolve to the same Household. NotificationDelivery links to exactly one Alert and keeps recipient/destination attempt provenance.
+
+### C-075 — Global notification preference boundary
 
 A future user-global preference may influence delivery behavior only. It cannot grant Household authority and is not required by current DB-01.
 
-### C-071 — Import Household binding
+## 13. Integrations and imports
+
+### C-076 — Import Household binding
 
 Every inventory-affecting ImportRun has exactly one target Household; ExternalReference and produced operational facts remain within that boundary.
 
-### C-072 — External reference namespace
+### C-077 — External reference namespace
 
 ExternalReference resolution/uniqueness is scoped by provider/integration namespace, type/value and Household when operationally Household-scoped.
 
-### C-073 — Secret separation
+### C-078 — Typed canonical external-reference targets
+
+Where an ExternalReference resolves to a referentially significant canonical business entity, the target is represented by a reviewed typed association contract. An unconstrained generic entity ID cannot become canonical resolution truth.
+
+### C-079 — Secret separation
 
 Integration secrets are secure references, not arbitrary domain JSON secret payloads.
 
-## 13. Idempotency, audit and outbox
+## 14. Idempotency, audit and outbox
 
-### C-074 — Scoped idempotency identity
+### C-080 — Scoped idempotency identity
 
 Idempotency uniqueness includes target scope/Household identity when applicable, principal, operation/command and client key. Client key alone is never cross-tenant identity.
 
-### C-075 — Idempotency fingerprint conflict
+### C-081 — Idempotency fingerprint conflict
 
 Same scoped identity with different semantic request fingerprint, target or command version is conflict, never overwrite/re-execution.
 
-### C-076 — Authorization before idempotent replay
+### C-082 — Authorization before idempotent replay
 
 Current authorization is re-established before stored idempotent result is disclosed.
 
-### C-077 — Mutation/outbox atomicity
+### C-083 — Mutation/outbox atomicity
 
 Required OutboxRecord commits in the same durable database transaction as authoritative business mutation; external publication follows that boundary.
 
-### C-078 — Audit is not ledger
+### C-084 — Audit is not ledger
 
 AuditEvent cannot substitute for InventoryMovement or domain history. Generic audit target identity is evidentiary metadata only.
 
-## 14. Transaction-boundary contracts
+## 15. Transaction-boundary contracts
 
 One atomic logical database transaction or equivalent serializable single-winner contract is required for at least:
 
@@ -379,20 +405,23 @@ One atomic logical database transaction or equivalent serializable single-winner
 - InventoryCount adjustment/reconciliation against captured InventoryLedgerBasis;
 - Preparation inputs/outputs, movement links, allocations/deviations and conservation;
 - ShoppingListFulfillment allocation;
+- creation/update of a HouseholdProductPolicy with deterministic ranked storage preferences when those constraints span rows;
+- Alert creation with its required typed trigger subject evidence;
 - Idempotency winner creation/observation;
 - business mutation + OutboxRecord.
 
-Check-then-write application sequences that allow concurrent over-allocation, duplicate movement reuse, idempotent duplication or Household mismatch are non-compliant.
+Check-then-write application sequences that allow concurrent over-allocation, duplicate movement reuse, idempotent duplication, ambiguous active preference ordering or Household mismatch are non-compliant.
 
-## 15. Delete/update semantics
+## 16. Delete/update semantics
 
 DB-02 explicitly chooses physical delete behavior under these logical defaults:
 
 - authoritative/history-bearing facts: ordinary deletion restricted or identity tombstoned;
 - transient uncommitted staging: governed cascade may be allowed;
 - catalog/rule/evidence/timezone records referenced by history: retire/version/tombstone, not destructive deletion;
+- Alert trigger evidence for committed alerts remains reproducible even if the referenced subject later retires;
 - Household deletion: explicit retention/lifecycle workflow, never uncontrolled cascade through ledger/audit/history.
 
-## 16. Gate rule
+## 17. Gate rule
 
 A physical schema is DB-01 compliant only if these contracts remain enforceable under concurrency, retries, delayed/offline facts, historical rule/timezone changes and DB-00 reconciliation edge cases. Existence of similarly named tables alone is insufficient.
