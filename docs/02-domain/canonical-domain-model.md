@@ -65,7 +65,7 @@ Represents a physical receiving operation into a Household. Purchase and Receipt
 ### ReceiptItem
 Represents one received Product/quantity/MeasurementUnit line inside a Receipt. When receipt originates from a Purchase, the ReceiptItem links to the relevant PurchaseItem so partial and incremental receiving can be reconciled at line level.
 
-A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, placement or other identity-affecting state requires a split.
+A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. Every linked entry effect must represent the same Product as the ReceiptItem, and the sum of the linked committed entry quantities, after valid dimension-safe conversion into one comparison unit, must equal exactly the committed ReceiptItem quantity. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, placement or other identity-affecting state requires a split; splitting may redistribute quantity but must neither create nor destroy it.
 
 ## 5. Inventory
 
@@ -90,7 +90,7 @@ A SourceExpirationFact may reference a Batch when the fact is genuinely batch-le
 Represents an immutable committed stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return. Corrections are additional compensating/adjustment movements rather than mutation of committed movement history.
 
 ### InventoryTransfer
-Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Transfer semantics move quantity between placement-coherent StockItems and preserve lineage between source and destination effects.
+Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Both effects must represent the same Product and conserve exactly the transferred quantity after valid dimension-safe conversion. A transfer may change placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve lineage between source and destination effects.
 
 ### InventoryBalance
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
@@ -116,7 +116,11 @@ When multiple rules are applicable, selection must be deterministic through gove
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
 
 ### EffectiveExpiration
-An explainable materialized projection for a concrete StockItem. Authoritative truth remains SourceExpirationFact records, applicable Batch source facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen, including the evaluation anchor and ShelfLifeRule version(s) that participated in selection.
+An explainable materialized projection for a concrete StockItem. Authoritative truth remains SourceExpirationFact records, applicable Batch source facts, lifecycle/storage facts and versioned shelf-life rules.
+
+Each applicable authoritative input produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline. Candidate comparison must use an explicit precision/timezone policy when source values are date-only or otherwise not directly comparable; the system must not silently invent precision.
+
+The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, combination result, evaluation anchor and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -137,7 +141,7 @@ References the concrete StockItem(s) and quantities consumed by a Preparation.
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
 
-One PreparationOutput may create multiple movement effects/StockItems when placement, package, shelf-life or provenance state requires a split. Multiple preparation outputs may later contribute to compatible holdings, but lineage to each originating PreparationOutput must remain recoverable through immutable movement provenance rather than inferred from the current StockItem balance.
+Every linked output effect must represent the same Product as the PreparationOutput, and the sum of linked committed output quantities, after valid dimension-safe conversion, must equal exactly the PreparationOutput quantity. One PreparationOutput may create multiple movement effects/StockItems when placement, package, shelf-life or provenance state requires a split. Multiple preparation outputs may later contribute to compatible holdings, but lineage to each originating PreparationOutput must remain recoverable through immutable movement provenance rather than inferred from the current StockItem balance.
 
 This separation creates the invariant: recipe = definition; preparation = execution.
 
@@ -151,7 +155,7 @@ The authoritative quantity change remains linked to inventory movement semantics
 ## 9. Planning and replenishment
 
 ### HouseholdProductPolicy
-Stores household/product-specific policy such as minimum desired stock or preferred storage defaults.
+Stores household/product-specific policy such as minimum desired stock or preferred storage defaults. Every measurable threshold, including minimum desired stock, carries or resolves an explicit MeasurementUnit and must be comparable with the relevant inventory balance only through the accepted dimension-safe conversion rules.
 
 ### ShoppingList
 Represents future purchase intent and is distinct from Purchase, which represents an acquisition transaction.
@@ -210,7 +214,7 @@ User ──< HouseholdMembership >── Household
                                 │       ├──< InventoryMovement
                                 │       ├──< FoodLifecycleEvent
                                 │       └── EffectiveExpiration
-                                ├──< InventoryTransfer
+                                ├──< InventoryTransfer ── paired conserved effects ──> InventoryMovement
                                 ├──< InventoryCount ──< InventoryCountItem ──> Product
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
@@ -244,14 +248,16 @@ The canonical model rejects these conflations:
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - Product as owner of a single current price;
-- unitless purchased, counted, prepared-output or shopping quantities;
+- unitless purchased, counted, prepared-output, replenishment-policy or shopping quantities;
 - Purchase as proof that stock physically entered inventory;
-- Receipt without line-level received-quantity and inventory-entry provenance;
+- Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
 - InventoryCountItem without explicit counted-subject identity;
-- PreparationOutput without explicit quantity/unit and authoritative movement provenance;
+- InventoryTransfer without same-Product and quantity-conservation semantics;
+- PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem without a canonical subject and measurable requested amount;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
+- EffectiveExpiration without deterministic candidate-combination semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
