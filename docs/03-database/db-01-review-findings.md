@@ -124,6 +124,28 @@ DB-00 says a user-global preference *may* exist but only without granting Househ
 
 **Status:** CLOSED.
 
+## Pass 3
+
+### F-012 — Preferred storage defaults were hidden in generic HouseholdProductPolicy metadata
+
+**Severity:** material relational ambiguity.
+
+DB-00 explicitly permits Household/Product policy such as preferred storage defaults, but the DB-01 baseline represented only measurable thresholds plus generic policy metadata. DB-02 could therefore encode the same preference as a location FK, compartment FK, free string or opaque JSON, yielding materially different integrity/cardinality semantics.
+
+**Resolution:** introduced `household_product_storage_preference` as a ranked typed policy child targeting exactly one same-Household StorageLocation, same-Household Compartment or governed StorageLocation kind. It remains policy/default data and cannot become StockItem placement truth or move stock.
+
+**Status:** CLOSED.
+
+### F-013 — AlertRule subject typing was deferred to DB-02
+
+**Severity:** material logical/reference ambiguity.
+
+The baseline required DB-02 to use a typed target where alert subject referential integrity mattered but did not itself define the logical representation. That violated DB-01's purpose and could produce incompatible physical schemas.
+
+**Resolution:** introduced `alert_rule_subject` with current governed typed subject kinds (Household, Product, StockItem, StorageLocation, Compartment, HouseholdProductPolicy) and `alert_trigger_subject` as immutable typed explainability evidence for committed Alerts. Future subject kinds require reviewed typed schema evolution.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-All findings recorded above are closed on the branch. This file does **not** itself declare the current HEAD CLEAN; the next step is a panoramic cross-document/delta review on the exact latest HEAD. Any new material finding reopens DB-01 and requires a new exact-HEAD gate.
+All findings F-001 through F-013 recorded above are closed on the branch. This file does **not** itself declare the current HEAD CLEAN; after these changes the exact HEAD must be revalidated through the panoramic repository/semantic gate. Any new material finding reopens DB-01 and requires a new exact-HEAD gate.
