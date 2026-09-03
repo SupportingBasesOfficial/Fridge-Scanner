@@ -28,13 +28,17 @@ This prevents generic recipes such as "milk" from being tied to one barcode/SKU 
 
 Cross-dimension conversion is forbidden unless an explicit product/ingredient conversion profile provides the necessary context, for example density or package-equivalence semantics.
 
-Package-to-quantity relationships such as "1 package = 500 g" are product/package facts, not universal unit conversions.
+Package-to-quantity relationships such as "1 package = 500 g" are product/package facts, not universal unit conversions. Any measurable operational or policy quantity that is compared, reconciled or conserved must carry or resolve a MeasurementUnit.
 
 ## D-004 — Effective expiration is a materialized, explainable projection
 
 **Decision:** authoritative shelf-life truth consists of source expiration facts, lifecycle events, storage facts and versioned shelf-life rules. A concrete `effective_expiration_at` may be materialized for efficient queries/alerts.
 
-The materialized value must be recomputable and must retain provenance sufficient to explain which rule/fact determined the result. Changing an authoritative input must invalidate/recalculate the projection deterministically.
+Source expiration must be representable at the concrete StockItem/package level even when no manufacturer Batch is known. Rule-version selection is anchored to the domain occurrence time of the fact that activates the rule, and recomputation must reuse that same anchor rather than current time.
+
+Applicable source expirations and rule-derived deadlines form an explicit candidate set. Unless a future governed semantic-class rule defines a different composition, the effective operational expiration is the earliest applicable candidate: a later candidate may not extend an earlier authoritative deadline. Date-only or unequal-precision candidates must be compared under an explicit precision/timezone policy rather than by silently inventing precision.
+
+The materialized value must be recomputable and must retain provenance sufficient to explain the candidate set, selected rule versions, evaluation anchor and final combination result. Changing an authoritative input must invalidate/recalculate the projection deterministically.
 
 The projection must never become an unexplained second source of truth.
 
@@ -50,9 +54,9 @@ If a future business case truly requires negative inventory, it requires an expl
 
 **Decision:** a stock transfer is represented as one atomic `InventoryTransfer` domain operation with one transfer identity and two linked ledger effects: source decrement and destination increment.
 
-Both effects commit atomically. Within the initial domain, source and destination must resolve to the same Household. A future cross-household transfer would be a distinct workflow requiring explicit authorization, ownership-transfer and receiving semantics.
+Both effects commit atomically, represent the same Product, and conserve exactly the transferred quantity after valid dimension-safe conversion. A transfer may change placement and may split or merge compatible holdings, but it cannot silently transform Product identity or create/destroy quantity. Within the initial domain, source and destination must resolve to the same Household. A future cross-household transfer would be a distinct workflow requiring explicit authorization, ownership-transfer and receiving semantics.
 
-This representation keeps balances easy to reconcile while preserving one business-level transfer identity.
+This representation keeps balances easy to reconcile while preserving one business-level transfer identity and conservation law.
 
 ## D-007 — `Household` is canonical code/domain vocabulary
 
