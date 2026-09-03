@@ -2,7 +2,7 @@
 
 ## Status
 
-The fourteen DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-014. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
+The fifteen DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-015. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
 No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
@@ -63,6 +63,10 @@ Resolution: splits/transfers preserve applicable source-expiration, lifecycle an
 ### OD-014 — ProductIdentifier normalization → resolved by D-014
 
 Resolution: normalization is governed per scheme/issuer and version, source values are preserved, and rule changes create collision-checked migration candidates rather than in-place reinterpretation or deployment-order-dependent matching.
+
+### OD-015 — ShelfLifeRule catalog governance and concept applicability → resolved by D-015
+
+Resolution: rules are explicitly global or Household-owned with same-scope reference/use constraints. Concept-targeted applicability preserves the exact activation-time compatibility evidence, and recomputation cannot reinterpret an activated deadline using current mappings.
 
 ## Decisions deliberately deferred to later phases
 
