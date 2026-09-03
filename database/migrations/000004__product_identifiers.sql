@@ -29,10 +29,22 @@ create table fridge.product_identifier_normalization_rule (
   constraint identifier_rule_version_positive check (rule_version > 0),
   constraint identifier_rule_algorithm_nonblank
     check (btrim(normalization_algorithm_code) <> '' and btrim(normalization_algorithm_version) <> ''),
-  constraint identifier_rule_interval_valid check (effective_to is null or effective_to > effective_from),
-  constraint identifier_rule_scope_version_uq
-    unique (scheme_code, namespace_mode, issuer_namespace, rule_version)
+  constraint identifier_rule_interval_valid check (effective_to is null or effective_to > effective_from)
 );
+
+-- PostgreSQL UNIQUE treats NULL values as distinct by default, so global and
+-- issuer-scoped normalization-rule version uniqueness are enforced separately.
+create unique index identifier_rule_global_version_uq
+  on fridge.product_identifier_normalization_rule (scheme_code, rule_version)
+  where namespace_mode = 'GLOBAL';
+
+create unique index identifier_rule_issuer_version_uq
+  on fridge.product_identifier_normalization_rule (
+    scheme_code,
+    issuer_namespace,
+    rule_version
+  )
+  where namespace_mode = 'ISSUER_SCOPED';
 
 comment on table fridge.product_identifier_normalization_rule is
   'Governed versioned normalization contract. Exact source and normalized values are still persisted on identifiers; algorithm identity/version is historical evidence, not deployment-current inference.';
