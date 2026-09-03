@@ -2,7 +2,7 @@
 
 ## Status
 
-The nine DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-009. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
+The ten DB-00 conceptual decisions currently tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-010. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
 No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
@@ -18,7 +18,7 @@ Resolution: RecipeIngredient targets `IngredientConcept`, not commercial stock. 
 
 ### OD-003 — Measurement conversion → resolved by D-003
 
-Resolution: units have explicit dimensions. Same-dimension conversions may use canonical conversion rules; cross-dimension conversion requires explicit product/ingredient context such as density or package equivalence.
+Resolution: units have explicit dimensions. Same-dimension conversions may use canonical conversion rules; cross-dimension conversion requires explicit product/ingredient context such as density or package equivalence. Authoritative quantities, factors and converted results use exact rational semantics, and conservation/reconciliation is evaluated losslessly without implementation-scale or display rounding.
 
 ### OD-004 — Effective expiration persistence and temporal arithmetic → resolved by D-004
 
@@ -43,6 +43,10 @@ Resolution: purchase-line money is modeled by explicit semantic role rather than
 ### OD-009 — Recipe catalog governance → resolved by D-009
 
 Resolution: Recipe and RecipeVersion have explicit global-or-Household scope. Versions inherit Recipe ownership; global recipes cannot reference private Household Products; household recipes and Preparations may reference/execute only global or same-Household catalog entities. Cross-scope publication, sharing or cloning is an explicit provenance-preserving workflow.
+
+### OD-010 — PurchaseItem allocation dimensions → resolved by D-010
+
+Resolution: receipt/substitution allocations share one physical-receiving pool, while ShoppingListFulfillment uses a separate shopping-intent pool. Each pool independently prevents double counting against PurchaseItem quantity; a unit may occur once in each because arrival evidence and intent attribution are different facts.
 
 ## Decisions deliberately deferred to later phases
 
