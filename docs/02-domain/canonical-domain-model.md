@@ -58,7 +58,12 @@ Represents a commercial transaction or acquisition record.
 Represents an item purchased, including transaction-specific quantity and price.
 
 ### Receipt / Receiving
-Represents what physically entered the household inventory. Purchase and receipt may occur atomically in simple flows, but they remain separate concepts because purchased quantity and received quantity can differ in time or amount.
+Represents a physical receiving operation into a Household. Purchase and Receipt may occur atomically in simple flows, but they remain separate concepts because purchased and received quantities can differ in time or amount. A Receipt may also represent an acquisition with no prior Purchase record when the source workflow legitimately has no commercial order.
+
+### ReceiptItem
+Represents one received product/quantity/unit line inside a Receipt. When receipt originates from a Purchase, the ReceiptItem links to the relevant PurchaseItem so partial and incremental receiving can be reconciled at line level.
+
+A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, location or other identity-affecting state requires a split.
 
 ## 5. Inventory
 
@@ -171,8 +176,9 @@ Provides a durable publication boundary for asynchronous side effects when a dat
 User ──< HouseholdMembership >── Household
                                 │
                                 ├──< StorageLocation ──< Compartment
-                                ├──< Purchase ──< PurchaseItem
-                                ├──< Receipt
+                                ├──< Purchase ──< PurchaseItem ──< ReceiptItem
+                                ├──< Receipt ──< ReceiptItem ──< InventoryMovement
+                                │                         └──────> StockItem / Batch provenance
                                 ├──< StockItem >── Batch >── Product
                                 │       │
                                 │       ├──< InventoryMovement
@@ -201,6 +207,8 @@ The canonical model rejects these conflations:
 - global `User.role` as household authority;
 - Batch as both manufacturing lot and physical inventory position;
 - Product as owner of a single current price;
+- Purchase as proof that stock physically entered inventory;
+- Receipt without line-level received-quantity and inventory-entry provenance;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
