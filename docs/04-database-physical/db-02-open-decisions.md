@@ -10,39 +10,35 @@ DB-02 has an initial physical baseline. The items below are proof/review targets
 
 **State:** physical design implemented; execution proof pending.
 
-`000001__bootstrap.sql` now provides a PostgreSQL-17-compatible arbitrary-precision Euclidean GCD and rational normalization using integral `numeric`, with positive denominator and canonical `0/1`. No fixed-width cast or decimal approximation participates.
+`000001__bootstrap.sql` provides a PostgreSQL-17-compatible arbitrary-precision Euclidean GCD and rational normalization using integral `numeric`, positive denominator and canonical `0/1`. No fixed-width cast or decimal approximation participates.
 
 **Gate:** automated PostgreSQL 17 execution must pass `database/tests/integrity/000001__rational_primitives.sql`, including exact 1/3, sign normalization, large values and invalid-input rejection. PostgreSQL 18 compatibility should also be exercised.
 
-### O2-003 — Constraint-trigger versus transaction-function boundary
-
-**Question:** for each cross-row conservation invariant, determine whether deferred constraint triggers add useful independent protection or whether all authoritative writes must be exclusively reachable through one privileged transaction routine plus postcondition checks.
-
-**Default direction:** use both where practical for high-risk conservation, but avoid duplicated rule engines that can diverge.
-
-### O2-004 — Current-balance projection shape
-
-**Question:** choose between view, materialized projection table, or transactionally maintained aggregate after correctness/performance tests.
-
-**Invariant:** no choice can make projected balance authoritative over InventoryMovement.
-
-### O2-005 — EffectiveExpiration projection shape
-
-**Question:** choose stored projection table versus calculated read path based on expected read/write ratio and invalidation complexity.
-
-**Invariant:** source facts/rule activation/evidence remain authoritative and projection stays rebuildable.
-
-### O2-006 — Exact role/grant mapping across plain PostgreSQL and Supabase
-
-**Question:** map provider-neutral privilege classes (owner/migrator/application/worker/read-only) to concrete roles in local Docker and hosted Supabase without granting normal client traffic owner/service bypass privileges.
-
-**Invariant:** privilege capability matters more than provider role name.
+No other intentional physical-model blocker is currently open. New SQL/red-team findings may reopen this section.
 
 ## B. Closed physical decisions
 
 ### O2-001 — Final application schema namespace names — CLOSED
 
 Canonical business/database objects use schema `fridge`; privileged implementation helpers use `fridge_internal`. Canonical application truth does not rely on an uncontrolled default `public` namespace. Provider-managed schemas remain separate.
+
+### O2-003 — Constraint-trigger versus transaction-function boundary — CLOSED
+
+Transaction-safe mutation routines own business decisions for cross-row operations. Deferred constraint triggers, when useful, verify narrow transaction-end mathematical/relational postconditions only; they do not duplicate policy selection or domain decision logic.
+
+### O2-004 — Current-balance projection shape — CLOSED
+
+Initial current balance is an ordinary read-only SQL view derived exactly from committed InventoryMovement ledger facts. A materialized/maintained projection may be introduced later only for measured performance need and remains rebuildable/non-authoritative.
+
+### O2-005 — EffectiveExpiration projection shape — CLOSED
+
+Initial EffectiveExpiration is a persisted derived projection table with derivation version/status, invalidation/rebuild semantics and candidate provenance. Authoritative expiration inputs remain source facts, lifecycle evidence, rule activations and lineage.
+
+### O2-006 — Role/grant model across plain PostgreSQL and Supabase — CLOSED
+
+Provider-neutral capability classes are `fridge_owner`, `fridge_migrator`, `fridge_app`, `fridge_worker` and `fridge_readonly`. Login identities bind to capabilities per environment. Supabase `anon`/`authenticated` receive no direct canonical table access by default; Data API exposure requires later explicit views/RPC contracts. `service_role` is not the ordinary request authority and must not be used as the normal RLS-bypass path.
+
+RLS custom transaction context is defense in depth for trusted server connections, not a cryptographic authentication mechanism; untrusted clients never receive database capability credentials.
 
 Also resolved by `db-02-decisions.md` and not open for convenience:
 
@@ -81,4 +77,4 @@ These do not block physical schema acceptance unless implementation proves they 
 
 ## Exit criterion
 
-DB-02 cannot be declared CLEAN while any Section A item can still produce materially different correctness/enforcement semantics. Projection storage choices may remain implementation-tunable only if both candidate forms are proven semantically equivalent and the accepted migration chooses one explicit initial form.
+DB-02 cannot be declared CLEAN while any open proof requirement can still reveal a materially different correctness/enforcement outcome. New schema findings reopen this register even when previously known items are closed.
