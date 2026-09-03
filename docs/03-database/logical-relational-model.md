@@ -14,56 +14,50 @@ Notation:
 - `IMM` — immutable after commit except governed correction/status metadata.
 - `XOR` — exactly one alternative must be selected.
 
-Every Household-owned operational relation below includes `household_id` directly unless explicitly described as globally scoped reference data. When a child and its parent both carry `household_id`, equality is part of the relational contract rather than a convention.
+Every Household-owned operational relation below includes `household_id` directly unless explicitly described as globally scoped reference data. When a child and parent both carry Household scope, equality is part of the relational contract.
 
 ## 1. Identity and Household boundary
 
 ### `user_profile`
 
-Purpose: platform-domain profile independent from authentication credentials.
-
-Core logical attributes:
-
 - `user_id` PK;
 - profile/display metadata;
 - lifecycle status.
 
-No global Household role exists here.
+Authentication credentials are outside this food-management domain. No global Household role exists on User.
 
 ### `household`
 
 - `household_id` PK;
 - canonical display/name metadata;
 - lifecycle status;
-- optional pointer/reference to the current governed Household-timezone version for operational reads.
+- optional current `household_timezone_version_id` pointer for operational reads.
 
-The current timezone pointer is convenience/current state only. Historical temporal interpretation resolves through versioned `household_timezone_version` facts.
+The current timezone pointer is convenience/current state only. Historical interpretation resolves through immutable versioned timezone facts.
 
 ### `household_membership`
 
 - `membership_id` PK;
 - `household_id` FK REQ;
 - `user_id` FK REQ;
-- household-scoped role/authority class;
+- household-scoped authority/role;
 - membership lifecycle/effective interval.
 
 Candidate key: active membership uniqueness for `(household_id, user_id)` under the governed lifecycle policy.
 
 ### `household_timezone_version`
 
-IMM once superseded or referenced by committed historical evidence.
-
-Purpose: preserve the governed IANA timezone/context that was effective for a Household at a domain anchor so later Household configuration changes cannot reinterpret historical expiration decisions.
+IMM once superseded or referenced by committed history.
 
 - `household_timezone_version_id` PK;
 - `household_id` FK REQ;
-- governed IANA timezone identifier/context;
+- governed IANA timezone/context;
 - version identity;
 - effective-from domain instant REQ;
 - optional effective-to domain instant;
-- provenance/actor/reason metadata.
+- provenance/actor/reason.
 
-Effective intervals for one Household must not overlap ambiguously. Historical evidence references the exact selected version when Household timezone semantics participate in a committed decision.
+Effective intervals for one Household cannot overlap ambiguously. Historical evidence references the exact version selected at its preserved domain anchor when Household timezone semantics participate.
 
 ## 2. Storage topology
 
@@ -82,29 +76,29 @@ Effective intervals for one Household must not overlap ambiguously. Historical e
 - `storage_location_id` FK REQ;
 - name/kind/ordering metadata.
 
-Integrity: parent `storage_location.household_id` must equal `compartment.household_id`.
+Parent StorageLocation and Compartment must share Household.
 
 ## 3. Catalog governance
 
-Catalog-governed relations use logical fields:
+Product, IngredientConcept, Recipe, ShelfLifeRule and governed compatibility mappings use:
 
 - `catalog_scope ∈ {GLOBAL, HOUSEHOLD}`;
-- `owner_household_id` nullable.
+- conditional `owner_household_id`.
 
-Invariant: `GLOBAL XOR HOUSEHOLD owner`: GLOBAL requires no owner; HOUSEHOLD requires exactly one owner.
+GLOBAL requires no owner; HOUSEHOLD requires exactly one owner.
 
 ### `ingredient_concept`
 
 - `ingredient_concept_id` PK;
 - catalog scope/owner;
-- semantic name and governed classification metadata;
+- semantic name/classification metadata;
 - lifecycle metadata.
 
 ### `product`
 
 - `product_id` PK;
 - catalog scope/owner;
-- canonical product name/identity metadata;
+- canonical identity/name metadata;
 - optional `brand_id`;
 - optional `manufacturer_id`;
 - optional `product_category_id`;
@@ -112,7 +106,7 @@ Invariant: `GLOBAL XOR HOUSEHOLD owner`: GLOBAL requires no owner; HOUSEHOLD req
 
 ### `brand`
 
-Global reference identity for brand metadata unless a future governed requirement introduces scoped brands.
+Global reference identity for brand metadata unless future governance explicitly introduces scoped brands.
 
 ### `manufacturer`
 
@@ -124,7 +118,7 @@ Distinct global reference identity for manufacturer metadata.
 - optional parent category FK;
 - governed category metadata.
 
-A category hierarchy must remain acyclic.
+The hierarchy must remain acyclic. ProductCategory is not implicitly the universal future ShelfLifeRule classification taxonomy.
 
 ### `product_identifier_normalization_rule`
 
@@ -133,9 +127,7 @@ A category hierarchy must remain acyclic.
 - issuer/namespace applicability;
 - rule version;
 - effective interval/status;
-- exact normalization semantics metadata.
-
-Candidate key: governed uniqueness of active rule version within its scheme/namespace policy.
+- exact normalization semantics.
 
 ### `product_identifier`
 
@@ -148,104 +140,94 @@ Candidate key: governed uniqueness of active rule version within its scheme/name
 - `normalization_rule_id` FK REQ;
 - lifecycle/status/provenance.
 
-Candidate key follows DB-00: `(scheme, issuer_or_namespace, active_normalization_rule_version, normalized_value)`, with issuer omitted only for schemes defined as one global namespace.
-
-Integrity: globally namespaced canonical identifiers may reference only GLOBAL Products.
+Candidate uniqueness follows `(scheme, issuer_or_namespace, normalization_rule_version, normalized_value)`, omitting issuer only for a scheme with one governed global namespace. A globally namespaced canonical identifier may reference only a GLOBAL Product.
 
 ### `staged_identifier_claim`
 
-Purpose: Household-scoped evidence for an unresolved globally namespaced identifier without consuming the canonical global key.
+Household-scoped unresolved evidence that does not consume canonical identifier uniqueness.
 
 - `staged_identifier_claim_id` PK;
 - `household_id` FK REQ;
-- optional private `product_id` candidate constrained to the same Household;
+- optional same-Household private `product_id` candidate;
 - scheme/source/normalized evidence;
 - normalization rule/version evidence;
 - provenance/status;
 - optional governed resolution/promotion reference.
 
-This relation is excluded from canonical `product_identifier` uniqueness/resolution until governed promotion/resolution.
-
 ### `product_ingredient_compatibility`
 
-Versioned governed mapping between Product and IngredientConcept.
+Versioned governed Product↔IngredientConcept mapping.
 
-- `compatibility_mapping_id` PK identifying the exact versioned mapping fact;
+- `compatibility_mapping_id` PK identifying the exact versioned mapping;
 - catalog scope/owner;
 - `product_id` FK REQ;
 - `ingredient_concept_id` FK REQ;
-- governed version/effective interval;
+- version/effective interval;
 - constraints/policy metadata;
 - lifecycle status.
 
-GLOBAL mappings may reference only GLOBAL Product and GLOBAL IngredientConcept. HOUSEHOLD mappings may reference GLOBAL or same-Household entities, never another Household's private entity.
+GLOBAL mapping references only GLOBAL entities. HOUSEHOLD mapping may reference GLOBAL or same-Household entities, never another Household's private catalog data.
 
 ### `compatibility_decision_evidence`
 
-IMM evidence captured by committed decisions.
+IMM committed decision evidence.
 
 - `compatibility_evidence_id` PK;
 - Product and IngredientConcept identities;
-- exact compatibility mapping identity/version;
+- exact mapping identity/version;
 - evaluation/effective anchor;
 - constraints/provenance/approval evidence.
 
-## 4. Measurement and money reference contracts
+## 4. Measurement and money
 
 ### `measurement_unit`
 
 - `measurement_unit_id` PK;
 - dimension/class;
 - symbol/name;
-- governed canonical metadata.
+- governed metadata.
 
 ### `measurement_conversion_rule`
 
-Versioned conversion/profile definition where contextual/package/cross-dimension conversion is permitted.
+Versioned conversion/profile definition for permitted contextual/package/cross-dimension conversion.
 
 ### `measurement_conversion_evidence`
 
 IMM:
 
 - `measurement_conversion_evidence_id` PK;
-- source rational quantity + source unit;
-- target rational quantity + target unit;
+- source exact rational quantity/unit;
+- target exact rational quantity/unit;
 - exact rational factor/formula inputs;
-- conversion rule/profile identity and version;
+- conversion rule/profile identity/version;
 - evaluation/effective context;
 - provenance.
 
-### Logical rational values
-
-Every authoritative quantity persists a lossless rational amount. DB-01 models this logically as numerator/denominator semantics or an equivalent exact representation plus `measurement_unit_id`; DB-02 chooses the physical encoding.
+All authoritative conserved/reconciled quantities use lossless rational semantics plus MeasurementUnit. DB-02 chooses the physical encoding; binary floating point or rounded display values cannot decide conservation equality.
 
 ### `purchase_money_fact`
-
-Purpose: preserve Purchase-level monetary facts that the source transaction does not allocate to a line.
 
 - `purchase_money_fact_id` PK;
 - `household_id` FK REQ;
 - `purchase_id` FK REQ;
 - exact monetary amount;
-- explicit currency;
+- currency;
 - semantic role such as discount/tax/fee/charge;
 - source-versus-derived provenance;
 - governed rounding/allocation metadata where relevant.
 
 ### `purchase_item_money_fact`
 
-Purpose: remove ambiguity between pricing basis, line gross, discount, tax/charge and line net.
-
 - `purchase_item_money_fact_id` PK;
 - `household_id` FK REQ;
 - `purchase_item_id` FK REQ;
 - semantic role REQ;
 - exact monetary amount;
-- explicit currency;
+- currency;
 - source-versus-derived provenance;
-- governed rounding policy identity/context.
+- governed rounding policy/context.
 
-For a pricing-basis fact, the associated pricing-basis quantity/unit is stored on `purchase_item` or on a dedicated role-specific basis record without ambiguity. Monetary facts are not interchangeable merely because their numeric values match.
+Pricing basis, line gross, discount, tax/charge and line net are distinct semantic facts, never an unlabeled generic price.
 
 ## 5. Procurement and receiving
 
@@ -258,28 +240,22 @@ For a pricing-basis fact, the associated pricing-basis quantity/unit is stored o
 - occurrence/recording times;
 - merchant/provider provenance.
 
-Purchase-level money lives in `purchase_money_fact` where applicable.
-
 ### `purchase_item`
 
 - `purchase_item_id` PK;
 - `household_id` FK REQ;
 - `purchase_id` FK REQ;
 - `product_id` FK REQ and visible to Household;
-- purchased exact rational quantity + `measurement_unit_id`;
-- optional pricing-basis exact rational quantity + pricing-basis unit;
+- purchased exact rational quantity/unit;
+- optional pricing-basis exact rational quantity/unit;
 - pricing/conversion provenance.
 
-Parent Household must match Purchase. Role-bearing line money lives in `purchase_item_money_fact`.
-
 ### `purchase_item_pricing_discrepancy`
-
-Preserves any source/computed pricing mismatch instead of silently accepting inconsistent gross/unit-cost semantics.
 
 - discrepancy PK;
 - `household_id`;
 - `purchase_item_id`;
-- source and computed monetary facts/amounts;
+- source/computed money evidence;
 - quantity/conversion evidence;
 - rounding policy/context;
 - reason/status/resolution provenance.
@@ -288,92 +264,85 @@ Preserves any source/computed pricing mismatch instead of silently accepting inc
 
 - `receipt_id` PK;
 - `household_id` FK REQ;
-- optional `purchase_id` provenance when the whole receiving operation belongs to one known Purchase;
+- optional `purchase_id` when the whole receiving operation belongs to one known Purchase;
 - authoritative receiving occurrence time;
 - recording/source provenance.
 
-If `receipt.purchase_id` is present, ordinary/substitution allocations under that Receipt must target PurchaseItems belonging to that Purchase. A Receipt with no prior Purchase remains valid and may contain unallocated ad-hoc ReceiptItems.
+If Receipt has Purchase provenance, allocations under it target only PurchaseItems of that Purchase. Receipt without Purchase remains valid.
 
 ### `receipt_item`
 
-Represents exactly what physically arrived on one received Product line. It does not itself consume a PurchaseItem allowance.
+Represents what physically arrived; it does not directly consume a PurchaseItem allowance.
 
 - `receipt_item_id` PK;
 - `household_id` FK REQ;
 - `receipt_id` FK REQ;
 - `product_id` FK REQ;
-- exact rational received quantity + unit;
-- source/provenance metadata.
+- exact rational received quantity/unit;
+- source/provenance.
 
 ### `purchase_item_receipt_allocation`
 
-Explicit ordinary same-Product receiving allocation.
+Ordinary same-Product receiving allocation.
 
 - `purchase_item_receipt_allocation_id` PK;
 - `household_id` FK REQ;
 - `purchase_item_id` FK REQ;
 - `receipt_item_id` FK REQ;
-- exact allocated rational quantity + unit;
-- required conversion evidence when contextual conversion is used;
-- allocation provenance.
+- exact allocated rational quantity/unit;
+- conversion evidence when required;
+- provenance.
 
-Constraints:
-
-- PurchaseItem Product equals ReceiptItem Product;
-- allocation cannot exceed unallocated quantity of the ReceiptItem;
-- allocations from all ReceiptItems plus substitutions share the PurchaseItem physical-receiving pool;
-- one ReceiptItem may be partially allocated across multiple compatible PurchaseItems when source provenance genuinely requires it, but its total ordinary + substitution attribution cannot exceed what physically arrived.
+PurchaseItem Product equals ReceiptItem Product. ReceiptItem ordinary+substitution attribution cannot exceed what arrived. PurchaseItem ordinary+substitution allocation cannot exceed purchased quantity as normal fulfillment.
 
 ### `purchase_item_substitution_allocation`
 
-Explicit exception path for a different received Product.
+Explicit different-Product exception allocation.
 
 - `purchase_item_substitution_allocation_id` PK;
 - `household_id` FK REQ;
 - `purchase_item_id` FK REQ;
 - `receipt_item_id` FK REQ;
-- requested Product identity REQ and equal to PurchaseItem Product;
-- received Product identity REQ and equal to ReceiptItem Product;
-- exact substituted rational quantity + unit;
-- required conversion evidence when applicable;
+- requested Product = PurchaseItem Product;
+- received Product = ReceiptItem Product;
+- exact substituted rational quantity/unit;
+- conversion evidence when required;
 - reason/approval/provenance.
-
-A substitution allocation is never ordinary same-Product provenance. Ordinary receipt allocations and substitution allocations share one physical receiving availability pool per PurchaseItem and together may consume at most the purchased quantity as normal fulfillment.
 
 ### `receipt_item_inventory_effect`
 
-Explicit line-to-ledger materialization link.
+Line-to-ledger materialization relation.
 
 - `receipt_item_inventory_effect_id` PK;
 - `household_id` FK REQ;
 - `receipt_item_id` FK REQ;
-- inventory-entry `inventory_movement_id` FK REQ and UQ within this semantic role;
-- exact rational quantity portion + unit represented by that effect;
-- optional conversion evidence when units differ contextually.
+- inventory-entry `inventory_movement_id` FK REQ UQ for this semantic role;
+- exact rational quantity portion/unit;
+- conversion evidence when applicable.
 
-For each committed ReceiptItem, linked entry-effect portions must represent the same Product and sum exactly to the ReceiptItem quantity. A ReceiptItem can produce multiple effects/StockItems when batch, placement or other identity-affecting state requires a split.
+Each linked movement is a positive inventory-entry effect for the same Household/Product; the relation's quantity portion reconciles exactly to that movement effect after valid conversion. Across all links, portions sum exactly to ReceiptItem quantity.
 
 ### `purchase_receiving_exception`
-
-Represents over-receipt or other governed receipt discrepancies with status/resolution rather than treating excess as normal fulfillment.
 
 - exception PK;
 - `household_id`;
 - relevant PurchaseItem/ReceiptItem/allocation references;
 - exact discrepant quantity/unit;
-- exception kind/status;
+- kind/status;
 - reason/approval/correction provenance.
 
-## 6. Inventory core
+Over-receipt is explicit exception state, never ordinary fulfillment.
+
+## 6. Inventory core and ledger
 
 ### `batch`
 
 - `batch_id` PK;
 - `product_id` FK REQ;
 - manufacturer/commercial lot facts;
-- optional production/source expiration metadata where genuinely batch-level.
+- optional batch-level production/expiration facts.
 
-Batch has no Household placement authority and is not required for StockItem identity.
+Batch is optional provenance, never stock placement and never required merely for Product or expiration identity.
 
 ### `stock_item`
 
@@ -382,17 +351,10 @@ Batch has no Household placement authority and is not required for StockItem ide
 - `product_id` FK REQ;
 - optional `batch_id` FK;
 - current lifecycle/status;
-- current placement alternative:
-  - optional `storage_location_id`,
-  - optional `compartment_id`,
-  - explicit governed unplaced state;
+- current placement XOR: direct `storage_location_id`, `compartment_id`, or explicit governed unplaced state;
 - optional current-state projection metadata.
 
-Placement integrity: exactly one of direct StorageLocation, Compartment, or explicit unplaced state. If Compartment is chosen, no competing direct StorageLocation value is stored as independent truth. Placement Household must match StockItem Household.
-
-Batch, if present, must belong to the same Product.
-
-Current quantity may be materialized only as a projection/cache; authoritative quantity is reconstructed from committed InventoryMovement.
+Batch, if present, belongs to the same Product. Placement resolves to the same Household. Current quantity may be materialized only as a projection; committed InventoryMovement history is authoritative.
 
 ### `source_expiration_fact`
 
@@ -401,35 +363,31 @@ IMM:
 - `source_expiration_fact_id` PK;
 - `household_id` FK REQ;
 - `stock_item_id` FK REQ;
-- optional `batch_id` and/or `receipt_item_id` provenance;
-- exact source expiration value with original precision/semantics;
-- authoritative fact occurrence/source temporal anchor;
-- optional source-provided timezone/offset context;
-- optional exact `household_timezone_version_id` selected when Household timezone semantics were required;
+- optional Batch/ReceiptItem provenance;
+- exact source expiration with original precision/semantics;
+- authoritative occurrence/source temporal anchor;
+- optional source timezone/offset context;
+- optional exact `household_timezone_version_id` when Household timezone semantics were used;
 - provenance.
-
-Batch is not required merely to preserve a printed expiration.
 
 ### `inventory_movement`
 
-Authoritative IMM ledger fact.
+Authoritative IMM stock delta.
 
 - `inventory_movement_id` PK;
 - `household_id` FK REQ;
 - movement kind;
 - `product_id` FK REQ;
-- exact signed rational quantity + unit;
-- affected `stock_item_id` when a concrete holding exists;
+- exact signed rational quantity/unit;
+- affected `stock_item_id` where a concrete holding exists;
 - authoritative domain occurrence time;
 - recording/commit time;
-- optional trustworthy causal ordering discriminator and ordering-domain identity;
+- optional trustworthy causal ordering discriminator + ordering-domain identity;
 - immutable placement snapshot/effect anchor when placement-sensitive;
-- provenance/causation identifiers;
-- optional correction/compensation relationship to another movement.
+- provenance/causation;
+- optional correction/compensation relationship.
 
-When `stock_item_id` is present, StockItem Household and Product must equal the movement Household and Product. Movement kind determines the permitted sign semantics; zero-quantity committed ledger effects are invalid unless a future explicit non-quantity event class is introduced outside InventoryMovement.
-
-Committed movement business meaning, Product, quantity, occurrence ordering evidence and historical placement/provenance are immutable.
+When StockItem is present, Household/Product agree. Quantity is non-zero and sign agrees with movement class. Committed Product, quantity, occurrence ordering evidence and historical provenance are immutable.
 
 ### `inventory_transfer`
 
@@ -443,7 +401,7 @@ Committed movement business meaning, Product, quantity, occurrence ordering evid
 
 ### `inventory_transfer_effect`
 
-Links exactly one transfer to its paired effects:
+One row per transfer:
 
 - `inventory_transfer_effect_id` PK;
 - `household_id` FK REQ;
@@ -451,65 +409,80 @@ Links exactly one transfer to its paired effects:
 - source-decrement `inventory_movement_id` FK REQ UQ;
 - destination-increment `inventory_movement_id` FK REQ UQ.
 
-Both movements must share Household and Product with the transfer and conserve exactly the transferred quantity after governed exact conversion. Source movement sign/kind is decrement; destination movement sign/kind is increment.
+Both effects share Household/Product with transfer and conserve exactly the transfer quantity with correct signs.
 
 ### `inventory_quantity_lineage`
 
-IMM conserved edge connecting one source quantity portion to one destination quantity portion for split, transfer, merge or other lineage-preserving redistribution.
+IMM same-Product conserved edge for split/transfer/merge/redistribution.
 
 - `inventory_quantity_lineage_id` PK;
 - `household_id` FK REQ;
 - source `inventory_movement_id` FK REQ;
 - destination `inventory_movement_id` FK REQ;
-- optional source `stock_item_id` FK;
-- optional destination `stock_item_id` FK;
+- optional source/destination StockItem FKs;
 - `product_id` FK REQ;
-- exact rational lineage quantity + unit;
-- required conversion evidence where contextual conversion participates;
+- exact rational lineage quantity/unit;
+- conversion evidence where required;
 - lineage operation/causation identity;
 - provenance.
 
-For each source effect, outgoing lineage portions cannot exceed the source conserved quantity. For each destination effect that is declared lineage-derived, incoming lineage portions must reconcile exactly to the destination quantity except where an explicitly modeled transformation operation (for example Preparation) creates a new Product identity through its own input/output conservation semantics rather than pretending to be a same-Product redistribution.
+For any movement/effect declared as a lineage-redistribution source, outgoing lineage edges for that operation sum exactly to the redistributed source quantity; disappearance is not represented by an unlinked remainder. If part of a holding is genuinely consumed/wasted/transformed, that terminal/transformation effect is represented explicitly by its own InventoryMovement/domain operation rather than disguised as missing lineage.
 
-Same-Product split/transfer/merge lineage cannot transform Product identity.
+For a lineage-derived destination effect, incoming edges sum exactly to the destination quantity. Same-Product lineage never transforms Product identity. Product-transforming Preparation uses its own input/output conservation model.
 
 ### `quantity_lineage_shelf_life_fact`
 
-IMM join associating an exact lineage portion with inherited shelf-life facts/evidence.
+IMM relation attaching inherited SourceExpirationFact, FoodLifecycleEvent or ShelfLifeRuleActivation to an exact lineage edge/quantity portion, retaining original anchors/evidence. Every applicable source shelf-life fact propagates to the conserved destination portion.
 
-- join PK;
-- `household_id`;
-- `inventory_quantity_lineage_id` FK REQ;
-- fact alternative identifying one inherited `source_expiration_fact`, `food_lifecycle_event` or `shelf_life_rule_activation`;
-- original evaluation/occurrence anchor and evidence reference where needed.
+## 7. Waste and disposal
 
-Every applicable source shelf-life fact for the conserved source portion must propagate to the destination portion. Redistribution cannot reset/open-freshen expiry state.
+### `waste_record`
 
-## 7. Inventory counting and reconciliation
+Durable waste/disposal semantic record distinct from the quantity ledger effect.
+
+- `waste_record_id` PK;
+- `household_id` FK REQ;
+- authoritative occurrence time;
+- waste/disposal reason/classification;
+- actor/source/provenance;
+- optional explanatory metadata.
+
+### `waste_record_movement`
+
+Explicit link from WasteRecord to one or more authoritative stock-reducing InventoryMovements.
+
+- `waste_record_movement_id` PK;
+- `household_id` FK REQ;
+- `waste_record_id` FK REQ;
+- waste/disposal `inventory_movement_id` FK REQ UQ for this semantic role;
+- exact rational quantity portion/unit;
+- conversion evidence when applicable.
+
+Each linked movement is a stock-reducing waste/disposal effect in the same Household. Its linked quantity portion reconciles exactly with that movement effect. Waste reason/classification never becomes a second quantity truth; InventoryMovement remains authoritative.
+
+## 8. Inventory counting and reconciliation
 
 ### `inventory_count`
 
 - `inventory_count_id` PK;
 - `household_id` FK REQ;
 - session metadata;
-- optional atomic/frozen snapshot reference only when genuinely authoritative for all lines;
+- optional atomic/frozen snapshot reference when genuinely authoritative for all lines;
 - lifecycle/status.
 
 ### `inventory_ledger_basis`
 
-IMM reference describing the historical ledger basis used by one or more count lines.
-
-This is a domain reconciliation basis, not necessarily a database/MVCC snapshot.
+IMM domain reconciliation basis, not necessarily a database/MVCC snapshot.
 
 - `inventory_ledger_basis_id` PK;
 - `household_id` FK REQ;
-- basis scope identity sufficient to reconstruct the relevant ledger stream/subject;
-- captured ledger cutoff/watermark identity;
+- basis scope sufficient to reconstruct the relevant ledger stream/subject;
+- captured cutoff/watermark identity;
 - authoritative cutoff/ordering context;
-- optional snapshot token supplied by a trustworthy source;
+- optional trustworthy snapshot token;
 - capture provenance.
 
-A session may reuse one basis only when a genuinely atomic/frozen snapshot or equivalent authoritative token applies to all lines. Otherwise each line references its own basis.
+One basis may be reused across count lines only when a genuinely atomic/frozen snapshot or equivalent authoritative token applies to all of them.
 
 ### `inventory_count_item`
 
@@ -517,57 +490,55 @@ A session may reuse one basis only when a genuinely atomic/frozen snapshot or eq
 - `household_id` FK REQ;
 - `inventory_count_id` FK REQ;
 - counted `product_id` FK REQ;
-- exact observed rational quantity + unit;
-- optional matched `stock_item_id`;
-- placement anchor where relevant;
+- exact observed rational quantity/unit;
+- optional matched StockItem;
+- placement anchor when relevant;
 - authoritative per-line observation time;
 - `inventory_ledger_basis_id` FK REQ;
-- optional causal ordering discriminator + ordering-domain identity tied to the observation when available;
+- optional causal ordering discriminator + ordering domain for the observation;
 - reconciliation status.
 
-Unmatched discovered stock is representable without inventing an earlier StockItem.
+Unmatched discovered physical stock is valid without fabricating a prior StockItem.
 
 ### `inventory_count_allocation`
-
-Used only when a count line can deterministically allocate observed/discrepant quantity among multiple holdings.
 
 - `inventory_count_allocation_id` PK;
 - `household_id`;
 - count item FK;
 - target StockItem FK;
-- exact rational allocated quantity/unit;
+- exact allocated rational quantity/unit;
 - allocation decision evidence/provenance.
 
-Ambiguous aggregate counts remain staged/unresolved rather than receiving arbitrary allocations.
+Only deterministic allocation is committable. Ambiguous aggregate counts remain staged/unresolved.
 
 ### `inventory_reconciliation_outcome`
 
-IMM/append-only reconciliation decision:
+IMM/append-only:
 
 - `inventory_reconciliation_outcome_id` PK;
 - `household_id`;
 - count item FK;
 - `inventory_ledger_basis_id` FK REQ;
-- included movement/evidence-set identity/reference;
-- status (`NO_CHANGE`, `ADJUSTED`, `UNRESOLVED`, `BLOCKED`, `COMPENSATED`, equivalent);
-- optional adjustment `inventory_movement_id` FK;
+- included movement/evidence-set identity;
+- status such as NO_CHANGE/ADJUSTED/UNRESOLVED/BLOCKED/COMPENSATED;
+- optional adjustment `inventory_movement_id` FK UQ for this reconciliation role;
 - rationale/evidence;
-- occurrence/decision provenance.
+- decision provenance.
 
-Equal-time movement/observation facts may be ordered only by trustworthy causal evidence from the same ordering domain; otherwise they remain ambiguous and cannot authorize guessed adjustment/rebase/compensation.
+Equal timestamps alone are not causal order. Without trustworthy same-ordering-domain evidence, the case remains ambiguous and cannot authorize guessed rebase/preservation/compensation.
 
-## 8. Recipes and preparation
+## 9. Recipes and preparation
 
 ### `recipe`
 
 - `recipe_id` PK;
 - catalog scope/owner;
-- canonical recipe identity/metadata;
+- canonical identity/metadata;
 - lifecycle status.
 
 ### `recipe_version`
 
-IMM once published or referenced by a committed Preparation:
+IMM once published or used by a committed Preparation.
 
 - `recipe_version_id` PK;
 - `recipe_id` FK REQ;
@@ -576,21 +547,19 @@ IMM once published or referenced by a committed Preparation:
 - yield/scaling metadata;
 - effective/published status.
 
-A version cannot widen Recipe scope.
-
 ### `recipe_ingredient`
 
-Immutable child of RecipeVersion:
+Immutable RecipeVersion child:
 
 - `recipe_ingredient_id` PK;
 - `recipe_version_id` FK REQ;
 - `ingredient_concept_id` FK REQ;
-- exact required rational quantity + unit;
-- optional exact `product_id` constraint;
+- exact required rational quantity/unit;
+- optional exact Product constraint;
 - optionality/tolerance/governed constraints;
 - stable line identity/order.
 
-Global RecipeVersion may reference only global catalog entities. Household RecipeVersion may reference global or same-Household entities.
+Global versions reference only global catalog entities; Household versions may reference global or same-Household entities.
 
 ### `preparation`
 
@@ -598,10 +567,10 @@ Global RecipeVersion may reference only global catalog entities. Household Recip
 - `household_id` FK REQ;
 - optional `recipe_version_id` for recipe-based execution;
 - authoritative occurrence/commit context;
-- preserved scaling inputs/effective yield context;
+- preserved scaling/yield inputs/context;
 - status/provenance.
 
-RecipeVersion, if present, must be GLOBAL or owned by the same Household.
+RecipeVersion must be GLOBAL or same-Household.
 
 ### `preparation_input`
 
@@ -610,32 +579,30 @@ RecipeVersion, if present, must be GLOBAL or owned by the same Household.
 - `preparation_id` FK REQ;
 - source `stock_item_id` FK REQ;
 - `product_id` FK REQ;
-- exact consumed rational quantity + unit.
+- exact consumed rational quantity/unit.
 
 ### `preparation_input_movement`
 
-Explicit join from PreparationInput to one or more authoritative decrement InventoryMovements.
-
-- join PK;
+- relation PK;
 - `household_id`;
 - PreparationInput FK;
-- InventoryMovement FK;
-- exact quantity portion/unit represented by the effect;
+- decrement `inventory_movement_id` FK REQ UQ for this semantic role;
+- exact quantity portion/unit;
 - conversion evidence when applicable.
 
-Linked committed effects must preserve Household/Product/StockItem lineage and sum exactly to the consumed input quantity.
+Each linked movement belongs to the same Household/Product/source lineage and the relation portion reconciles exactly to that movement effect. Across all links, portions sum exactly to PreparationInput quantity. One decrement movement cannot be reused to satisfy multiple PreparationInputs.
 
 ### `preparation_input_allocation`
 
-- `preparation_input_allocation_id` PK;
+- allocation PK;
 - `household_id`;
 - PreparationInput FK;
-- exact `recipe_ingredient_id` from immutable RecipeVersion snapshot;
-- exact allocated rational quantity + unit;
-- optional `compatibility_evidence_id` when IngredientConcept compatibility is used;
-- deviation/policy references when applicable.
+- exact RecipeIngredient FK from immutable RecipeVersion;
+- exact allocated rational quantity/unit;
+- optional CompatibilityDecisionEvidence;
+- policy/deviation reference when applicable.
 
-Source-side allocations plus explicit deviations must exhaust PreparationInput quantity. Target-side allocations must reconcile to each RecipeIngredient effective scaled requirement under governed tolerance/deviation policy.
+Source-side allocations plus explicit deviations exhaust each input. Target-side allocations reconcile each scaled RecipeIngredient requirement under governed tolerance/deviation rules.
 
 ### `preparation_input_deviation`
 
@@ -651,24 +618,22 @@ Explicit underage/overage/tolerance/substitution decision against a RecipeIngred
 - `household_id` FK REQ;
 - `preparation_id` FK REQ;
 - `product_id` FK REQ;
-- exact produced rational quantity + unit.
+- exact produced rational quantity/unit.
 
 ### `preparation_output_movement`
 
-Explicit join from PreparationOutput to authoritative increment InventoryMovement effects.
-
-- join PK;
+- relation PK;
 - `household_id`;
 - PreparationOutput FK;
-- InventoryMovement FK;
-- exact quantity portion/unit represented by the effect;
+- increment `inventory_movement_id` FK REQ UQ for this semantic role;
+- exact quantity portion/unit;
 - conversion evidence when applicable.
 
-Effects must represent the same Product and sum exactly to output quantity.
+Each linked movement belongs to same Household/Product, the relation portion reconciles exactly to that movement effect, and all linked portions sum exactly to PreparationOutput quantity. One increment movement cannot be reused to materialize multiple PreparationOutputs.
 
-Preparation transforms input Products into output Product identity through explicit Preparation semantics; this is not modeled as same-Product `inventory_quantity_lineage` and therefore cannot accidentally bypass preparation conservation.
+Preparation is the explicit Product-transformation boundary; it is not same-Product InventoryQuantityLineage.
 
-## 9. Shelf life and lifecycle
+## 10. Shelf life and lifecycle
 
 ### `food_lifecycle_event`
 
@@ -676,50 +641,50 @@ IMM:
 
 - `food_lifecycle_event_id` PK;
 - `household_id` FK REQ;
-- `stock_item_id` FK REQ for the concrete event subject at occurrence;
-- event kind such as opening/state change;
+- originating `stock_item_id` FK REQ;
+- event kind;
 - authoritative occurrence time;
 - provenance.
 
-Inheritance into later split/transfer destinations occurs through quantity lineage evidence, not by rewriting this original subject.
+Later redistribution inherits the event through quantity-lineage evidence; the original subject is not rewritten.
 
 ### `shelf_life_rule`
 
 Versioned governed rule:
 
-- `shelf_life_rule_id` PK identifying the exact rule version;
+- `shelf_life_rule_id` PK identifying exact rule version;
 - catalog scope/owner;
-- rule family/semantic trigger group;
-- applicability target alternative: Product, IngredientConcept, or explicitly governed classification;
+- semantic trigger/deadline group;
+- current DB-01 applicability target XOR: Product or IngredientConcept;
 - trigger/storage predicates;
 - priority/specificity metadata;
 - version/effective interval;
 - temporal duration amount/unit;
 - temporal basis (`ELAPSED` or `LOCAL_CALENDAR`);
 - endpoint semantics;
-- governed timezone-selection semantics where calendar arithmetic requires them.
+- governed timezone-selection semantics where required.
 
-Calendar durations accept only DB-00-governed integral semantics and deterministic month/year/DST behavior.
+DB-00 permits “another governed classification introduced later.” That is an explicit future schema-evolution point, not a generic untyped target in DB-01. A classification target becomes valid only after its typed governed relation/version/reference contract is reviewed and added. ProductCategory is not silently assumed to be that universal taxonomy.
 
 ### `shelf_life_rule_activation`
 
-IMM decision fact for a rule activated for a concrete stock quantity/lineage.
+IMM:
 
 - `shelf_life_rule_activation_id` PK;
 - `household_id` FK REQ;
-- exact `shelf_life_rule_id` FK REQ;
-- originating `stock_item_id` FK REQ at activation;
+- exact ShelfLifeRule FK;
+- originating StockItem FK;
 - authoritative activation anchor;
-- optional exact `household_timezone_version_id` selected when Household timezone was used;
-- optional more-specific governed source temporal context;
-- optional `compatibility_evidence_id` for concept-targeted rules;
+- optional exact HouseholdTimezoneVersion selected when Household timezone was used;
+- optional more-specific source temporal context;
+- optional CompatibilityDecisionEvidence for concept-targeted rules;
 - preserved evaluation inputs/provenance.
 
-Later redistribution inherits this activation through quantity-lineage evidence rather than changing the original activation subject.
+Later redistribution inherits activation through lineage evidence.
 
 ### `effective_expiration`
 
-Derived/materializable projection for one current StockItem/lineage view:
+Derived/materializable current projection:
 
 - `effective_expiration_id` PK;
 - `household_id` FK REQ;
@@ -729,32 +694,28 @@ Derived/materializable projection for one current StockItem/lineage view:
 - derivation version/status;
 - recomputation provenance.
 
-A StockItem has at most one active current EffectiveExpiration projection for a given derivation contract/version. Historical derivation snapshots may be retained separately when required, but they cannot compete as current truth.
+At most one active current projection exists per StockItem/derivation contract version.
 
 ### `effective_expiration_candidate`
 
-Links one EffectiveExpiration calculation to one candidate via constrained source XOR:
-
-- `effective_expiration_candidate_id` PK;
+- candidate PK;
 - `household_id`;
 - EffectiveExpiration FK;
-- source candidate XOR:
-  - `source_expiration_fact_id`, or
-  - `shelf_life_rule_activation_id`;
-- candidate value/precision used for comparison;
+- source XOR: SourceExpirationFact or ShelfLifeRuleActivation;
+- candidate value/precision;
 - comparison/timezone context;
-- selected/rejected outcome and reason.
+- selected/rejected outcome/reason.
 
-Earliest-applicable candidate semantics remain governed by DB-00. A candidate cannot point to an unrelated Household/lineage fact.
+Candidate must be applicable to the same Household and StockItem lineage history. Earliest-applicable composition remains governed by DB-00.
 
-## 10. Shopping and replenishment
+## 11. Shopping and replenishment
 
 ### `household_product_policy`
 
-- `household_product_policy_id` PK;
+- policy PK;
 - `household_id` FK REQ;
-- `product_id` FK REQ and visible to Household;
-- optional exact desired/minimum quantity + unit;
+- visible `product_id` FK REQ;
+- optional exact desired/minimum quantity/unit;
 - policy metadata.
 
 ### `shopping_list`
@@ -765,47 +726,45 @@ Earliest-applicable candidate semantics remain governed by DB-00. A candidate ca
 
 ### `shopping_list_item`
 
-- `shopping_list_item_id` PK;
+- item PK;
 - `household_id` FK REQ;
 - ShoppingList FK REQ;
-- subject XOR:
-  - `product_id`, or
-  - `ingredient_concept_id`;
-- exact requested rational quantity + unit;
-- unresolved source text only as provenance, never canonical fulfillment identity;
+- subject XOR: Product or IngredientConcept;
+- exact requested rational quantity/unit;
+- unresolved free text as provenance only;
 - status.
 
 ### `shopping_list_fulfillment`
 
-- `shopping_list_fulfillment_id` PK;
+- fulfillment PK;
 - `household_id` FK REQ;
-- ShoppingListItem FK REQ;
-- PurchaseItem FK REQ;
-- exact allocated rational quantity + unit;
-- optional CompatibilityDecisionEvidence for concept-targeted item;
+- ShoppingListItem FK;
+- PurchaseItem FK;
+- exact allocated rational quantity/unit;
+- optional CompatibilityDecisionEvidence for concept target;
 - conversion evidence when applicable;
 - provenance.
 
-All ShoppingListFulfillment allocations for one PurchaseItem share the shopping-intent attribution pool and cannot exceed purchased quantity after exact conversion. This pool is independent from physical receiving allocation.
+All fulfillments from one PurchaseItem share the distinct shopping-intent pool and cannot exceed purchased quantity. This pool is independent from physical receiving.
 
-## 11. Alerts and notifications
+## 12. Alerts and notifications
 
 ### `alert_rule`
 
 - `alert_rule_id` PK;
 - `household_id` FK REQ for Household-derived operational rules;
-- governed subject/scope descriptor whose allowed target classes are defined by the rule type;
+- governed subject/scope descriptor defined by rule type;
 - condition/configuration;
 - lifecycle/version metadata.
 
-Where a rule targets a referentially significant domain entity, DB-02 must use a typed FK/association relation rather than an unconstrained generic entity ID.
+Referentially significant targets use typed FK/association relations, not unconstrained generic IDs.
 
 ### `alert`
 
 - `alert_id` PK;
 - `household_id` FK REQ;
 - AlertRule FK REQ;
-- triggering subject/context typed according to the originating rule;
+- triggering subject/context typed according to rule;
 - detection occurrence/recording provenance;
 - state.
 
@@ -818,23 +777,23 @@ Where a rule targets a referentially significant domain entity, DB-02 must use a
 - attempt/delivery state;
 - decision/attempt provenance.
 
-Alert state and delivery state are independent. A global user notification preference, if later modeled, influences delivery behavior only and cannot grant Household data authority.
+Alert state and delivery state are independent. A future global user notification preference may influence delivery only; it cannot grant Household authority and is not required for this DB-01 baseline.
 
-## 12. Integrations and imports
+## 13. Integrations and imports
 
 ### `integration`
 
 - `integration_id` PK;
-- explicit scope/binding type;
+- scope/binding type;
 - optional `household_id` when Household-affecting;
 - provider/account metadata;
-- secure credential reference only, never arbitrary secret JSON;
+- secure credential reference only;
 - lifecycle state.
 
 ### `import_run`
 
 - `import_run_id` PK;
-- `household_id` FK REQ for inventory-affecting imports;
+- `household_id` FK REQ for inventory-affecting import;
 - Integration FK;
 - source/run identity;
 - timestamps/status/provenance.
@@ -842,123 +801,88 @@ Alert state and delivery state are independent. A global user notification prefe
 ### `external_reference`
 
 - `external_reference_id` PK;
-- `household_id` when reference participates in Household operational reconciliation;
+- `household_id` when Household-operational;
 - Integration/ImportRun provenance;
 - provider namespace/type/value;
-- typed canonical target reference where resolved;
+- typed canonical target where resolved;
 - lifecycle/status.
 
-Provider identifiers never grant Household authority. Candidate uniqueness is scoped by provider/integration namespace, external reference type/value and Household when the reference is Household-operational; DB-02 must not make an unqualified provider value globally authoritative.
+Uniqueness/resolution is scoped by provider/integration namespace, type/value and Household when applicable. Provider identity never grants Household authority.
 
-## 13. Audit, idempotency and outbox
+## 14. Audit, idempotency and outbox
 
 ### `audit_event`
 
-Append-only auditable action record distinct from inventory history, domain event streams and application logs.
+Append-only auditable action evidence distinct from ledger/domain history.
 
-- `audit_event_id` PK;
+- audit PK;
 - optional/direct Household context;
 - actor/principal;
 - action;
-- target type and stable target identity as audit evidence;
+- target type/stable identity as evidentiary metadata;
 - occurrence/recording time;
-- trace/provenance metadata.
+- trace/provenance.
 
-Audit target identity is evidentiary metadata and does not itself replace the typed domain FK relationships of business facts.
+Generic audit target identity does not replace typed business FKs.
 
 ### `idempotency_record`
 
-- `idempotency_record_id` PK;
+- idempotency PK;
 - target scope class;
-- `household_id` REQ for Household operations, absent only for explicitly governed non-Household system/global commands;
-- authenticated actor/trusted principal identity;
-- command/operation identity and version;
-- client idempotency key;
+- `household_id` REQ for Household commands, absent only for explicitly governed non-Household commands;
+- principal identity;
+- command/operation identity/version;
+- client key;
 - canonical request fingerprint;
 - execution state;
-- committed response/result reference;
+- committed result reference;
 - retention/expiry state.
 
-Candidate key: `(target_scope, household_or_global_scope_identity, principal, operation_or_command, client_key)`.
-
-A key alone is never globally unique. Matching scoped identity with a different fingerprint/target/version is a conflict, not a new execution.
+Candidate key: `(target_scope, household_or_global_scope_identity, principal, operation, client_key)`. Reuse with a different fingerprint/target/version is conflict, not execution.
 
 ### `outbox_record`
 
-Durable publication boundary associated with the database transaction that commits the business mutation.
-
-- `outbox_record_id` PK;
+- outbox PK;
 - Household/context where applicable;
-- event/message contract identity and version;
+- event/message contract identity/version;
 - aggregate/business fact identity;
 - payload or immutable payload reference;
-- publication lifecycle timestamps/status.
+- publication lifecycle/status/timestamps.
 
-Outbox publication state does not change whether the underlying business mutation committed.
+Outbox is committed in the same durable database transaction as the business mutation requiring publication.
 
-## 14. Relational ownership summary
+## 15. Ownership summary
 
-Direct Household scope is required at minimum on:
+Direct Household scope is required at minimum on HouseholdMembership/TimezoneVersion, storage topology, Household-private catalog/evidence, procurement/receiving allocations/effects, inventory/ledger/lineage/waste/count/reconciliation, preparation facts, shelf-life activations/projections, shopping, alerts, Household integrations/imports/references, and Household-scoped audit/idempotency/outbox facts.
 
-- HouseholdMembership and HouseholdTimezoneVersion;
-- StorageLocation / Compartment;
-- Household-private catalog entities and mappings;
-- StagedIdentifierClaim;
-- Purchase / PurchaseItem / Receipt / ReceiptItem and related allocations/effects/exceptions;
-- StockItem / SourceExpirationFact / InventoryMovement / InventoryTransfer / quantity lineage / count and reconciliation facts;
-- Preparation and all input/output/allocation/deviation facts;
-- Household shelf-life activations/effective projections;
-- HouseholdProductPolicy / ShoppingList and fulfillment;
-- AlertRule / Alert / NotificationDelivery;
-- Household-affecting Integration / ImportRun / ExternalReference;
-- Household-scoped AuditEvent / IdempotencyRecord / OutboxRecord.
+A child carrying Household scope must agree with every Household-owning parent it references.
 
-A child relation carrying `household_id` must agree with every Household-owning parent it references. The database contract must make mismatched cross-Household composition impossible within one committed business fact.
+## 16. Authoritative versus derived
 
-## 15. Authoritative versus derived facts
+Authoritative/history-bearing examples include HouseholdTimezoneVersion; Purchase/Receipt facts and allocations; InventoryMovement; Transfer effects and exact lineage; WasteRecord semantics linked to ledger effects; InventoryLedgerBasis and reconciliation outcomes; immutable RecipeVersion/ingredients; Preparation inputs/outputs/allocations/deviations; SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation; conversion/compatibility evidence; committed ShoppingListFulfillment; IdempotencyRecord; AuditEvent; OutboxRecord.
 
-Authoritative/history-bearing examples:
+Derived/materializable examples include current StockItem balance, occupancy, EffectiveExpiration, alert/read models and analytical monetary allocations not present in source truth.
 
-- HouseholdTimezoneVersion;
-- Purchase/Receipt committed facts and allocations;
-- InventoryMovement;
-- InventoryTransfer identity/effects and exact quantity-lineage edges;
-- Inventory ledger basis and reconciliation outcomes;
-- RecipeVersion and its ingredient snapshot once committed/published for use;
-- Preparation input/output facts and allocations/deviations;
-- SourceExpirationFact / FoodLifecycleEvent / ShelfLifeRuleActivation;
-- MeasurementConversionEvidence / CompatibilityDecisionEvidence;
-- committed ShoppingListFulfillment;
-- IdempotencyRecord outcome identity;
-- AuditEvent and OutboxRecord.
+Every derived value must be rebuildable from authoritative facts plus preserved versioned decision evidence.
 
-Derived/materializable examples:
+## 17. Explicit logical non-conflations
 
-- current StockItem balance;
-- current storage occupancy;
-- EffectiveExpiration projection;
-- alert/read models;
-- analytical purchase unit cost allocations not present in the source transaction.
+DB-01 preserves at least these separations:
 
-A derived relation must be rebuildable from authoritative facts plus explicitly versioned rules/evidence.
-
-## 16. Explicit logical non-conflations
-
-DB-01 must preserve these separations in every physical implementation:
-
-- User profile versus Household authority;
-- global catalog identity versus Household-private catalog ownership;
-- canonical ProductIdentifier versus staged unresolved identifier evidence;
-- Product versus Batch versus StockItem;
-- ReceiptItem versus PurchaseItem allocation versus InventoryMovement effect;
-- physical receiving pool versus shopping-intent attribution pool;
-- StockItem current placement versus immutable historical placement effects;
-- StockItem current balance projection versus InventoryMovement ledger truth;
-- InventoryTransfer business identity versus its two ledger effects;
-- same-Product quantity lineage versus Product-transforming Preparation semantics;
-- InventoryCount observation versus historical ledger basis versus reconciliation outcome/adjustment;
-- Recipe versus immutable RecipeVersion versus concrete Preparation;
-- shelf-life rule definition versus activation decision versus EffectiveExpiration projection;
-- notification preference versus Household AlertRule authority;
-- provider/external identity versus Household authorization;
-- AuditEvent versus domain/inventory history.
+- User profile vs Household authority;
+- global catalog vs Household-private ownership;
+- canonical identifier vs staged identifier evidence;
+- Product vs Batch vs StockItem;
+- ReceiptItem vs PurchaseItem allocation vs InventoryMovement effect;
+- physical receiving pool vs shopping-intent pool;
+- StockItem current placement vs historical placement effects;
+- current balance projection vs InventoryMovement truth;
+- InventoryTransfer identity vs paired ledger effects;
+- same-Product lineage vs Product-transforming Preparation;
+- WasteRecord reason/classification vs stock-reducing ledger effect;
+- count observation vs InventoryLedgerBasis vs reconciliation outcome/adjustment;
+- Recipe vs immutable RecipeVersion vs Preparation;
+- shelf-life rule definition vs activation vs EffectiveExpiration projection;
+- optional notification preference vs Household AlertRule authority;
+- provider/external identity vs Household authorization;
+- AuditEvent vs domain/inventory history.
