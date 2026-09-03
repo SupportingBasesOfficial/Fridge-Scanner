@@ -68,17 +68,21 @@ Represents the exact conversion decision used when a committed business fact dep
 A committed receipt, movement, reconciliation, preparation allocation, shopping fulfillment or other conserved/reconciled quantity must never be reinterpreted using whatever conversion profile happens to be current later. If its correctness depends on a contextual conversion, the committed fact retains or immutably references the exact MeasurementConversionEvidence used. Corrections to a conversion profile affect future decisions or explicit correction workflows; they do not silently rewrite historical conservation semantics.
 
 ### Money / Currency
-Monetary values carry an exact amount and explicit currency. Binary floating-point representation is not authoritative money semantics. Cross-currency comparison or aggregation requires an explicit conversion rate/source and conversion time/context; the system must never silently treat numerically equal amounts in different currencies as equivalent.
+Monetary values carry an exact amount and explicit currency. Binary floating-point representation is not authoritative money semantics. Monetary facts also carry an explicit semantic role when the business meaning differs — for example pricing-basis amount, line gross, line discount, line tax/charge or line net — so two numerically equal amounts are not treated as interchangeable facts. Cross-currency comparison or aggregation requires an explicit conversion rate/source and conversion time/context; the system must never silently treat numerically equal amounts in different currencies as equivalent.
 
 ## 4. Procurement and receiving
 
 ### Purchase
-Represents a commercial transaction or acquisition record and establishes the transaction currency/context used by its monetary lines unless a source transaction explicitly models multiple currencies with preserved conversion provenance.
+Represents a commercial transaction or acquisition record and establishes the transaction currency/context used by its monetary lines unless a source transaction explicitly models multiple currencies with preserved conversion provenance. Purchase-level discounts, taxes, fees or charges may remain Purchase-level facts when the source transaction does not allocate them to individual lines.
 
 ### PurchaseItem
-Represents an item purchased, including Product, transaction-specific quantity, MeasurementUnit and monetary price. The quantity is never unitless; reconciliation may convert only under the accepted dimension-safe conversion rules. Price/discount/tax values are transaction facts with explicit currency and exact monetary semantics rather than Product attributes.
+Represents an item purchased, including Product, transaction-specific quantity, MeasurementUnit and explicit monetary-role facts. The quantity is never unitless; reconciliation may convert only under the accepted dimension-safe conversion rules.
 
-If an imported/source line is denominated differently from the Purchase transaction currency, both the source amount/currency and any normalized amount must preserve the explicit conversion rate/source and conversion time/context; silent conversion is forbidden.
+A generic unlabeled `price` amount is not canonical. When a unit/basis price exists, it identifies the pricing-basis quantity and MeasurementUnit to which the amount applies. A PurchaseItem may additionally preserve `line_gross`, `line_discount`, `line_tax` or other governed line charges, and `line_net`, each as an exact Money value with explicit semantic role and provenance indicating whether the value came from the source transaction or was derived by the platform.
+
+For the ordinary line equation, `line_gross` is the pre-discount, pre-tax/charge extended amount; `line_discount` is the total discount allocated to the line; `line_tax`/governed line charges are the total taxes/charges allocated to the line; and `line_net = line_gross - line_discount + line_tax/line-charges` under the transaction's governed currency scale/rounding policy. If source-provided and derived values coexist, they must reconcile under that policy or retain an explicit discrepancy. Purchase-level discounts, taxes, fees or charges that are not source-allocated to a line must not be silently folded into PurchaseItem unit price or historical unit cost. Any later analytical/accounting allocation of Purchase-level amounts preserves allocation method, basis, rounding and provenance as derived facts without rewriting source transaction amounts.
+
+If the pricing basis differs from the purchased quantity/unit, the relationship is reconciled only through accepted measurement-conversion semantics and preserves MeasurementConversionEvidence whenever contextual conversion is required. If an imported/source line is denominated differently from the Purchase transaction currency, both the source amount/currency and any normalized amount must preserve the explicit conversion rate/source and conversion time/context; silent conversion is forbidden.
 
 ### Receipt / Receiving
 Represents a physical receiving operation into a Household. Purchase and Receipt may occur atomically in simple flows, but they remain separate concepts because purchased and received quantities can differ in time or amount. A Receipt may also represent an acquisition with no prior Purchase record when the source workflow legitimately has no commercial order.
@@ -147,13 +151,15 @@ Every committed reconciliation outcome links back to the InventoryCount/Inventor
 ## 6. Food lifecycle and shelf life
 
 ### ShelfLifeRule
-Represents a versioned rule such as "N days after opening", "N days after preparation", or a rule conditional on storage state. A relative shelf life is a duration/rule, not a calendar date.
+Represents a versioned rule such as "N days after opening", "N days after preparation", or a rule conditional on storage state. A relative shelf life is a governed duration rule, not a calendar date.
 
 Every ShelfLifeRule has an explicit applicability scope. Rules may target a specific Product, an IngredientConcept, or another governed classification introduced later; broader scopes must not override a more specific applicable rule accidentally. Applicability includes a semantic trigger/deadline group identifying which rules are alternatives competing to produce the same kind of deadline for the same authoritative activation fact, plus trigger/event type, storage condition/category and other explicit predicates required by the rule.
 
 Precedence is evaluated only among applicable rules inside the same semantic trigger/deadline group. Within such a competing group, exact Product scope outranks broader IngredientConcept/classification scope; within the same specificity, explicit priority resolves ordering. Rules activated by independent semantic facts or trigger groups — for example a stock-entry/default deadline and a later opening deadline — do not suppress one another merely because one has a more specific catalog scope. Each independent applicable group may contribute its own expiration candidate, after which candidate-combination semantics choose the operational deadline.
 
 Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates that rule group. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority inside one competing group at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
+
+Every relative rule also preserves the temporal arithmetic necessary to derive one deterministic deadline: duration amount/unit, temporal basis (`ELAPSED` or `LOCAL_CALENDAR`), endpoint semantics, and the governed timezone/version context required for calendar arithmetic. `ELAPSED` arithmetic operates on the instant timeline: seconds, minutes and hours are exact elapsed durations, an elapsed day is exactly 24 hours and an elapsed week is exactly seven elapsed days; month/year units are invalid in elapsed mode. `LOCAL_CALENDAR` arithmetic adds calendar days/weeks/months/years in the governed IANA timezone anchored to the activation fact unless the rule preserves a more specific governed timezone context. It preserves the activation local wall-clock time unless the rule declares another endpoint. A resulting time in a DST gap resolves to the first valid instant after the gap; an ambiguous overlap resolves to the earlier occurrence. End-of-local-day is the exclusive start of the following local calendar day. A deadline expires at the boundary and is valid strictly before it. Rules missing the temporal semantics needed to derive one instant are invalid and must not be published/applied.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
@@ -165,7 +171,7 @@ Each applicable authoritative input or independent ShelfLifeRule semantic group 
 
 For candidate ordering, a source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source data but is interpreted operationally as the end of that local calendar day in the canonical Household timezone applicable to the StockItem. If the source itself supplies an explicit timezone/offset or a governed external context requires one, that source context is preserved and used instead. When Household timezone is used, its exact governed version is selected as of the preserved domain occurrence time at which the relevant SourceExpirationFact became authoritative for the concrete StockItem/package — normally that fact's source observation/import/receipt occurrence time — unless a more specific governed source temporal context applies. Initial calculation and every recomputation reuse this same timezone-selection anchor; later Household timezone changes cannot reinterpret the historical date-only fact. Instant-valued candidates retain their exact instant. Comparisons normalize these operational instants without mutating or fabricating precision in the original source fact.
 
-The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, semantic trigger/deadline groups, group-local precedence decisions, combination result, rule evaluation anchor, the SourceExpirationFact occurrence/source anchor used for date-only timezone selection, the selected timezone version/context and ShelfLifeRule version(s) that participated in selection.
+The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, semantic trigger/deadline groups, group-local precedence decisions, combination result, rule evaluation anchor, relative-duration amount/unit/basis/endpoint/timezone context, the SourceExpirationFact occurrence/source anchor used for date-only timezone selection, the selected timezone version/context and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -323,7 +329,7 @@ Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
 
 MeasurementConversionEvidence ── exact version/factor/context ──> committed reconciled/conserved quantities
 CompatibilityDecisionEvidence ── exact mapping/version/context ──> committed concept-based allocations
-ShelfLifeRule ── group-local precedence / activation-time selection ──> Product | IngredientConcept | governed classification
+ShelfLifeRule ── group-local precedence / activation-time selection / explicit temporal arithmetic ──> Product | IngredientConcept | governed classification
 StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
 ```
 
@@ -341,6 +347,9 @@ The canonical model rejects these conflations:
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - ProductIdentifier uniqueness without scheme/issuer namespace semantics;
 - Product as owner of a single current price;
+- PurchaseItem with an unlabeled monetary `price` whose unit-vs-line-total meaning is ambiguous;
+- purchase line totals, discounts, taxes or charges without explicit gross/net roles and governed reconciliation/rounding semantics;
+- Purchase-level charges silently folded into line unit cost without explicit allocation provenance;
 - monetary amount without explicit currency or silent cross-currency conversion;
 - unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
 - committed contextual/cross-dimension conversion that later resolves against the current profile instead of preserving the exact version/factor/context used;
@@ -370,6 +379,7 @@ The canonical model rejects these conflations:
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule precedence applied globally across independent semantic trigger/deadline groups;
 - ShelfLifeRule without explicit applicability, deterministic group-local precedence and an activation-class-specific stable evaluation anchor;
+- relative ShelfLifeRule arithmetic that leaves elapsed-vs-calendar basis, timezone/DST handling or endpoint semantics implicit;
 - EffectiveExpiration date-only interpretation whose timezone version is selected from calculation time instead of the preserved SourceExpirationFact domain/source anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
