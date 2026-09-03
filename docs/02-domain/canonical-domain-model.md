@@ -96,12 +96,14 @@ Represents one atomic business transfer identity backed by linked source-decreme
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
 
 ### InventoryCount
-Represents a physical inventory/counting session scoped to one Household and optionally to a defined counting area such as a StorageLocation or Compartment.
+Represents a physical inventory/counting session scoped to one Household and optionally to a defined counting area such as a StorageLocation or Compartment. The session records an authoritative physical observation time and a corresponding ledger as-of/cutoff point used for reconciliation.
+
+Reconciliation must compare observed quantities with the system state as of that captured cutoff, not whatever balance happens to exist when processing occurs later. If committed movements occur after the cutoff, reconciliation must preserve them: the adjustment is computed against the captured as-of state and committed with concurrency semantics that prevent overwriting or double-accounting for intervening movements. If the captured cutoff can no longer be reconciled safely because required history is unavailable or conflicting, the outcome must be blocked/escalated rather than guessed.
 
 ### InventoryCountItem
 Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
 
-When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to support an explicit reconciliation outcome that can create canonical inventory rather than silently mutating or inventing history.
+When an InventoryCountItem matches an existing StockItem, product and placement semantics must be compatible with that StockItem. When no existing StockItem matches, the count line still carries enough Product/placement/measurement identity to support an explicit reconciliation outcome that can create canonical inventory rather than silently mutating or inventing history. Every reconciliation outcome links back to the InventoryCount/InventoryCountItem, the captured as-of point and the committed adjustment movement(s) it produced.
 
 ## 6. Food lifecycle and shelf life
 
@@ -136,7 +138,9 @@ Defines an `IngredientConcept`, quantity, unit and optional constraints for a Re
 Concrete execution of a Recipe or ad-hoc preparation inside a Household.
 
 ### PreparationInput
-References the concrete StockItem(s) and quantities consumed by a Preparation.
+Represents one measurable stock input consumed by a Preparation. It identifies the concrete source StockItem, Product, consumed quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-input InventoryMovement decrement effect(s).
+
+Every linked input effect must represent the same Product as the PreparationInput and originate from the referenced StockItem or its governed split lineage. The sum of linked committed decrement quantities, after valid dimension-safe conversion, must equal exactly the PreparationInput quantity. A single input may therefore be materialized by multiple decrement effects only when lineage/state splitting requires it; splitting may redistribute the consumed quantity but must neither create nor destroy it.
 
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
@@ -216,9 +220,10 @@ User ──< HouseholdMembership >── Household
                                 │       └── EffectiveExpiration
                                 ├──< InventoryTransfer ── paired conserved effects ──> InventoryMovement
                                 ├──< InventoryCount ──< InventoryCountItem ──> Product
+                                │       └── as-of/cutoff ──> reconciliation adjustment InventoryMovement
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
-                                ├──< Preparation ──< PreparationInput >── StockItem
+                                ├──< Preparation ──< PreparationInput ──< InventoryMovement >── StockItem
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
                                 │                              └──< fulfillment >── PurchaseItem
@@ -248,11 +253,13 @@ The canonical model rejects these conflations:
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - Product as owner of a single current price;
-- unitless purchased, counted, prepared-output, replenishment-policy or shopping quantities;
+- unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
 - Purchase as proof that stock physically entered inventory;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
 - InventoryCountItem without explicit counted-subject identity;
+- inventory reconciliation without a captured physical-count as-of/ledger cutoff;
 - InventoryTransfer without same-Product and quantity-conservation semantics;
+- PreparationInput without authoritative decrement provenance and quantity conservation;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem without a canonical subject and measurable requested amount;
 - ambiguous StockItem placement with conflicting location/compartment truths;
