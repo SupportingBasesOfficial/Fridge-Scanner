@@ -8,9 +8,41 @@ Traceability log for physical-schema/enforcement findings discovered during DB-0
 
 DB-02 begins from accepted DB-01 main commit `33507116eae3e4e79f4d1242d17d7d8f847424d4`.
 
-## Current findings
+## Pass 1 — physical baseline and identity/tenancy
 
-None recorded yet. The initial PostgreSQL design baseline is intentionally not declared CLEAN until red-team review of the physical decisions and executable bootstrap is complete.
+### F2-001 — Invalid/redundant duplicate-column Household unique constraint
+
+**Severity:** executable-schema blocker.
+
+The first `household` draft attempted `UNIQUE(household_id, household_id)`, which was unnecessary because `household_id` is already the PK and duplicate-column key syntax does not provide the intended composite integrity.
+
+**Resolution:** removed the constraint. Same-Household integrity is enforced on child/parent relations using meaningful composite candidate keys on the actual parent relation that contains both Household and child identity.
+
+**Status:** CLOSED.
+
+### F2-002 — Physical schema invented concrete Household role codes
+
+**Severity:** domain-governance overreach.
+
+The initial migration seeded OWNER/ADMIN/MEMBER/AUDITOR even though accepted DB-00/DB-01 require Household-scoped authority but do not canonically define that exact role taxonomy.
+
+**Resolution:** retained `household_role` as governed reference structure but removed all guessed role seeds. Concrete business role meanings must enter through a separately accepted reference-data contract.
+
+**Status:** CLOSED.
+
+### F2-003 — Current membership uniqueness depended on mutable status text
+
+**Severity:** lifecycle integrity ambiguity.
+
+The first partial unique index treated only `lifecycle_status = 'ACTIVE'` as current. Because lifecycle status taxonomy is governed/evolvable, a different current-state code could permit two simultaneously open memberships for the same Household/User.
+
+**Resolution:** current-membership uniqueness is now based on the temporal contract itself: only one `(household_id, user_id)` row may have `effective_to IS NULL`, independent of lifecycle label.
+
+**Status:** CLOSED.
+
+## Current review state
+
+All findings recorded above are closed on the branch. DB-02 is **not** CLEAN: the migration lineage is still incomplete and rational execution proof plus future physical-schema red-team remain required.
 
 ## Rule
 
