@@ -199,3 +199,15 @@ Working decision register for DB-01. These decisions refine persistence shape wi
 **Decision:** DB-01 does not require a `user_notification_preference` relation for acceptance.
 
 **Reason:** DB-00 permits such a preference but does not require it. If introduced later, it influences NotificationDelivery behavior only and cannot grant Household operational authority or replace Household AlertRule/Alert ownership.
+
+## L-033 — Preferred storage defaults are typed policy children
+
+**Decision:** `household_product_storage_preference` represents preferred-storage defaults as ranked typed targets: StorageLocation XOR Compartment XOR governed StorageLocation kind.
+
+**Reason:** keeping preferred storage inside generic policy metadata would let DB-02 implementations disagree on target identity/cardinality and would prevent Household/reference integrity. A preference remains policy only and never becomes StockItem placement truth or an InventoryMovement.
+
+## L-034 — AlertRule scope and Alert trigger evidence are typed relations
+
+**Decision:** every Household AlertRule has one primary `alert_rule_subject`; every committed Alert retains typed `alert_trigger_subject` evidence. Current subject kinds are Household, Product, StockItem, StorageLocation, Compartment and HouseholdProductPolicy.
+
+**Reason:** DB-00 requires explicit governed alert subject/scope and explainable triggering subject/context. Deferring this to a generic DB-02 type/id scheme would violate DB-01's referential-integrity purpose. Future subject kinds require reviewed typed schema extension.
