@@ -78,7 +78,7 @@ When a ReceiptItem references a PurchaseItem, both lines must identify the same 
 
 A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. Every linked entry effect must represent the same Product as the ReceiptItem, and the sum of the linked committed entry quantities, after valid dimension-safe conversion into one comparison unit, must equal exactly the committed ReceiptItem quantity. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, placement or other identity-affecting state requires a split; splitting may redistribute quantity but must neither create nor destroy it.
 
-Cumulative ordinary ReceiptItems allocated to one PurchaseItem must remain reconcilable to the purchased quantity after valid conversion. Partial receiving is valid. Quantity beyond the purchased amount must remain an explicit over-receipt discrepancy/exception with governed acceptance or correction; it must not silently make the PurchaseItem appear normally fulfilled.
+All allocations that consume a PurchaseItem's acquired quantity share one source availability pool. After valid dimension-safe conversion, the sum of ordinary same-Product receipt allocations plus governed substitution allocations against that PurchaseItem must not exceed its purchased quantity as normal fulfillment. Partial receiving is valid. Quantity beyond the purchased amount, regardless of whether it is ordinary or substituted, must remain an explicit over-receipt discrepancy/exception with governed acceptance or correction; substitution must never create an independent second quantity allowance for the same PurchaseItem.
 
 ## 5. Inventory
 
@@ -170,7 +170,9 @@ Every linked input effect must represent the same Product as the PreparationInpu
 ### PreparationInputAllocation
 For a Preparation that executes a Recipe, fulfillment of recipe requirements is represented explicitly by allocations from PreparationInput to RecipeIngredient. Each allocation identifies the exact RecipeIngredient line, allocated quantity and MeasurementUnit. The allocated Product must satisfy that line's IngredientConcept and any exact-Product or other governed constraints effective for the preparation.
 
-Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion, may not allocate more than the PreparationInput quantity in total, and must preserve enough identity to distinguish repeated or otherwise similar recipe lines. Recipe requirement fulfillment is derived from these explicit allocations rather than inferred from ingredient names or Product similarity. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
+Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion and preserve enough identity to distinguish repeated or otherwise similar recipe lines. Across all allocations sourced from one PreparationInput, the allocated total must not exceed that PreparationInput quantity.
+
+For each RecipeIngredient, the preparation resolves the effective required quantity after applying the Preparation's governed recipe scaling/yield factor or other explicit quantity adjustment. The sum of compatible PreparationInputAllocation quantities targeting that exact RecipeIngredient must reconcile against that effective requirement after valid conversion. Normal exact fulfillment must not exceed or underfill the requirement silently. If the preparation intentionally permits an underage, overage, tolerance or substitution, the deviation must be explicit and preserve the expected quantity, actual allocated quantity, MeasurementUnit, reason/policy and provenance/approval where required. Recipe requirement fulfillment is derived from these explicit allocations rather than inferred from ingredient names or Product similarity. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
 
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
@@ -207,13 +209,17 @@ Each fulfillment allocation records allocated quantity and MeasurementUnit. Allo
 ## 10. Automation, alerts and integrations
 
 ### AlertRule
-Defines a condition or preference that may create an alert.
+Defines a condition or preference that may create an alert. A rule that reads or evaluates Household-scoped operational data belongs to exactly one Household and records the governed subject/scope it evaluates, such as a Product, StockItem, StorageLocation, expiration condition or other explicit Household-owned target. Household ownership is part of the rule's authorization boundary, not an inferred UI filter.
+
+A genuinely user-global notification preference may exist outside a Household only when it does not itself grant access to Household operational data or act as a cross-household alert rule. Applying a global preference to a Household alert still requires the underlying AlertRule/Alert to remain Household-scoped and independently authorized.
 
 ### Alert
-Represents a detected actionable condition.
+Represents a detected actionable condition and retains the AlertRule, target Household, triggering subject/context and detection occurrence/recording provenance needed to explain the condition. An Alert must not be attached to a Household or subject different from the rule/evidence that produced it.
 
 ### NotificationDelivery
-Represents a delivery attempt through a channel. Alert state and delivery state are separate.
+Represents one delivery attempt for an Alert through a channel. It links to exactly one Alert and preserves the intended recipient/destination, channel, delivery state and attempt provenance. Alert state and delivery state are separate.
+
+For Household-derived alerts, the delivery decision must be based on a recipient/destination that is authorized or explicitly configured for that Household at the governed decision point. A NotificationDelivery cannot be reassigned across Households, and knowledge of an email address, device token, webhook destination or provider account is not by itself Household authorization.
 
 ### Integration
 Represents an external-provider connection and lifecycle. Credentials/secrets are referenced through secure infrastructure and are not stored as arbitrary JSON in the domain model.
@@ -267,6 +273,7 @@ User ──< HouseholdMembership >── Household
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
                                 │                              └──< ShoppingListFulfillment >── PurchaseItem
+                                ├──< AlertRule ──< Alert ──< NotificationDelivery
                                 ├──< Integration / Household binding
                                 │       └──< ImportRun ──< ExternalReference
                                 └──< HouseholdProductPolicy >── Product
@@ -302,6 +309,7 @@ The canonical model rejects these conflations:
 - Purchase as proof that stock physically entered inventory;
 - ReceiptItem linked to a different-Product PurchaseItem without explicit substitution semantics;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
+- ordinary receipts and substitutions consuming separate quantity allowances from the same PurchaseItem;
 - silent over-receipt treated as ordinary PurchaseItem fulfillment;
 - InventoryCountItem without explicit counted-subject identity or its own observation/as-of semantics when the session is not atomic;
 - inventory reconciliation that classifies late-recorded movements only by commit time instead of domain occurrence time;
@@ -310,10 +318,12 @@ The canonical model rejects these conflations:
 - InventoryTransfer without same-Product and quantity-conservation semantics;
 - PreparationInput without authoritative decrement provenance and quantity conservation;
 - recipe-based PreparationInput fulfillment inferred without explicit RecipeIngredient allocation;
+- recipe allocations capped only by source input while silently over/under-fulfilling the target RecipeIngredient requirement;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
+- AlertRule/Alert/NotificationDelivery without explicit Household, subject and recipient/destination ownership chain for Household-derived conditions;
 - inventory-affecting Integration/ImportRun without explicit Household scope;
-- provider identity or credentials treated as Household authorization;
+- provider identity, credentials or notification destination treated as Household authorization;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule without explicit applicability, deterministic precedence and an activation-class-specific stable evaluation anchor;
