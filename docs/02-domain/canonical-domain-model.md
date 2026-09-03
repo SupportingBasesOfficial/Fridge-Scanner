@@ -34,7 +34,12 @@ A stored StockItem has exactly one placement anchor: either a Compartment or a S
 ### IngredientConcept
 Recipe-facing semantic food/ingredient concept, such as "milk", "egg" or "rice". It is independent from a specific commercial SKU, barcode or household stock item.
 
-A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Compatibility is domain data, not uncontrolled name matching. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
+A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Compatibility is governed, versioned domain data, not uncontrolled name matching. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
+
+### CompatibilityDecisionEvidence
+Represents the exact compatibility decision used when a committed business fact treats a Product as satisfying an IngredientConcept. It preserves Product, IngredientConcept, compatibility mapping/rule identity and version, effective/evaluation time or context, relevant constraints, decision provenance and any approval required by policy.
+
+Committed PreparationInputAllocation and ShoppingListFulfillment records that rely on IngredientConcept compatibility must retain or immutably reference the exact CompatibilityDecisionEvidence used at the decision point. Later changes to compatibility mappings affect future decisions or explicit correction workflows; they must not silently reinterpret historical allocations.
 
 ### Product
 Canonical definition of a stockable food/product identity. A Product may represent a commercial packaged product, loose/unbranded food, a household-defined item, or a reusable identity for prepared food/output. Commercial metadata such as SKU, barcode, brand, manufacturer or Batch is optional and must not be required merely to create valid stock identity.
@@ -109,10 +114,14 @@ A SourceExpirationFact may reference a Batch when the fact is genuinely batch-le
 ### InventoryMovement
 Represents an immutable committed stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return. Corrections are additional compensating/adjustment movements rather than mutation of committed movement history.
 
-An InventoryMovement whose domain occurrence time can differ from its recording/commit time preserves both. This distinction is authoritative for historical reconciliation: late recording does not change when the physical/domain stock change actually occurred.
+An InventoryMovement whose domain occurrence time can differ from its recording/commit time preserves both. This distinction is authoritative for historical reconciliation: late recording does not change when the physical/domain stock change actually occurred. When a movement affects placement-sensitive history, the movement effect preserves the immutable placement anchor applicable to that effect rather than relying on the StockItem's later mutable placement.
 
 ### InventoryTransfer
-Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Both effects must represent the same Product and conserve exactly the transferred quantity after valid dimension-safe conversion. A transfer may change placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve lineage between source and destination effects.
+Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Both effects must represent the same Product and conserve exactly the transferred quantity after valid dimension-safe conversion.
+
+The source-decrement effect preserves the immutable source placement anchor and the destination-increment effect preserves the immutable destination placement anchor. The transfer/effects preserve authoritative domain occurrence time independently from recording/commit time when those may differ. Historical reconstruction therefore resolves where the quantity existed from immutable transfer/movement facts, never from whatever placement the StockItem has now.
+
+A transfer may change current placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve lineage between source and destination effects.
 
 ### InventoryBalance
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
@@ -163,13 +172,16 @@ Expiration is a state/condition. Disposal is a separate physical action and must
 ## 7. Recipes and preparations
 
 ### Recipe
-Reusable preparation definition. A Recipe is not tied to a physical stock batch or household storage location.
+Reusable preparation definition. A Recipe is not tied to a physical stock batch or household storage location. Changes to a reusable Recipe create a new immutable RecipeVersion or equivalent immutable snapshot for future executions rather than rewriting the definition used by committed Preparations.
+
+### RecipeVersion
+Represents an immutable execution-time snapshot/version of a Recipe, including the exact RecipeIngredient lines, quantities, units, ordering/identity and governed constraints applicable to that version. Historical Preparations reference this immutable version/snapshot so later Recipe edits cannot change past execution semantics.
 
 ### RecipeIngredient
-Defines an `IngredientConcept`, quantity, unit and optional constraints for a Recipe. It does not reference concrete stock. An exact Product constraint is permitted only when the recipe genuinely requires a specific product.
+Defines an `IngredientConcept`, quantity, unit and optional constraints for a Recipe version. It does not reference concrete stock. An exact Product constraint is permitted only when the recipe genuinely requires a specific product.
 
 ### Preparation
-Concrete execution of a Recipe or ad-hoc preparation inside a Household.
+Concrete execution of a Recipe or ad-hoc preparation inside a Household. A recipe-based Preparation references exactly one immutable RecipeVersion/snapshot and preserves the scaling/yield inputs/context used to derive effective requirements for that execution. An ad-hoc Preparation may omit Recipe/RecipeVersion provenance.
 
 ### PreparationInput
 Represents one measurable stock input consumed by a Preparation. It identifies the concrete source StockItem, Product, consumed quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-input InventoryMovement decrement effect(s).
@@ -177,18 +189,20 @@ Represents one measurable stock input consumed by a Preparation. It identifies t
 Every linked input effect must represent the same Product as the PreparationInput and originate from the referenced StockItem or its governed split lineage. The sum of linked committed decrement quantities, after valid dimension-safe conversion, must equal exactly the PreparationInput quantity. A single input may therefore be materialized by multiple decrement effects only when lineage/state splitting requires it; splitting may redistribute the consumed quantity but must neither create nor destroy it.
 
 ### PreparationInputAllocation
-For a Preparation that executes a Recipe, fulfillment of recipe requirements is represented explicitly by allocations from PreparationInput to RecipeIngredient. Each allocation identifies the exact RecipeIngredient line, allocated quantity and MeasurementUnit. The allocated Product must satisfy that line's IngredientConcept and any exact-Product or other governed constraints effective for the preparation.
+For a Preparation that executes a Recipe, fulfillment of recipe requirements is represented explicitly by allocations from PreparationInput to the exact RecipeIngredient line in the referenced immutable RecipeVersion/snapshot. Each allocation identifies that exact line, allocated quantity and MeasurementUnit.
+
+The allocated Product must satisfy the line's IngredientConcept and any exact-Product or other governed constraints effective for the Preparation. When compatibility rather than exact Product identity is used, the allocation preserves or immutably references the exact CompatibilityDecisionEvidence used at commit time. Later compatibility edits cannot invalidate or retroactively validate the committed allocation.
 
 Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion and preserve enough identity to distinguish repeated or otherwise similar recipe lines. Across all allocations sourced from one PreparationInput, the allocated total must not exceed that PreparationInput quantity.
 
-For each RecipeIngredient, the preparation resolves the effective required quantity after applying the Preparation's governed recipe scaling/yield factor or other explicit quantity adjustment. The sum of compatible PreparationInputAllocation quantities targeting that exact RecipeIngredient must reconcile against that effective requirement after valid conversion. Normal exact fulfillment must not exceed or underfill the requirement silently. If the preparation intentionally permits an underage, overage, tolerance or substitution, the deviation must be explicit and preserve the expected quantity, actual allocated quantity, MeasurementUnit, reason/policy and provenance/approval where required. Recipe requirement fulfillment is derived from these explicit allocations rather than inferred from ingredient names or Product similarity. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
+For each RecipeIngredient snapshot line, the Preparation preserves the effective required quantity after applying its governed recipe scaling/yield factor or other explicit quantity adjustment, including the scaling inputs/context used. The sum of compatible PreparationInputAllocation quantities targeting that exact immutable line must reconcile against the preserved effective requirement after valid conversion. Normal exact fulfillment must not exceed or underfill the requirement silently. If the preparation intentionally permits an underage, overage, tolerance or substitution, the deviation must be explicit and preserve the expected quantity, actual allocated quantity, MeasurementUnit, reason/policy and provenance/approval where required. Recipe requirement fulfillment is derived from these explicit historical allocations rather than inferred from current Recipe contents, ingredient names or current Product compatibility. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
 
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
 
 Every linked output effect must represent the same Product as the PreparationOutput, and the sum of linked committed output quantities, after valid dimension-safe conversion, must equal exactly the PreparationOutput quantity. One PreparationOutput may create multiple movement effects/StockItems when placement, package, shelf-life or provenance state requires a split. Multiple preparation outputs may later contribute to compatible holdings, but lineage to each originating PreparationOutput must remain recoverable through immutable movement provenance rather than inferred from the current StockItem balance.
 
-This separation creates the invariant: recipe = definition; preparation = execution.
+This separation creates the invariant: recipe = reusable definition; recipe version = immutable execution contract; preparation = concrete execution.
 
 ## 8. Waste and disposal
 
@@ -212,6 +226,8 @@ Free text may be retained as unresolved user input/provenance, but unresolved te
 
 ### ShoppingListFulfillment
 Represents an explicit quantity allocation from one PurchaseItem to one ShoppingListItem. For a Product-targeted list line, the PurchaseItem must reference that exact Product. For an IngredientConcept-targeted line, the purchased Product must satisfy that IngredientConcept through the governed compatibility relationship effective for the fulfillment decision.
+
+When IngredientConcept compatibility is used, the committed fulfillment preserves or immutably references the exact CompatibilityDecisionEvidence used at the decision point. Later compatibility changes must not silently reinterpret historical fulfillment validity.
 
 Each fulfillment allocation records allocated quantity and MeasurementUnit. Allocated quantities are reconciled through the accepted dimension-safe conversion rules, may represent partial fulfillment, and must not exceed the quantity of the source PurchaseItem available for allocation after accounting for its other fulfillment allocations. A ShoppingListItem is fully fulfilled only when the sum of its compatible allocated quantities satisfies its requested quantity under an explicit fulfillment policy; over-fulfillment, substitution or tolerance must be represented explicitly rather than inferred. The same purchased quantity must not be double-counted across multiple list lines.
 
@@ -273,26 +289,29 @@ User ──< HouseholdMembership >── Household
                                 │       ├──< InventoryMovement
                                 │       ├──< FoodLifecycleEvent
                                 │       └── EffectiveExpiration
-                                ├──< InventoryTransfer ── paired conserved effects ──> InventoryMovement
+                                ├──< InventoryTransfer ── source/destination placement snapshots ──> InventoryMovement
                                 ├──< InventoryCount ──< InventoryCountItem ──> Product
                                 │       └── per-line observation/as-of ──> reconciliation adjustment InventoryMovement
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
-                                ├──< Preparation ──< PreparationInput ──< InventoryMovement >── StockItem
-                                │              │          └──< PreparationInputAllocation >── RecipeIngredient
+                                ├──< Preparation ──> RecipeVersion ──> Recipe
+                                │              ├──< PreparationInput ──< InventoryMovement >── StockItem
+                                │              │          └──< PreparationInputAllocation >── RecipeIngredient snapshot
+                                │              │                         └── CompatibilityDecisionEvidence
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
                                 │                              └──< ShoppingListFulfillment >── PurchaseItem
+                                │                                             └── CompatibilityDecisionEvidence when concept-targeted
                                 ├──< AlertRule ──< Alert ──< NotificationDelivery
                                 ├──< Integration / Household binding
                                 │       └──< ImportRun ──< ExternalReference
                                 └──< HouseholdProductPolicy >── Product
 
 GLOBAL catalog ──< Product
-IngredientConcept ──< RecipeIngredient >── Recipe
+IngredientConcept ──< RecipeIngredient >── RecipeVersion ──> Recipe
         │
         ├──< ShelfLifeRule
-        └──< controlled compatibility >── Product
+        └──< versioned controlled compatibility >── Product
 
 Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         ├──< ShelfLifeRule
@@ -300,6 +319,7 @@ Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         └── measurement/catalog metadata
 
 MeasurementConversionEvidence ── exact version/factor/context ──> committed reconciled/conserved quantities
+CompatibilityDecisionEvidence ── exact mapping/version/context ──> committed concept-based allocations
 ShelfLifeRule ── group-local precedence / activation-time selection ──> Product | IngredientConcept | governed classification
 StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
 ```
@@ -321,6 +341,7 @@ The canonical model rejects these conflations:
 - monetary amount without explicit currency or silent cross-currency conversion;
 - unitless purchased, counted, prepared-input, prepared-output, replenishment-policy or shopping quantities;
 - committed contextual/cross-dimension conversion that later resolves against the current profile instead of preserving the exact version/factor/context used;
+- committed IngredientConcept compatibility that later resolves against the current mapping instead of preserving the exact mapping/version/context used;
 - Purchase as proof that stock physically entered inventory;
 - ReceiptItem linked to a different-Product PurchaseItem without explicit substitution semantics;
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
@@ -330,8 +351,10 @@ The canonical model rejects these conflations:
 - inventory reconciliation that classifies late-recorded movements only by commit time instead of domain occurrence time;
 - a late pre-observation movement applied on top of a count adjustment that already compensated for the same physical effect;
 - ambiguous aggregate count allocated arbitrarily across state-distinct StockItems;
-- InventoryTransfer without same-Product and quantity-conservation semantics;
+- InventoryTransfer without same-Product, quantity-conservation and immutable source/destination placement semantics;
+- historical transfer reconstruction from current StockItem placement;
 - PreparationInput without authoritative decrement provenance and quantity conservation;
+- recipe-based Preparation without immutable RecipeVersion/snapshot and preserved scaling/constraint context;
 - recipe-based PreparationInput fulfillment inferred without explicit RecipeIngredient allocation;
 - recipe allocations capped only by source input while silently over/under-fulfilling the target RecipeIngredient requirement;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
