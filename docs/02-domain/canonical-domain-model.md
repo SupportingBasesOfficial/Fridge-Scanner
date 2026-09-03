@@ -29,8 +29,13 @@ Physical occupancy indicators are projections derived from capacity and stock da
 
 ## 3. Product catalog
 
+### IngredientConcept
+Recipe-facing semantic food/ingredient concept, such as "milk", "egg" or "rice". It is independent from a specific commercial SKU, barcode or household stock item.
+
+A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Compatibility is domain data, not uncontrolled name matching. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
+
 ### Product
-Canonical description of a food or packaged product. Product identity is independent from purchase price, household stock and physical location.
+Canonical description of a commercial or otherwise catalogued food product. Product identity is independent from purchase price, household stock and physical location. A Product may satisfy one or more IngredientConcepts according to controlled compatibility semantics.
 
 ### ProductCategory
 Classifies products and may form a hierarchy.
@@ -61,15 +66,18 @@ Represents what physically entered the household inventory. Purchase and receipt
 Represents manufacturer/commercial batch identity and batch-level facts such as manufacturer lot code, production date and original expiration when known.
 
 ### StockItem
-Represents a concrete inventory holding under a Household. It carries the state that may vary independently between items from the same Batch, such as storage position, package-open state and lifecycle timestamps.
+Represents a concrete inventory holding under a Household. It is the inventory unit of record and may aggregate measurable quantity only while identity-affecting state remains coherent. It carries state that may vary independently between holdings from the same Batch, such as storage position, package-open state and lifecycle timestamps.
 
-A Batch must not be used as the physical-location record.
+A StockItem must be splittable when part of its quantity acquires materially different location, package state, shelf-life state, reservation/hold state or provenance requirements. A Batch must not be used as the physical-location record.
 
 ### InventoryMovement
 Represents an immutable or append-oriented stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return.
 
+### InventoryTransfer
+Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household.
+
 ### InventoryBalance
-Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history.
+Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
 
 ### InventoryCount
 Represents a physical inventory/counting session.
@@ -86,7 +94,7 @@ Represents a rule such as "N days after opening", "N days after preparation", or
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
 
 ### EffectiveExpiration
-A computed or persisted projection for a concrete StockItem. It is derived from applicable source expiration and lifecycle rules. It must retain enough provenance to explain why the effective expiration was chosen.
+An explainable materialized projection for a concrete StockItem. Authoritative truth remains the applicable source expiration facts, lifecycle/storage facts and versioned shelf-life rules. The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain why the effective expiration was chosen.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -96,7 +104,7 @@ Expiration is a state/condition. Disposal is a separate physical action and must
 Reusable preparation definition. A Recipe is not tied to a physical stock batch or household storage location.
 
 ### RecipeIngredient
-Defines required ingredient/product, quantity and unit for a Recipe.
+Defines an `IngredientConcept`, quantity, unit and optional constraints for a Recipe. It does not reference concrete stock. An exact Product constraint is permitted only when the recipe genuinely requires a specific product.
 
 ### Preparation
 Concrete execution of a Recipe or ad-hoc preparation inside a Household.
@@ -170,17 +178,20 @@ User ──< HouseholdMembership >── Household
                                 │       ├──< InventoryMovement
                                 │       ├──< FoodLifecycleEvent
                                 │       └── EffectiveExpiration
+                                ├──< InventoryTransfer
                                 ├──< InventoryCount ──< InventoryCountItem
                                 ├──< Preparation ──< PreparationInput >── StockItem
                                 │              └──< PreparationOutput ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem
                                 └──< HouseholdProductPolicy >── Product
 
+IngredientConcept ──< RecipeIngredient >── Recipe
+        │
+        └──< controlled compatibility >── Product
+
 Product ──< ProductIdentifier
         ├──> ProductCategory
         └── measurement/catalog metadata
-
-Recipe ──< RecipeIngredient >── Product/Ingredient concept
 ```
 
 ## 13. Explicitly rejected conflations from earlier drafts
@@ -190,7 +201,8 @@ The canonical model rejects these conflations:
 - global `User.role` as household authority;
 - Batch as both manufacturing lot and physical inventory position;
 - Product as owner of a single current price;
-- RecipeIngredient pointing to a physical Batch;
+- RecipeIngredient pointing to a physical Batch or StockItem;
+- RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
 - relative shelf life represented as a calendar date;
 - expiration automatically meaning disposal;
