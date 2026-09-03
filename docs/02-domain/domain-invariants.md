@@ -42,7 +42,7 @@ DB-00 normative invariants. Later database, API, backend, frontend, jobs and int
 ## Purchase and receiving
 
 21. A Purchase represents acquisition/commercial intent or transaction; Receipt represents physical entry into inventory.
-22. A simple workflow may create Purchase and Receipt together, but the domain must not depend on purchased quantity always equaling received quantity.
+22. A simple workflow may create Purchase and Receipt together, but purchased and received quantities must remain independently reconcilable at line level. Each committed ReceiptItem must identify the received product/quantity/unit, link to its source PurchaseItem when applicable, and retain traceable linkage to the inventory entry effect(s) that materialized the receipt. A legitimate ad-hoc Receipt may omit PurchaseItem provenance, but it must not omit inventory-entry provenance.
 
 ## Recipes and preparation
 
