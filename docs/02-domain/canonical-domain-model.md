@@ -102,6 +102,8 @@ A SourceExpirationFact may reference a Batch when the fact is genuinely batch-le
 ### InventoryMovement
 Represents an immutable committed stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return. Corrections are additional compensating/adjustment movements rather than mutation of committed movement history.
 
+An InventoryMovement whose domain occurrence time can differ from its recording/commit time preserves both. This distinction is authoritative for historical reconciliation: late recording does not change when the physical/domain stock change actually occurred.
+
 ### InventoryTransfer
 Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Both effects must represent the same Product and conserve exactly the transferred quantity after valid dimension-safe conversion. A transfer may change placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve lineage between source and destination effects.
 
@@ -113,7 +115,9 @@ Represents a physical inventory/counting session scoped to one Household and opt
 
 Each InventoryCountItem records its authoritative physical observation time and the corresponding ledger as-of/cutoff used for that line's reconciliation. A session-level observation time/cutoff may be reused by all lines only when the workflow provides a genuinely atomic/frozen snapshot or equivalent snapshot token that guarantees all observations correspond to the same authoritative inventory state.
 
-Reconciliation compares each observed line with system state as of that line's captured cutoff, not whatever balance happens to exist when processing occurs later. If committed movements occur after a line's cutoff, reconciliation must preserve them: the adjustment is computed against the captured as-of state and committed with concurrency semantics that prevent overwriting or double-accounting for intervening movements. If the captured cutoff can no longer be reconciled safely because required history is unavailable or conflicting, the outcome must be blocked/escalated rather than guessed.
+Reconciliation compares each observed line with system state as of that line's captured cutoff and observation time, not whatever balance happens to exist when processing occurs later. A movement recorded after the captured cutoff is classified by domain occurrence time, not merely by commit time. If its occurrence is after the physical observation, it is a genuinely intervening/post-observation movement and must be preserved outside the count adjustment. If its occurrence is at or before the physical observation, it changes the historical state that the observation should have been compared against: the prior reconciliation basis is invalidated/rebased and must be recomputed with that late fact included before an adjustment can remain or become committed. A late pre-observation movement must never be preserved on top of an adjustment that already compensated for its physical effect, because that would double-apply the change.
+
+If a reconciliation adjustment was already committed when a newly recorded pre-observation fact becomes authoritative, the system must not mutate history. It must deterministically recompute the count outcome against the corrected historical state and emit an explicit compensating/reconciliation outcome when safe, or block/escalate when provenance, ordering or required history is insufficient. If the captured historical state can no longer be reconstructed safely, the outcome must be blocked/escalated rather than guessed.
 
 ### InventoryCountItem
 Represents one observed count line. It must identify the counted Product, observed quantity and MeasurementUnit, plus the observed placement when placement is part of the counting context, and its own authoritative observation time plus ledger as-of/cutoff unless the session proves one common atomic snapshot as defined above. It may reference an existing StockItem when the observed stock can be matched unambiguously; that reference is optional because physical counting must also represent newly discovered stock that has no prior StockItem.
@@ -122,7 +126,7 @@ When an InventoryCountItem matches an existing StockItem, product and placement 
 
 If more than one existing StockItem is compatible with the observed Product/placement while differing in batch, expiration, package/lifecycle state or other identity-affecting provenance, the discrepancy is ambiguous. The workflow must either capture sufficient count granularity to identify the affected holding(s), or retain the discrepancy in an explicit unresolved/staging state until a governed allocation decision is made. No adjustment may arbitrarily decrement or increment one candidate StockItem merely to force aggregate equality.
 
-Every committed reconciliation outcome links back to the InventoryCount/InventoryCountItem, that line's authoritative observation/as-of point, the deterministic allocation/match decision and the committed adjustment movement(s) it produced.
+Every committed reconciliation outcome links back to the InventoryCount/InventoryCountItem, that line's authoritative observation/as-of point, the historical movement set/basis used, the deterministic allocation/match decision and the committed adjustment or compensating movement(s) it produced.
 
 ## 6. Food lifecycle and shelf life
 
@@ -162,6 +166,11 @@ Concrete execution of a Recipe or ad-hoc preparation inside a Household.
 Represents one measurable stock input consumed by a Preparation. It identifies the concrete source StockItem, Product, consumed quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-input InventoryMovement decrement effect(s).
 
 Every linked input effect must represent the same Product as the PreparationInput and originate from the referenced StockItem or its governed split lineage. The sum of linked committed decrement quantities, after valid dimension-safe conversion, must equal exactly the PreparationInput quantity. A single input may therefore be materialized by multiple decrement effects only when lineage/state splitting requires it; splitting may redistribute the consumed quantity but must neither create nor destroy it.
+
+### PreparationInputAllocation
+For a Preparation that executes a Recipe, fulfillment of recipe requirements is represented explicitly by allocations from PreparationInput to RecipeIngredient. Each allocation identifies the exact RecipeIngredient line, allocated quantity and MeasurementUnit. The allocated Product must satisfy that line's IngredientConcept and any exact-Product or other governed constraints effective for the preparation.
+
+Multiple PreparationInputs may fulfill one RecipeIngredient and one PreparationInput may be allocated across more than one compatible RecipeIngredient when quantities require it. Allocations must reconcile through dimension-safe conversion, may not allocate more than the PreparationInput quantity in total, and must preserve enough identity to distinguish repeated or otherwise similar recipe lines. Recipe requirement fulfillment is derived from these explicit allocations rather than inferred from ingredient names or Product similarity. Ad-hoc Preparations with no Recipe have no RecipeIngredient allocation requirement.
 
 ### PreparationOutput
 Represents one measurable food output produced by a Preparation. Each output identifies the resulting Product, quantity and MeasurementUnit and must retain traceable linkage to the authoritative preparation-output InventoryMovement effect(s) that materialize inventory.
@@ -209,8 +218,12 @@ Represents a delivery attempt through a channel. Alert state and delivery state 
 ### Integration
 Represents an external-provider connection and lifecycle. Credentials/secrets are referenced through secure infrastructure and are not stored as arbitrary JSON in the domain model.
 
+An Integration that is authorized to read or affect Household-scoped operational data must carry an explicit governed Household scope/binding. Provider account identity, connection ownership or possession of provider credentials is not proof of authorization for an arbitrary Household. A platform/global Integration is permitted only for capabilities that do not implicitly grant inventory authority across households; household-affecting use must resolve through an explicit Household binding.
+
 ### ImportRun / ExternalReference
-Tracks external imports and their provenance so third-party data does not write directly into canonical inventory without normalization and reconciliation semantics.
+Tracks external imports and their provenance so third-party data does not write directly into canonical inventory without normalization and reconciliation semantics. Every inventory-affecting ImportRun identifies exactly one target Household. Every ExternalReference used to reconcile or materialize Household-owned inventory also retains that Household scope, directly or through an unambiguous parent ImportRun/binding.
+
+All canonical entities and inventory effects produced from an import must remain inside the same target Household boundary. Cross-household reuse of provider identifiers may exist as provider metadata, but it must not authorize or accidentally attach imported operational data to another Household.
 
 ## 11. Governance and platform records
 
@@ -250,9 +263,12 @@ User ──< HouseholdMembership >── Household
                                 │                              ├── optional ──> StockItem
                                 │                              └── placement ─> StorageLocation/Compartment
                                 ├──< Preparation ──< PreparationInput ──< InventoryMovement >── StockItem
+                                │              │          └──< PreparationInputAllocation >── RecipeIngredient
                                 │              └──< PreparationOutput ──< InventoryMovement ──> StockItem
                                 ├──< ShoppingList ──< ShoppingListItem ──> Product XOR IngredientConcept
                                 │                              └──< ShoppingListFulfillment >── PurchaseItem
+                                ├──< Integration / Household binding
+                                │       └──< ImportRun ──< ExternalReference
                                 └──< HouseholdProductPolicy >── Product
 
 IngredientConcept ──< RecipeIngredient >── Recipe
@@ -288,12 +304,16 @@ The canonical model rejects these conflations:
 - Receipt without line-level received-quantity, inventory-entry provenance and quantity conservation;
 - silent over-receipt treated as ordinary PurchaseItem fulfillment;
 - InventoryCountItem without explicit counted-subject identity or its own observation/as-of semantics when the session is not atomic;
-- inventory reconciliation without a captured physical-count as-of/ledger cutoff;
+- inventory reconciliation that classifies late-recorded movements only by commit time instead of domain occurrence time;
+- a late pre-observation movement applied on top of a count adjustment that already compensated for the same physical effect;
 - ambiguous aggregate count allocated arbitrarily across state-distinct StockItems;
 - InventoryTransfer without same-Product and quantity-conservation semantics;
 - PreparationInput without authoritative decrement provenance and quantity conservation;
+- recipe-based PreparationInput fulfillment inferred without explicit RecipeIngredient allocation;
 - PreparationOutput without explicit quantity/unit, authoritative movement provenance and quantity conservation;
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
+- inventory-affecting Integration/ImportRun without explicit Household scope;
+- provider identity or credentials treated as Household authorization;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule without explicit applicability, deterministic precedence and an activation-class-specific stable evaluation anchor;
