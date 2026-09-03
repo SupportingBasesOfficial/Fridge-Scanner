@@ -66,7 +66,7 @@ DB-00: InventoryTransfer is one domain operation backed by paired conserved effe
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock, and line monetary fields could be read as generic price/value scalars.
 
-DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explicit by semantic role: any unit/basis price identifies its pricing quantity/unit, while line gross, discount, tax/governed charges and net are distinct exact-money facts reconciled under an explicit rounding policy. Purchase-level discounts/taxes/fees remain Purchase-level unless an explicit derived allocation records method, basis, rounding and provenance; they are never silently folded into line unit cost. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared physical-receiving pool per PurchaseItem. ShoppingListFulfillment uses a separate intent-attribution pool, independently preventing double counting without making receipt evidence compete with the shopping intent it fulfills.
+DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explicit by semantic role: any unit/basis price identifies its pricing quantity/unit and its extension against exactly converted purchased quantity must reconcile to line gross under the preserved rounding policy or remain an explicit pricing discrepancy; line gross, discount, tax/governed charges and net are distinct exact-money facts reconciled under that policy. Purchase-level discounts/taxes/fees remain Purchase-level unless an explicit derived allocation records method, basis, rounding and provenance; they are never silently folded into line unit cost. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared physical-receiving pool per PurchaseItem. ShoppingListFulfillment uses a separate intent-attribution pool, independently preventing double counting without making receipt evidence compete with the shopping intent it fulfills.
 
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
@@ -149,7 +149,7 @@ DB-00 introduces or makes explicit:
 - Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage, scaled RecipeIngredient reconciliation, preserved compatibility evidence and exhaustive consumed-input accounting;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
 - Household-scoped AlertRule, Alert and NotificationDelivery ownership/subject chain;
-- idempotency, concurrency and cross-household isolation invariants;
+- tenant/principal/operation/request-fingerprint-bound idempotency, concurrency and cross-household isolation invariants;
 - source/provenance and distinct occurrence/recording time;
 - scanner/vision/import evidence governance;
 - Household-scoped integration/import normalization lifecycle;
