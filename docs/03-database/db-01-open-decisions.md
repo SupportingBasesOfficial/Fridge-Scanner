@@ -4,33 +4,19 @@
 
 This file distinguishes genuine logical-model blockers from physical implementation choices that must not reopen DB-01 unnecessarily.
 
-The first independent DB-01 red-team pass closed the initial structural ambiguities around receiving allocation, line-to-ledger provenance, Household timezone history, quantity-lineage granularity, count historical basis and referentially significant polymorphism. Those closures are recorded below.
+After the first independent DB-01 red-team pass and a second closure pass against the accepted DB-00 contract, **there are currently no intentionally open logical-model decisions**.
+
+This does not declare DB-01 review-complete. Further review may create new findings. It means the baseline is not knowingly carrying a material logical ambiguity forward.
 
 No intentional DB-00 semantic ambiguity is accepted as an implementation shortcut.
 
-## A. Remaining DB-01 review targets
+## A. Current DB-01 logical blockers
 
-### O-004 — Rule applicability to governed classification
+**None known at this HEAD.**
 
-ShelfLifeRule may target Product, IngredientConcept or a governed classification.
+Any new reviewer finding that can produce materially different relational models or weaken a DB-00 invariant reopens this section until corrected and reviewed on the new exact HEAD.
 
-**Review question:** is ProductCategory sufficient as the only classification target in DB-01, or does the domain require a separate versioned classification taxonomy relation before physical schema?
-
-**Default direction:** do not generalize prematurely. Introduce a new classification relation only if accepted DB-00 behavior cannot be represented by ProductCategory plus existing governed catalog semantics.
-
-**Status:** OPEN — must be closed or explicitly proven non-blocking before DB-01 acceptance.
-
-### O-005 — Global notification preferences
-
-DB-00 permits genuinely user-global notification preferences that do not grant Household authority.
-
-**Review question:** should DB-01 include a separate `user_notification_preference` relation now, or leave it outside the first database slice until notification behavior is specified further?
-
-**Constraint regardless of answer:** preferences never substitute for Household AlertRule/Alert authorization.
-
-**Status:** OPEN but likely non-core; review must decide whether omission changes the accepted durable logical model.
-
-## B. Closed by the first DB-01 red-team pass
+## B. Closed by DB-01 review
 
 ### O-001 — Polymorphic historical subject references — CLOSED
 
@@ -45,6 +31,18 @@ Product-transforming Preparation is explicitly excluded from same-Product lineag
 ### O-003 — Count historical basis identity — CLOSED
 
 **Resolution:** introduced immutable `inventory_ledger_basis`. Every InventoryCountItem references the exact historical cutoff/watermark/ordering context used for reconciliation. One basis can be shared across lines only under a genuinely atomic/frozen snapshot or equivalent authoritative token.
+
+### O-004 — Rule applicability to governed classification — CLOSED
+
+**DB-00 evidence:** accepted DB-00 allows a ShelfLifeRule to target Product, IngredientConcept, or “another governed classification introduced later.” The classification is explicitly an extension point, not a requirement to invent an abstract taxonomy in DB-01.
+
+**Resolution:** the DB-01 baseline has concrete referential targets for Product and IngredientConcept. No persisted rule may use a generic/untyped classification target. A future classification target becomes valid only after an explicit governed classification relation/versioning contract is introduced through a reviewed schema evolution. ProductCategory is not silently promoted into a universal ShelfLifeRule taxonomy merely for implementation convenience.
+
+### O-005 — Global notification preferences — CLOSED / DEFERRED FEATURE
+
+**DB-00 evidence:** a genuinely user-global notification preference *may* exist only when it grants no Household operational authority. DB-00 does not require that optional feature to exist in the initial durable model.
+
+**Resolution:** no `user_notification_preference` relation is required for DB-01 acceptance. If the feature is introduced later, it is a separate user-level preference model influencing delivery behavior only. It cannot replace or weaken Household AlertRule/Alert ownership and authorization.
 
 ### O-006 — Receipt allocation and line-to-ledger provenance — CLOSED
 
@@ -98,13 +96,12 @@ These are already closed by DB-00/DB-01 and must not be reopened as implementati
 - whether exact conservation may rely on floating point/display rounding — no;
 - whether provider identity can imply Household authority — no;
 - whether an idempotency key is globally unique without scope/fingerprint — no;
-- whether generic polymorphic IDs may replace enforceable business FKs — no.
+- whether generic polymorphic IDs may replace enforceable business FKs — no;
+- whether ProductCategory may be assumed to be the universal future classification taxonomy — no;
+- whether optional global notification preferences grant or imply Household authority — no.
 
 ## Exit criterion
 
-Before DB-01 can be accepted, every item in section A must either:
-
-1. be proven adequately represented by the existing model; or
-2. produce a concrete logical-model correction and corresponding decision update.
+DB-01 can be accepted only when the exact current HEAD has no unresolved material logical findings after panoramic review. A new finding reopens this register even when all previously known items are closed.
 
 No section-C physical choice is required to close DB-01 unless review proves it actually changes logical semantics.
