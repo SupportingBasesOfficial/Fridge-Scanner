@@ -849,14 +849,17 @@ Alert state and delivery state are independent. A future global user notificatio
 
 ### `external_reference`
 
+Provider-side identity/provenance used during normalization, reconciliation and import materialization. It is not itself an unconstrained polymorphic pointer to arbitrary canonical entities.
+
 - `external_reference_id` PK;
-- `household_id` when Household-operational;
+- `household_id` when the reference participates in Household operational reconciliation, directly or through an unambiguous owning ImportRun/binding;
 - Integration/ImportRun provenance;
 - provider namespace/type/value;
-- typed canonical target where resolved;
-- lifecycle/status.
+- normalization/reconciliation status and provenance.
 
-Uniqueness/resolution is scoped by provider/integration namespace, type/value and Household when applicable. Provider identity never grants Household authority. Any referentially significant canonical target is implemented by a typed association contract rather than an unconstrained generic entity ID.
+Uniqueness/resolution is scoped by provider/integration namespace, type/value and Household when applicable. Provider identity never grants Household authority.
+
+When a concrete canonical business fact needs to retain an ExternalReference as durable provenance, the association is modeled from that domain fact or through a dedicated typed provenance relation whose target type/cardinality is defined by that domain contract. DB-01 deliberately forbids one generic `target_type/target_id` field on ExternalReference because DB-00 does not define a universal polymorphic canonical-target relationship. A future import capability that introduces a new durable typed provenance relationship must add it through reviewed schema evolution rather than hiding it in metadata.
 
 ## 14. Audit, idempotency and outbox
 
@@ -908,7 +911,7 @@ A child carrying Household scope must agree with every Household-owning parent i
 
 ## 16. Authoritative versus derived
 
-Authoritative/history-bearing examples include HouseholdTimezoneVersion; Purchase/Receipt facts and allocations; InventoryMovement; Transfer effects and exact lineage; WasteRecord semantics linked to ledger effects; InventoryLedgerBasis and reconciliation outcomes; immutable RecipeVersion/ingredients; Preparation inputs/outputs/allocations/deviations; SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation; conversion/compatibility evidence; HouseholdProductPolicy/storage preferences; committed ShoppingListFulfillment; Alert/AlertTriggerSubject; IdempotencyRecord; AuditEvent; OutboxRecord.
+Authoritative/history-bearing examples include HouseholdTimezoneVersion; Purchase/Receipt facts and allocations; InventoryMovement; Transfer effects and exact lineage; WasteRecord semantics linked to ledger effects; InventoryLedgerBasis and reconciliation outcomes; immutable RecipeVersion/ingredients; Preparation inputs/outputs/allocations/deviations; SourceExpirationFact, FoodLifecycleEvent and ShelfLifeRuleActivation; conversion/compatibility evidence; HouseholdProductPolicy/storage preferences; committed ShoppingListFulfillment; Alert/AlertTriggerSubject; ImportRun/ExternalReference provenance; IdempotencyRecord; AuditEvent; OutboxRecord.
 
 Derived/materializable examples include current StockItem balance, occupancy, EffectiveExpiration, alert/read models and analytical monetary allocations not present in source truth.
 
@@ -934,6 +937,7 @@ DB-01 preserves at least these separations:
 - shelf-life rule definition vs activation vs EffectiveExpiration projection;
 - HouseholdProductPolicy storage preference vs current StockItem placement;
 - AlertRule condition vs typed rule scope vs concrete Alert trigger evidence vs NotificationDelivery;
+- ExternalReference provider provenance vs typed canonical-domain relationships;
 - optional notification preference vs Household AlertRule authority;
 - provider/external identity vs Household authorization;
 - AuditEvent vs domain/inventory history.
