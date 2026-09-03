@@ -6,17 +6,13 @@ DB-02 has an initial physical baseline. The items below are proof/review targets
 
 ## A. Current physical blockers
 
-### O2-001 — Final application schema namespace names
+### O2-002 — Rational canonicalization execution proof
 
-**Question:** confirm the canonical PostgreSQL schema names for business objects and internal helpers before SQL migration acceptance.
+**State:** physical design implemented; execution proof pending.
 
-**Default direction:** use provider-neutral PostgreSQL schemas such as `fridge` for canonical business objects and `fridge_internal` for privileged helpers. Do not rely on `public` as an uncontrolled application namespace.
+`000001__bootstrap.sql` now provides a PostgreSQL-17-compatible arbitrary-precision Euclidean GCD and rational normalization using integral `numeric`, with positive denominator and canonical `0/1`. No fixed-width cast or decimal approximation participates.
 
-### O2-002 — Rational canonicalization implementation
-
-**Question:** prove one PostgreSQL 17-compatible normalization routine for arbitrary-precision integral `numeric` numerator/denominator, including gcd, sign normalization and `0/1`, without overflow-prone casts.
-
-**Gate:** database tests must prove exact 1/3, negative values, large values and split/merge equality.
+**Gate:** automated PostgreSQL 17 execution must pass `database/tests/integrity/000001__rational_primitives.sql`, including exact 1/3, sign normalization, large values and invalid-input rejection. PostgreSQL 18 compatibility should also be exercised.
 
 ### O2-003 — Constraint-trigger versus transaction-function boundary
 
@@ -44,7 +40,11 @@ DB-02 has an initial physical baseline. The items below are proof/review targets
 
 ## B. Closed physical decisions
 
-Already resolved by `db-02-decisions.md` and not open for convenience:
+### O2-001 — Final application schema namespace names — CLOSED
+
+Canonical business/database objects use schema `fridge`; privileged implementation helpers use `fridge_internal`. Canonical application truth does not rely on an uncontrolled default `public` namespace. Provider-managed schemas remain separate.
+
+Also resolved by `db-02-decisions.md` and not open for convenience:
 
 - PostgreSQL 17.x initial minimum baseline;
 - forward-compatibility lane for PostgreSQL 18;
