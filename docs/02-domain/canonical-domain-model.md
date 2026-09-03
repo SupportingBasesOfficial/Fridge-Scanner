@@ -27,6 +27,8 @@ A physical subdivision of a StorageLocation, such as a shelf, drawer, door secti
 
 Physical occupancy indicators are projections derived from capacity and stock data when possible; they are not authoritative domain truth by default.
 
+A stored StockItem has exactly one placement anchor: either a Compartment or a StorageLocation directly. A Compartment anchor resolves its StorageLocation through the compartment relationship and must not create a second conflicting location truth. A StockItem may be temporarily unplaced only through an explicit unplaced lifecycle/state, not through an ambiguous missing relationship.
+
 ## 3. Product catalog
 
 ### IngredientConcept
@@ -55,31 +57,35 @@ Defines units used by measurable quantities. Quantities must be dimensionally me
 Represents a commercial transaction or acquisition record.
 
 ### PurchaseItem
-Represents an item purchased, including transaction-specific quantity and price.
+Represents an item purchased, including Product, transaction-specific quantity, MeasurementUnit and price. The quantity is never unitless; reconciliation may convert only under the accepted dimension-safe conversion rules.
 
 ### Receipt / Receiving
 Represents a physical receiving operation into a Household. Purchase and Receipt may occur atomically in simple flows, but they remain separate concepts because purchased and received quantities can differ in time or amount. A Receipt may also represent an acquisition with no prior Purchase record when the source workflow legitimately has no commercial order.
 
 ### ReceiptItem
-Represents one received product/quantity/unit line inside a Receipt. When receipt originates from a Purchase, the ReceiptItem links to the relevant PurchaseItem so partial and incremental receiving can be reconciled at line level.
+Represents one received Product/quantity/MeasurementUnit line inside a Receipt. When receipt originates from a Purchase, the ReceiptItem links to the relevant PurchaseItem so partial and incremental receiving can be reconciled at line level.
 
-A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, location or other identity-affecting state requires a split.
+A committed ReceiptItem must retain traceable linkage to the inventory entry effect(s) that materialize what physically entered stock, including resulting StockItem/Batch provenance as applicable. One PurchaseItem may therefore be fulfilled by multiple ReceiptItems over time, and one ReceiptItem may produce multiple inventory entry effects when batch, placement or other identity-affecting state requires a split.
 
 ## 5. Inventory
 
 ### Batch
-Represents manufacturer/commercial batch identity and batch-level facts such as manufacturer lot code, production date and original expiration when known.
+Represents optional manufacturer/commercial batch provenance and batch-level facts such as manufacturer lot code, production date and original expiration when known. A Batch belongs to exactly one Product. Absence of known batch information must not require fabrication of a synthetic manufacturer batch.
 
 ### StockItem
-Represents a concrete inventory holding under a Household. It is the inventory unit of record and may aggregate measurable quantity only while identity-affecting state remains coherent. It carries state that may vary independently between holdings from the same Batch, such as storage position, package-open state and lifecycle timestamps.
+Represents a concrete inventory holding under a Household. It is the inventory unit of record and may aggregate measurable quantity only while identity-affecting state remains coherent.
 
-A StockItem must be splittable when part of its quantity acquires materially different location, package state, shelf-life state, reservation/hold state or provenance requirements. A Batch must not be used as the physical-location record.
+Every StockItem identifies exactly one Product directly. A StockItem may additionally reference a Batch when batch provenance is known; if present, that Batch must belong to the same Product as the StockItem. Batch is therefore optional provenance, never the only path from inventory to Product identity.
+
+A stored StockItem has exactly one placement anchor: either one Compartment or one StorageLocation directly. If the anchor is a Compartment, its parent StorageLocation is authoritative and must belong to the same Household. A StockItem may be temporarily unplaced only when that condition is represented explicitly. It must be splittable when part of its quantity acquires materially different placement, package state, shelf-life state, reservation/hold state or provenance requirements.
+
+A Batch must not be used as the physical-location record.
 
 ### InventoryMovement
-Represents an immutable or append-oriented stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return.
+Represents an immutable committed stock delta/event such as receipt, consumption, waste, transfer, adjustment, preparation input, preparation output, donation or return. Corrections are additional compensating/adjustment movements rather than mutation of committed movement history.
 
 ### InventoryTransfer
-Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household.
+Represents one atomic business transfer identity backed by linked source-decrement and destination-increment ledger effects. In the initial domain, both ends must resolve to the same Household. Transfer semantics move quantity between placement-coherent StockItems and preserve lineage between source and destination effects.
 
 ### InventoryBalance
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
@@ -176,11 +182,15 @@ Provides a durable publication boundary for asynchronous side effects when a dat
 User ──< HouseholdMembership >── Household
                                 │
                                 ├──< StorageLocation ──< Compartment
+                                │          ▲                ▲
+                                │          └──── placement ─┤
+                                │                           │
                                 ├──< Purchase ──< PurchaseItem ──< ReceiptItem
                                 ├──< Receipt ──< ReceiptItem ──< InventoryMovement
                                 │                         └──────> StockItem / Batch provenance
-                                ├──< StockItem >── Batch >── Product
-                                │       │
+                                ├──< StockItem >──────────────> Product
+                                │       ├──── optional ───────> Batch ─────> Product
+                                │       ├── placement ────────> StorageLocation XOR Compartment
                                 │       ├──< InventoryMovement
                                 │       ├──< FoodLifecycleEvent
                                 │       └── EffectiveExpiration
@@ -200,15 +210,20 @@ Product ──< ProductIdentifier
         └── measurement/catalog metadata
 ```
 
+`StorageLocation XOR Compartment` means one stored StockItem has one placement anchor, not two competing placement truths. Explicitly unplaced StockItems are the governed exception.
+
 ## 13. Explicitly rejected conflations from earlier drafts
 
 The canonical model rejects these conflations:
 
 - global `User.role` as household authority;
 - Batch as both manufacturing lot and physical inventory position;
+- Batch as a mandatory bridge between StockItem and Product;
 - Product as owner of a single current price;
+- unitless purchased quantities;
 - Purchase as proof that stock physically entered inventory;
 - Receipt without line-level received-quantity and inventory-entry provenance;
+- ambiguous StockItem placement with conflicting location/compartment truths;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
