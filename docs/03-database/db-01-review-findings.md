@@ -13,139 +13,86 @@ Codex code-review quota was exhausted, so these are independent repository/seman
 ## Pass 1
 
 ### F-001 — Receipt-to-Purchase allocation quantity was implicit
-
-**Severity:** material logical ambiguity.
-
-Initial `receipt_item.purchase_item_id` could identify one PurchaseItem but did not represent a partial allocation quantity or cleanly support one physical ReceiptItem being attributable across multiple compatible purchase lines.
-
-**Resolution:** introduced `purchase_item_receipt_allocation` carrying exact quantity/unit; substitutions remain a distinct explicit allocation relation. Both ReceiptItem source quantity and PurchaseItem receiving availability now have independent conservation rules.
-
+**Severity:** material logical ambiguity.  
+**Resolution:** introduced `purchase_item_receipt_allocation` carrying exact quantity/unit; substitutions remain distinct. ReceiptItem source quantity and PurchaseItem receiving availability now conserve independently.  
 **Status:** CLOSED.
 
 ### F-002 — ReceiptItem had no explicit relational ledger-effect link
-
-**Severity:** material provenance/conservation gap.
-
-The baseline said ReceiptItem links to InventoryMovement effects but did not define the actual relation/cardinality needed to enforce this.
-
-**Resolution:** introduced `receipt_item_inventory_effect`, one semantic-use constraint for each linked movement, effect-level quantity reconciliation and exact total conservation to ReceiptItem quantity.
-
+**Severity:** material provenance/conservation gap.  
+**Resolution:** introduced `receipt_item_inventory_effect`, semantic-use uniqueness, effect-level reconciliation and exact total conservation to ReceiptItem quantity.  
 **Status:** CLOSED.
 
 ### F-003 — Household timezone history lacked a durable logical relation
-
-**Severity:** historical reproducibility gap.
-
-DB-00 requires exact governed Household timezone version selected at a preserved domain anchor, but the baseline had only a current Household timezone/configuration reference.
-
-**Resolution:** introduced immutable/versioned `household_timezone_version` with non-ambiguous effective intervals and historical references from expiration/rule evidence where Household timezone participates.
-
+**Severity:** historical reproducibility gap.  
+**Resolution:** introduced immutable/versioned `household_timezone_version` with non-ambiguous effective intervals and exact historical references.  
 **Status:** CLOSED.
 
 ### F-004 — Quantity lineage was too vague for portion-level inheritance
-
-**Severity:** material lineage ambiguity.
-
-A generic source/destination lineage relationship did not guarantee that shelf-life/provenance inheritance could be tied to an exact conserved portion.
-
-**Resolution:** `inventory_quantity_lineage` is now one exact source-movement → destination-movement conserved edge with Product, optional endpoint StockItems and exact rational quantity. `quantity_lineage_shelf_life_fact` attaches inherited evidence to that exact edge.
-
+**Severity:** material lineage ambiguity.  
+**Resolution:** `inventory_quantity_lineage` is now one exact source-movement → destination-movement conserved edge; inherited shelf-life evidence attaches to that exact edge.  
 **Status:** CLOSED.
 
 ### F-005 — Inventory count historical basis had no first-class identity
-
-**Severity:** reconciliation reproducibility gap.
-
-Observation/cutoff prose alone could permit processing-time/current balance or implementation-specific snapshot meaning to leak into reconciliation.
-
-**Resolution:** introduced immutable `inventory_ledger_basis`, referenced by every InventoryCountItem and ReconciliationOutcome. Shared session basis is allowed only for genuinely atomic/frozen authoritative snapshots.
-
+**Severity:** reconciliation reproducibility gap.  
+**Resolution:** introduced immutable `inventory_ledger_basis`, referenced by every InventoryCountItem and ReconciliationOutcome.  
 **Status:** CLOSED.
 
 ### F-006 — Referentially significant polymorphism could become unenforceable generic IDs
-
-**Severity:** integrity risk.
-
-Several subject references were described semantically but could have been physically implemented as unconstrained `entity_type/entity_id` pairs.
-
-**Resolution:** typed FK/association relations are now mandatory wherever business referential integrity matters. Generic target identity remains allowed only as evidentiary metadata such as AuditEvent targets.
-
+**Severity:** integrity risk.  
+**Resolution:** typed FK/association relations are mandatory wherever business referential integrity matters; generic target identity remains allowed only as evidentiary metadata such as AuditEvent targets.  
 **Status:** CLOSED.
 
 ## Pass 2
 
 ### F-007 — WasteRecord from DB-00 had no durable DB-01 home
-
-**Severity:** DB-00 coverage gap.
-
-The initial DB-01 relation inventory omitted the accepted WasteRecord concept, so a physical schema could have reduced waste/disposal semantics to a generic movement and lost reason/classification provenance.
-
-**Resolution:** introduced `waste_record` plus `waste_record_movement`. Waste semantics remain separate from authoritative stock quantity; linked stock-reducing InventoryMovement remains quantity truth and cannot be reused across unrelated WasteRecords.
-
+**Severity:** DB-00 coverage gap.  
+**Resolution:** introduced `waste_record` plus `waste_record_movement`; waste semantics remain separate from authoritative stock quantity.  
 **Status:** CLOSED.
 
 ### F-008 — Source-side same-Product lineage permitted an unaccounted remainder
-
-**Severity:** conservation gap.
-
-The hardened baseline initially required outgoing lineage to be no greater than the source quantity. For a movement declared as a redistribution source, this still allowed quantity to disappear from lineage without an explicit consumption/waste/transformation effect.
-
-**Resolution:** outgoing lineage edges for a declared same-Product redistribution operation now sum exactly to the redistributed source quantity. Genuine terminal consumption, waste or Product transformation is represented by its own explicit domain effect rather than missing lineage.
-
+**Severity:** conservation gap.  
+**Resolution:** outgoing lineage edges for a declared same-Product redistribution operation now sum exactly to redistributed source quantity; genuine terminal effects are explicit.  
 **Status:** CLOSED.
 
 ### F-009 — Preparation movement effects could be reused across multiple inputs/outputs
-
-**Severity:** double-accounting risk.
-
-Without semantic-role uniqueness on PreparationInputMovement/PreparationOutputMovement, one InventoryMovement could theoretically satisfy multiple inputs or materialize multiple outputs while each local relation looked valid.
-
-**Resolution:** each linked InventoryMovement is unique within the respective preparation materialization role; each relation portion reconciles to its movement effect, and aggregate portions reconcile exactly to the PreparationInput/PreparationOutput quantity.
-
+**Severity:** double-accounting risk.  
+**Resolution:** each linked InventoryMovement is unique within the respective preparation materialization role and all parts reconcile exactly.  
 **Status:** CLOSED.
 
 ### F-010 — Future ShelfLifeRule classification extension was too generic
-
-**Severity:** forward-schema ambiguity.
-
-DB-00 permits “another governed classification introduced later,” but that does not authorize an untyped generic classification reference in the current logical model.
-
-**Resolution:** current DB-01 applicability is Product XOR IngredientConcept. A future classification target is valid only after a reviewed typed governed classification/version/reference contract is added. ProductCategory is not implicitly promoted into a universal shelf-life taxonomy.
-
+**Severity:** forward-schema ambiguity.  
+**Resolution:** current applicability is Product XOR IngredientConcept; future classifications require reviewed typed schema evolution.  
 **Status:** CLOSED.
 
 ### F-011 — Optional global notification preference could be mistaken for a missing required table
-
-**Severity:** scope ambiguity, low but architectural.
-
-DB-00 says a user-global preference *may* exist but only without granting Household authority.
-
-**Resolution:** DB-01 explicitly treats it as an optional future user-level feature, not a current acceptance requirement. Household AlertRule/Alert ownership remains mandatory and independent.
-
+**Severity:** scope ambiguity, low but architectural.  
+**Resolution:** explicitly deferred as optional future user-level data that cannot grant Household authority.  
 **Status:** CLOSED.
 
 ## Pass 3
 
 ### F-012 — Preferred storage defaults were hidden in generic HouseholdProductPolicy metadata
-
-**Severity:** material relational ambiguity.
-
-DB-00 explicitly permits Household/Product policy such as preferred storage defaults, but the DB-01 baseline represented only measurable thresholds plus generic policy metadata. DB-02 could therefore encode the same preference as a location FK, compartment FK, free string or opaque JSON, yielding materially different integrity/cardinality semantics.
-
-**Resolution:** introduced `household_product_storage_preference` as a ranked typed policy child targeting exactly one same-Household StorageLocation, same-Household Compartment or governed StorageLocation kind. It remains policy/default data and cannot become StockItem placement truth or move stock.
-
+**Severity:** material relational ambiguity.  
+**Resolution:** introduced `household_product_storage_preference` as a ranked typed policy child targeting exactly one same-Household StorageLocation, same-Household Compartment or governed StorageLocation kind; it is not placement truth.  
 **Status:** CLOSED.
 
 ### F-013 — AlertRule subject typing was deferred to DB-02
+**Severity:** material logical/reference ambiguity.  
+**Resolution:** introduced `alert_rule_subject` and immutable `alert_trigger_subject` with current governed typed subject kinds; future kinds require reviewed typed extension.  
+**Status:** CLOSED.
 
-**Severity:** material logical/reference ambiguity.
+## Pass 4
 
-The baseline required DB-02 to use a typed target where alert subject referential integrity mattered but did not itself define the logical representation. That violated DB-01's purpose and could produce incompatible physical schemas.
+### F-014 — ExternalReference implied a generic canonical-target relationship not defined by DB-00
 
-**Resolution:** introduced `alert_rule_subject` with current governed typed subject kinds (Household, Product, StockItem, StorageLocation, Compartment, HouseholdProductPolicy) and `alert_trigger_subject` as immutable typed explainability evidence for committed Alerts. Future subject kinds require reviewed typed schema evolution.
+**Severity:** material forward-model ambiguity.
+
+The DB-01 draft said an ExternalReference could have a “typed canonical target where resolved,” then deferred the actual association contract. DB-00 requires ExternalReference to preserve external import/reconciliation provenance and Household scope, but does not define one universal polymorphic relationship from every external reference to every canonical entity. Leaving that phrase would invite incompatible DB-02 `target_type/target_id` implementations.
+
+**Resolution:** ExternalReference is now explicitly provider-side identity/provenance only, namespaced by Integration/provider/type/value and Household where operationally scoped. It carries no universal canonical target pointer. When a concrete canonical domain fact needs durable external provenance, that domain fact or a dedicated typed provenance relation defines the association/cardinality through reviewed schema evolution. Generic polymorphic canonical target IDs are forbidden.
 
 **Status:** CLOSED.
 
 ## Current review state
 
-All findings F-001 through F-013 recorded above are closed on the branch. This file does **not** itself declare the current HEAD CLEAN; after these changes the exact HEAD must be revalidated through the panoramic repository/semantic gate. Any new material finding reopens DB-01 and requires a new exact-HEAD gate.
+All findings F-001 through F-014 recorded above are closed on the branch. This file does **not** itself declare the current HEAD CLEAN; after these changes the exact HEAD must be revalidated through the panoramic repository/semantic gate. Any new material finding reopens DB-01 and requires a new exact-HEAD gate.
