@@ -52,6 +52,38 @@ The first storage/catalog migration included `constraint_metadata`, `decision_co
 
 **Status:** CLOSED.
 
+## Pass 3 — identifiers and measurement
+
+### F2-005 — Global normalization-rule uniqueness was NULL-unsafe
+
+**Severity:** canonical identifier collision risk.
+
+The initial normalization-rule candidate key included nullable `issuer_namespace` in one ordinary UNIQUE constraint. PostgreSQL treats NULL values as distinct, so two GLOBAL rules with the same scheme/version could coexist.
+
+**Resolution:** replaced the mixed UNIQUE with two partial unique indexes: `(scheme_code, rule_version)` for GLOBAL rules and `(scheme_code, issuer_namespace, rule_version)` for ISSUER_SCOPED rules.
+
+**Status:** CLOSED.
+
+### F2-006 — Money rounding scale had an invented upper bound
+
+**Severity:** physical overconstraint.
+
+The first money-rounding policy limited decimal scale to 18 even though DB-00/DB-01 define governed exact monetary boundaries, not that arbitrary limit.
+
+**Resolution:** removed the invented maximum; physical validation now requires only non-negative scale within the PostgreSQL column type's representable range.
+
+**Status:** CLOSED.
+
+### F2-007 — Contextual conversion evidence omitted exact formula inputs
+
+**Severity:** historical reproducibility gap.
+
+The first contextual conversion model preserved the applied factor and contract identity/version but not the exact named rational inputs used to select/derive that factor, contrary to DB-00 conversion-evidence requirements.
+
+**Resolution:** added `measurement_conversion_evidence_input`, one typed/named exact rational input per evidence record, optionally carrying MeasurementUnit. The governed commit routine validates the required input set against the referenced context contract version.
+
+**Status:** CLOSED.
+
 ## Current review state
 
 All findings recorded above are closed on the branch. DB-02 is **not** CLEAN: the migration lineage is still incomplete and rational execution proof plus future physical-schema red-team remain required.
