@@ -32,9 +32,9 @@ A stored StockItem has exactly one placement anchor: either a Compartment or a S
 ## 3. Product catalog
 
 ### IngredientConcept
-Recipe-facing semantic food/ingredient concept, such as "milk", "egg" or "rice". It is independent from a specific commercial SKU, barcode or household stock item.
+Recipe-facing semantic food/ingredient concept, such as "milk", "egg" or "rice". It is independent from a specific commercial SKU, barcode or household stock item and has explicit catalog governance. A global IngredientConcept has no Household owner and ordinary Household authority cannot mutate it. A household-scoped IngredientConcept belongs to exactly one Household and is visible/editable only through that Household. Global recipes/rules may reference only global concepts; Household-scoped consumers may reference global or same-Household concepts, never another Household's private concept.
 
-A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Compatibility is governed, versioned domain data, not uncontrolled name matching. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
+A controlled compatibility relationship maps Products that may satisfy an IngredientConcept. Every mapping is governed, versioned domain data with one explicit scope/owner and effective interval, not uncontrolled name matching. A global mapping may connect only global IngredientConcept and global Product. A Household mapping belongs to exactly one Household and may connect only global or same-Household concepts and Products; it cannot expose another Household's private Product or concept. Visibility and edit authority follow mapping scope, and use of a mapping requires all referenced entities to be visible in the consuming Household/context. Promotion, sharing or cloning across scopes creates a governed destination-scope mapping/version with validated references and preserved provenance; it never silently widens visibility. A recipe may impose an exact-product constraint when a specific commercial product is genuinely required.
 
 ### CompatibilityDecisionEvidence
 Represents the exact compatibility decision used when a committed business fact treats a Product as satisfying an IngredientConcept. It preserves Product, IngredientConcept, compatibility mapping/rule identity and version, effective/evaluation time or context, relevant constraints, decision provenance and any approval required by policy.
@@ -54,7 +54,9 @@ Classifies products and may form a hierarchy.
 ### ProductIdentifier
 Maps a Product to one or more identifiers. Every identifier records an explicit scheme/type and the issuer/namespace required by that scheme. Globally governed schemes such as GTIN use their governed global namespace; non-global schemes such as retailer SKU, provider code, household/internal ID or locally scoped PLU must identify the issuing retailer/provider/Household or other governed namespace.
 
-Identifier uniqueness is therefore evaluated within the canonical tuple `(scheme, issuer/namespace, normalized value)`, with issuer omitted only when the scheme itself defines a single global namespace. The same non-global value may legitimately exist under different issuers and must not resolve ambiguously across those namespaces.
+Each identifier preserves the exact source value and the governed scheme-specific normalization rule identity/version used to produce its normalized value. That rule defines, rather than generic string cleanup, the treatment of case, punctuation/separators, whitespace, check digits, leading zeros, character repertoire and validity for its scheme/issuer. Unknown or invalid schemes remain unresolved evidence and must not be guessed into a canonical key.
+
+Identifier uniqueness is evaluated within `(scheme, issuer/namespace, active normalization-rule version, normalized value)`, with issuer omitted only when the scheme itself defines one global namespace. The same non-global value may legitimately exist under different issuers and must not resolve ambiguously across namespaces. A normalization-rule change does not mutate historical source/normalized values in place: it creates a governed new version and an explicit re-normalization/migration candidate while retaining the prior version/provenance for historical resolution. Before activation, collisions or changed Product matches across old/new versions are detected and remain blocked/staged for governed merge, alias or rejection; the system must not silently merge Products, choose one candidate or make lookup dependent on deployment order. Active-version selection and any compatibility lookup across retained aliases are deterministic and versioned.
 
 ### Brand / Manufacturer
 Brand and manufacturer are distinct concepts and must not be conflated by the model, even if an initial physical implementation keeps one of them optional.
@@ -129,7 +131,11 @@ Represents one atomic business transfer identity backed by linked source-decreme
 
 The source-decrement effect preserves the immutable source placement anchor and the destination-increment effect preserves the immutable destination placement anchor. The transfer/effects preserve authoritative domain occurrence time independently from recording/commit time when those may differ. Historical reconstruction therefore resolves where the quantity existed from immutable transfer/movement facts, never from whatever placement the StockItem has now.
 
-A transfer may change current placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve lineage between source and destination effects.
+A transfer may change current placement and may split or merge compatible holdings, but it must not silently transform one Product into another or create/destroy quantity. Transfer semantics preserve immutable quantity lineage between source and destination effects.
+
+Every destination quantity created by split, transfer or other lineage-preserving redistribution inherits or immutably references all SourceExpirationFact, FoodLifecycleEvent and already-activated ShelfLifeRule evaluation context applicable to that source quantity at the operation occurrence time, retaining original fact identity, occurrence/evaluation anchors, rule/timezone versions and provenance. The destination may acquire additional placement/storage/lifecycle candidates after the operation, but redistribution cannot reset an opened/prepared state, discard an earlier deadline or treat inherited quantity as fresh. A partial operation associates the inherited state with exactly the transferred portion while the remainder retains it on the source lineage.
+
+Holdings may merge into one StockItem only when their inherited and current shelf-life/lifecycle state is equivalent under StockItem state-coherence rules. Otherwise they remain separate StockItems or the merged container preserves distinguishable quantity sublineages whose facts and candidate sets cannot be collapsed; EffectiveExpiration for any aggregate operational view is at least as restrictive as the earliest candidate among included lineages. Subsequent split must be able to recover the applicable fact set for each resulting quantity without guessing.
 
 ### InventoryBalance
 Represents a projection/materialized balance when needed for efficient reads. It must be derivable or reconcilable from authoritative inventory history and must not silently contradict that history. Committed authoritative inventory must not become negative under the accepted DB-00 policy.
@@ -163,7 +169,7 @@ Precedence is evaluated only among applicable rules inside the same semantic tri
 
 Version/effective-interval selection is evaluated as of the domain occurrence time of the authoritative fact that activates that rule group. For an event-triggered rule this is the triggering FoodLifecycleEvent occurrence time; for a stock-entry/default rule it is the authoritative stock-entry occurrence time; for a placement/storage-change rule it is the occurrence time of the authoritative InventoryMovement/InventoryTransfer or other canonical placement-state change that activated the storage predicate; and for a rule triggered by a trusted storage/conservation observation it is that observation's occurrence time. Recomputing later must reuse the same original evaluation anchor rather than current/recalculation time. Conflicting equally specific rules with the same effective priority inside one competing group at that evaluation time must be rejected or surfaced for governance rather than selected arbitrarily.
 
-Every relative rule also preserves the temporal arithmetic necessary to derive one deterministic deadline: duration amount/unit, temporal basis (`ELAPSED` or `LOCAL_CALENDAR`), endpoint semantics, and the governed timezone/version context required for calendar arithmetic. `ELAPSED` arithmetic operates on the instant timeline: seconds, minutes and hours are exact elapsed durations, an elapsed day is exactly 24 hours and an elapsed week is exactly seven elapsed days; month/year units are invalid in elapsed mode. `LOCAL_CALENDAR` arithmetic adds calendar days/weeks/months/years in the governed IANA timezone anchored to the activation fact unless the rule preserves a more specific governed timezone context. It preserves the activation local wall-clock time unless the rule declares another endpoint. For month/year units, the full duration amount is applied to the original anchored local date using proleptic-Gregorian year/month arithmetic; the original day-of-month is retained when valid and otherwise clamps to the final valid day of the target month (for example, January 31 plus one month becomes February 28 or 29, and February 29 plus one year becomes February 28). The calculation must not iterate through intermediate clamped dates, so equivalent full-amount evaluation cannot drift by library behavior. After calendar-date resolution, a resulting time in a DST gap resolves to the first valid instant after the gap; an ambiguous overlap resolves to the earlier occurrence. End-of-local-day is the exclusive start of the following local calendar day. A deadline expires at the boundary and is valid strictly before it. Rules missing the temporal semantics needed to derive one instant are invalid and must not be published/applied.
+Every relative rule also preserves the temporal arithmetic necessary to derive one deterministic deadline: duration amount/unit, temporal basis (`ELAPSED` or `LOCAL_CALENDAR`), endpoint semantics, and the governed timezone/version context required for calendar arithmetic. `ELAPSED` arithmetic operates on the instant timeline: seconds, minutes and hours are exact elapsed durations, an elapsed day is exactly 24 hours and an elapsed week is exactly seven elapsed days; month/year units are invalid in elapsed mode. `LOCAL_CALENDAR` arithmetic accepts only a non-negative integer duration amount for calendar days, weeks, months or years; fractional calendar amounts are invalid and must not be truncated, rounded, decomposed or reinterpreted as elapsed time. It adds that integer amount in the governed IANA timezone anchored to the activation fact unless the rule preserves a more specific governed timezone context. It preserves the activation local wall-clock time unless the rule declares another endpoint. For month/year units, the full duration amount is applied to the original anchored local date using proleptic-Gregorian year/month arithmetic; the original day-of-month is retained when valid and otherwise clamps to the final valid day of the target month (for example, January 31 plus one month becomes February 28 or 29, and February 29 plus one year becomes February 28). The calculation must not iterate through intermediate clamped dates, so equivalent full-amount evaluation cannot drift by library behavior. After calendar-date resolution, a resulting time in a DST gap resolves to the first valid instant after the gap; an ambiguous overlap resolves to the earlier occurrence. End-of-local-day is the exclusive start of the following local calendar day. A deadline expires at the boundary and is valid strictly before it. Rules missing the temporal semantics needed to derive one instant are invalid and must not be published/applied.
 
 ### FoodLifecycleEvent
 Represents meaningful state-changing facts such as opened, frozen, thawed, prepared or other conservation events that may influence effective shelf life.
@@ -325,10 +331,12 @@ User ──< HouseholdMembership >── Household
 
 GLOBAL catalog ──< Product
               └──< Recipe ──< RecipeVersion
+GLOBAL catalog ──< IngredientConcept
+Household ──< Household-scoped IngredientConcept
 IngredientConcept ──< RecipeIngredient >── RecipeVersion ──> Recipe
         │
         ├──< ShelfLifeRule
-        └──< versioned controlled compatibility >── Product
+        └──< scoped/versioned controlled compatibility >── Product
 
 Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
         ├──< ShelfLifeRule
@@ -338,7 +346,8 @@ Product ──< ProductIdentifier ── scoped by scheme + issuer/namespace
 MeasurementConversionEvidence ── exact version/factor/context ──> committed reconciled/conserved quantities
 CompatibilityDecisionEvidence ── exact mapping/version/context ──> committed concept-based allocations
 ShelfLifeRule ── group-local precedence / activation-time selection / explicit temporal arithmetic ──> Product | IngredientConcept | governed classification
-StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / ShelfLifeRule version(s)
+StockItem ──< EffectiveExpiration ── provenance ──> SourceExpirationFact / FoodLifecycleEvent / ShelfLifeRule version(s)
+InventoryMovement lineage ── inherited shelf-life fact set per quantity portion ──> split/transfer/merge StockItem
 ```
 
 `StorageLocation XOR Compartment` means one stored StockItem has one placement anchor, not two competing placement truths. Explicitly unplaced StockItems are the governed exception.
@@ -354,6 +363,7 @@ The canonical model rejects these conflations:
 - Batch as both manufacturing lot and physical inventory position;
 - Batch as a mandatory bridge between StockItem and Product or source expiration;
 - ProductIdentifier uniqueness without scheme/issuer namespace semantics;
+- ProductIdentifier normalization without a governed scheme-specific rule/version, preserved source value and collision-safe migration;
 - Product as owner of a single current price;
 - PurchaseItem with an unlabeled monetary `price` whose unit-vs-line-total meaning is ambiguous;
 - unit/basis price and purchased quantity producing a line gross that is accepted without governed extension/rounding reconciliation or an explicit pricing discrepancy;
@@ -376,6 +386,8 @@ The canonical model rejects these conflations:
 - ambiguous aggregate count allocated arbitrarily across state-distinct StockItems;
 - InventoryTransfer without same-Product, quantity-conservation and immutable source/destination placement semantics;
 - historical transfer reconstruction from current StockItem placement;
+- split, transfer or merge resetting/dropping applicable SourceExpirationFact, FoodLifecycleEvent or activated shelf-life evaluation context;
+- merging shelf-life-distinct quantity into one indistinguishable StockItem lineage;
 - PreparationInput without authoritative decrement provenance and quantity conservation;
 - recipe-based Preparation without immutable RecipeVersion/snapshot and preserved scaling/constraint context;
 - recipe-based PreparationInput fulfillment inferred without explicit RecipeIngredient allocation;
@@ -390,9 +402,11 @@ The canonical model rejects these conflations:
 - undeclared reservation/hold semantics treated as if already canonical StockItem state;
 - ShelfLifeRule precedence applied globally across independent semantic trigger/deadline groups;
 - ShelfLifeRule without explicit applicability, deterministic group-local precedence and an activation-class-specific stable evaluation anchor;
-- relative ShelfLifeRule arithmetic that leaves elapsed-vs-calendar basis, month/year invalid-date rollover, timezone/DST handling or endpoint semantics implicit;
+- relative ShelfLifeRule arithmetic that leaves elapsed-vs-calendar basis, integral calendar amounts, month/year invalid-date rollover, timezone/DST handling or endpoint semantics implicit;
 - EffectiveExpiration date-only interpretation whose timezone version is selected from calculation time instead of the preserved SourceExpirationFact domain/source anchor;
 - EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
+- IngredientConcept or compatibility mapping without explicit global-or-Household scope, ownership, visibility, edit authority and cross-scope reference constraints;
+- a global compatibility mapping exposing a private Household Product/concept, or a Household mapping referencing another Household's private catalog entities;
 - Recipe/RecipeVersion without explicit global-or-Household governance scope, ownership, visibility and edit authority;
 - a global Recipe referencing a private Household Product, or a Household Recipe/Preparation referencing another Household's private Recipe/Product;
 - RecipeIngredient pointing to a physical Batch or StockItem;
