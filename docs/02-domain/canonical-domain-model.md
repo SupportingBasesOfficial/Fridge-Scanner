@@ -82,7 +82,7 @@ Represents an item purchased, including Product, transaction-specific quantity, 
 
 A generic unlabeled `price` amount is not canonical. When a unit/basis price exists, it identifies the pricing-basis quantity and MeasurementUnit to which the amount applies. A PurchaseItem may additionally preserve `line_gross`, `line_discount`, `line_tax` or other governed line charges, and `line_net`, each as an exact Money value with explicit semantic role and provenance indicating whether the value came from the source transaction or was derived by the platform.
 
-For the ordinary line equation, `line_gross` is the pre-discount, pre-tax/charge extended amount; `line_discount` is the total discount allocated to the line; `line_tax`/governed line charges are the total taxes/charges allocated to the line; and `line_net = line_gross - line_discount + line_tax/line-charges` under the transaction's governed currency scale/rounding policy. If source-provided and derived values coexist, they must reconcile under that policy or retain an explicit discrepancy. Purchase-level discounts, taxes, fees or charges that are not source-allocated to a line must not be silently folded into PurchaseItem unit price or historical unit cost. Any later analytical/accounting allocation of Purchase-level amounts preserves allocation method, basis, rounding and provenance as derived facts without rewriting source transaction amounts.
+For the ordinary line equation, `line_gross` is the pre-discount, pre-tax/charge extended amount. When a unit/basis price exists, its unrounded extension is `basis-price amount × (purchased quantity expressed in the pricing-basis unit ÷ pricing-basis quantity)` using exact-rational quantity conversion; the governed currency scale/rounding policy is then applied once at the line-gross boundary. An authoritative `line_gross` must equal that computed extension under the preserved policy. A source value that does not reconcile is retained only with an explicit pricing discrepancy/exception recording source and computed amounts, quantity/conversion evidence, policy, reason and resolution status; it must not silently become ordinary gross or unit cost. `line_discount` is the total discount allocated to the line; `line_tax`/governed line charges are the total taxes/charges allocated to the line; and `line_net = line_gross - line_discount + line_tax/line-charges` under the same governed currency scale/rounding policy. If source-provided and derived values coexist, they must reconcile under that policy or retain an explicit discrepancy. Purchase-level discounts, taxes, fees or charges that are not source-allocated to a line must not be silently folded into PurchaseItem unit price or historical unit cost. Any later analytical/accounting allocation of Purchase-level amounts preserves allocation method, basis, rounding and provenance as derived facts without rewriting source transaction amounts.
 
 If the pricing basis differs from the purchased quantity/unit, the relationship is reconciled only through accepted measurement-conversion semantics and preserves MeasurementConversionEvidence whenever contextual conversion is required. If an imported/source line is denominated differently from the Purchase transaction currency, both the source amount/currency and any normalized amount must preserve the explicit conversion rate/source and conversion time/context; silent conversion is forbidden.
 
@@ -276,7 +276,9 @@ Records who/what performed an auditable action, in which Household/context, agai
 Audit history is distinct from application logs, security telemetry, domain events and inventory ledger history.
 
 ### IdempotencyRecord
-Supports safe retry of mutations where duplicate execution could corrupt business state.
+Supports safe retry of mutations where duplicate execution could corrupt business state. Its canonical identity is scoped at least by target Household (or an explicit global/system scope for a genuinely non-Household operation), authenticated actor/trusted principal, operation/command identity and client idempotency key. A key is never globally unique by itself and possession of a key grants no authority.
+
+The record preserves a canonical request fingerprint computed from the complete normalized semantic mutation payload, including target entity/scope and command version, plus execution state and the committed response/result reference. A retry with the same scoped identity and matching fingerprint returns/reuses the original in-progress or committed outcome without executing the mutation again. Reuse of that scoped identity with a different fingerprint, target, operation or command version is rejected as an idempotency conflict and cannot overwrite, replay or reinterpret the original record. Authorization is re-established for every retry before any stored result is disclosed. Retention/expiry may permit later key reuse only through an explicit governed policy that cannot overlap a still-replayable mutation outcome.
 
 ### OutboxRecord
 Provides a durable publication boundary for asynchronous side effects when a database mutation and event/message publication must be coordinated.
@@ -354,6 +356,7 @@ The canonical model rejects these conflations:
 - ProductIdentifier uniqueness without scheme/issuer namespace semantics;
 - Product as owner of a single current price;
 - PurchaseItem with an unlabeled monetary `price` whose unit-vs-line-total meaning is ambiguous;
+- unit/basis price and purchased quantity producing a line gross that is accepted without governed extension/rounding reconciliation or an explicit pricing discrepancy;
 - purchase line totals, discounts, taxes or charges without explicit gross/net roles and governed reconciliation/rounding semantics;
 - Purchase-level charges silently folded into line unit cost without explicit allocation provenance;
 - monetary amount without explicit currency or silent cross-currency conversion;
@@ -398,5 +401,7 @@ The canonical model rejects these conflations:
 - relative shelf life represented as a calendar date;
 - expiration automatically meaning disposal;
 - household physical structure duplicated inside JSON configuration;
+- idempotency keyed only by an unscoped client value, without Household/principal/operation identity and a canonical request fingerprint;
+- reuse of an idempotency identity with a different request payload or disclosure of a stored result before retry authorization is re-established;
 - one mutable `quantity_current` value as the only source of inventory truth;
 - audit log as a substitute for inventory/domain history.
