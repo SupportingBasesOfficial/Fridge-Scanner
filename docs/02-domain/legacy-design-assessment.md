@@ -31,7 +31,7 @@ DB-00: household authority belongs to HouseholdMembership. A platform-level role
 ### Product
 Earlier: category/manufacturer/value were scalar attributes.
 
-DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
+DB-00: Product is the canonical stockable food identity and is not synonymous with a retail SKU. It may represent commercial, loose, household-defined or prepared food. Catalog governance is explicit: global Products are globally governed/reusable and are not editable through ordinary Household authority; household-defined Products belong to exactly one Household and are visible/editable only through that Household boundary. A Household may reference global Products or its own private catalog entries, never another Household's private Product. Price is transaction-specific monetary data with explicit currency; category, namespaced identifiers and measurement semantics are explicit domain concepts; brand/manufacturer must not be accidentally conflated.
 
 ### Batch / lot
 Earlier: `Lote` combined product batch, compartment, quantity, package state and expiration.
@@ -42,6 +42,11 @@ DB-00: Batch and StockItem are distinct concepts. Physical location and mutable 
 Earlier: `quantidade_atual` was directly mutated by triggers/actions.
 
 DB-00: durable InventoryMovement semantics are authoritative; current balance may be a projection/cache but must be reconcilable. InventoryMovement preserves domain occurrence time separately from recording/commit time where delayed/offline capture is possible.
+
+### Measurement conversion
+Earlier: unit/package conversion could be interpreted as current configuration.
+
+DB-00: same-dimension conversion remains governed by canonical unit semantics, while contextual, package-equivalence and cross-dimension conversion requires explicit product/ingredient evidence. When such a conversion participates in a committed receipt, movement, reconciliation or allocation, the exact source/target units, factor/formula inputs, conversion profile/rule identity and version, evaluation context and provenance are retained so later profile changes cannot reinterpret historical quantities.
 
 ### Consumption / movement / disposal
 Earlier: separate operational tables each mutated the current quantity.
@@ -66,7 +71,7 @@ DB-00: PreparationInput and PreparationOutput carry measurable quantities and li
 ### Dynamic expiration
 Earlier: absolute and relative expiration were represented as dates and Recipe contained a dynamic-expiration date.
 
-DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch; rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving.
+DB-00: SourceExpirationFact, ShelfLifeRule, lifecycle/storage facts and EffectiveExpiration are separate concepts. Source expiration may exist independently of Batch. ShelfLifeRule precedence is evaluated only within rules competing for the same semantic trigger/deadline group; independent lifecycle groups remain candidates rather than suppressing one another. Rule version selection, activation-time anchors, candidate combination and date-only comparison are deterministic and provenance-preserving.
 
 ### Inventory count
 Earlier: reconciliation semantics were not sufficient for delayed/offline observation or ambiguous allocation.
@@ -115,9 +120,10 @@ They remain open until later phases select technology based on accepted requirem
 DB-00 introduces or makes explicit:
 
 - IngredientConcept and controlled Product compatibility for recipe/planning semantics;
-- Product as a stockable identity broader than retail SKU;
+- Product as a stockable identity broader than retail SKU, with explicit global-vs-Household catalog governance;
 - ProductIdentifier with scheme plus issuer/namespace scoping;
 - MeasurementUnit and dimensional semantics;
+- versioned MeasurementConversionEvidence for committed contextual/package/cross-dimension conversions;
 - exact Money/Currency semantics for transaction values;
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
 - shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
@@ -126,7 +132,7 @@ DB-00 introduces or makes explicit:
 - InventoryMovement with occurrence/recording time, conservation rules and reconcilable balances;
 - InventoryTransfer as one business transfer backed by paired conserved effects;
 - InventoryCount with per-line observation/as-of semantics for non-atomic counts, historical rebase rules and ambiguity staging;
-- FoodLifecycleEvent, ShelfLifeRule and deterministic EffectiveExpiration;
+- FoodLifecycleEvent, ShelfLifeRule semantic trigger/deadline groups and deterministic EffectiveExpiration;
 - Preparation, PreparationInput, PreparationInputAllocation and PreparationOutput with durable lineage and scaled RecipeIngredient reconciliation;
 - HouseholdProductPolicy, ShoppingList, ShoppingListItem and ShoppingListFulfillment;
 - Household-scoped AlertRule, Alert and NotificationDelivery ownership/subject chain;
