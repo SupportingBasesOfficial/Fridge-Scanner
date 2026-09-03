@@ -131,9 +131,11 @@ Represents meaningful state-changing facts such as opened, frozen, thawed, prepa
 ### EffectiveExpiration
 An explainable materialized projection for a concrete StockItem. Authoritative truth remains SourceExpirationFact records, applicable Batch source facts, lifecycle/storage facts and versioned shelf-life rules.
 
-Each applicable authoritative input produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline. Candidate comparison must use an explicit precision/timezone policy when source values are date-only or otherwise not directly comparable; the system must not silently invent precision.
+Each applicable authoritative input produces zero or more expiration candidates with preserved source semantics/provenance. Unless a future explicitly governed rule defines a different composition for a specific semantic class, the operational EffectiveExpiration is the earliest applicable candidate: source/package expiration and lifecycle-derived deadlines act as limiting upper bounds, so a later candidate must never extend an earlier authoritative deadline.
 
-The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, combination result, evaluation anchor and ShelfLifeRule version(s) that participated in selection.
+For candidate ordering, a source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source data but is interpreted operationally as the end of that local calendar day in the canonical Household timezone applicable to the StockItem. If the source itself supplies an explicit timezone/offset or a governed external context requires one, that source context is preserved and used instead. The Household timezone used for interpretation must itself be a governed, versioned/as-of context so later timezone-setting changes do not alter historical recomputation. Instant-valued candidates retain their exact instant. Comparisons normalize these operational instants without mutating or fabricating precision in the original source fact.
+
+The materialized value must be invalidatable and deterministically recomputable when authoritative inputs change, and it must retain enough provenance to explain the candidate set, combination result, evaluation anchor, date-only interpretation timezone/context and ShelfLifeRule version(s) that participated in selection.
 
 Expiration is a state/condition. Disposal is a separate physical action and must not be inferred as having occurred merely because time passed.
 
@@ -283,7 +285,7 @@ The canonical model rejects these conflations:
 - ShoppingListItem fulfillment without subject compatibility, quantity allocation and anti-double-counting semantics;
 - ambiguous StockItem placement with conflicting location/compartment truths;
 - ShelfLifeRule without explicit applicability, deterministic precedence and a stable as-of evaluation anchor;
-- EffectiveExpiration without deterministic candidate-combination semantics;
+- EffectiveExpiration without deterministic candidate-combination and date-only comparison semantics;
 - RecipeIngredient pointing to a physical Batch or StockItem;
 - RecipeIngredient being permanently tied to one commercial SKU when a semantic IngredientConcept is sufficient;
 - Recipe pointing to one concrete destination StorageLocation;
