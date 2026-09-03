@@ -1,56 +1,44 @@
-# FridgeScanner — DB-00 Open Decisions
+# FridgeScanner — DB-00 Decision Register
 
-## Purpose
+## Status
 
-This register prevents undecided subjects from being mistaken for accepted architecture. DB-00 closes domain semantics first and deliberately defers implementation-specific choices that require later evidence.
+The seven DB-00 conceptual decisions originally tracked here are **resolved** by `db-00-decisions.md` as D-001 through D-007. This file remains as the traceability register showing what was open, how it was closed, and which implementation-specific subjects are deliberately deferred.
 
-## Decisions to close before DB-01 / DB-02
+No item in the resolved section below is an open blocker for DB-01. If a later phase needs to change one of these decisions, it must do so explicitly through governed architecture change rather than by silently changing table shape or implementation behavior.
 
-### OD-001 — StockItem granularity
+## Resolved DB-00 decisions
 
-Question: when several equivalent units share the same batch, location, package state and shelf-life state, may one StockItem represent an aggregate quantity, or must every physical package/unit have a distinct identity?
+### OD-001 — StockItem granularity → resolved by D-001
 
-Direction: support aggregation where identity is not operationally meaningful, while allowing split operations when package/lifecycle state diverges. DB-01 must define the exact relational representation and split/merge semantics.
+Resolution: StockItem uses state-coherent aggregate identity. Aggregation is allowed while identity-affecting state remains coherent; split/merge semantics must preserve lifecycle, ownership, measurement, provenance and audit meaning.
 
-### OD-002 — Ingredient abstraction
+### OD-002 — Ingredient abstraction → resolved by D-002
 
-Question: should RecipeIngredient reference Product directly, a broader Ingredient concept, or support both?
+Resolution: RecipeIngredient targets `IngredientConcept`, not commercial stock. Controlled compatibility mapping determines which Products can satisfy an IngredientConcept, with exact-product constraints only when genuinely required.
 
-Direction: do not force recipes to depend on one commercial SKU. DB-01 must define how generic ingredients such as "milk" can be fulfilled by compatible catalog products without introducing uncontrolled free-text semantics.
+### OD-003 — Measurement conversion → resolved by D-003
 
-### OD-003 — Measurement conversion
+Resolution: units have explicit dimensions. Same-dimension conversions may use canonical conversion rules; cross-dimension conversion requires explicit product/ingredient context such as density or package equivalence.
 
-Question: which conversions are universal and which require product/ingredient-specific density or packaging rules?
+### OD-004 — Effective expiration persistence → resolved by D-004
 
-Direction: dimension-safe conversion is mandatory. Cross-dimension conversion (for example mass ↔ volume) must never be assumed globally.
+Resolution: effective expiration may be materialized for efficient reads and alerts, but authoritative truth remains the source facts, lifecycle/storage facts and versioned shelf-life rules. The projection must be explainable, invalidatable and recomputable.
 
-### OD-004 — Effective expiration persistence
+### OD-005 — Negative inventory policy → resolved by D-005
 
-Question: should effective expiration be calculated on read, materialized as a projection, or both?
+Resolution: committed authoritative inventory cannot become negative. Ambiguous imports/reconciliation remain staged until they can be committed without fabricating negative stock.
 
-Direction: the result must be explainable and recomputable from authoritative source facts/rules. DB-02/DB-03 will choose persistence and invalidation semantics.
+### OD-006 — Stock transfer representation → resolved by D-006
 
-### OD-005 — Negative inventory policy
+Resolution: one atomic `InventoryTransfer` domain operation produces two linked ledger effects: source decrement and destination increment under one transfer identity.
 
-Question: must authoritative inventory balance always be non-negative, or may controlled reconciliation/import workflows temporarily represent negative balance?
+### OD-007 — Household naming and external vocabulary → resolved by D-007
 
-Direction: ordinary user flows must never silently create negative stock. Exceptional reconciliation semantics require an explicit decision before physical constraints are designed.
-
-### OD-006 — Stock transfer representation
-
-Question: is a transfer one movement with origin/destination, or a paired outbound/inbound ledger operation under one transfer identity?
-
-Direction: DB-01/DB-02 must select the representation that preserves atomicity, household isolation, lineage and efficient balance calculation.
-
-### OD-007 — Household naming and external vocabulary
-
-Question: should the canonical code/domain term be `Household` while Portuguese UI uses `Casa`, or should code use another stable term?
-
-Direction: `Household` is currently the canonical architecture term; UI terminology is not constrained by it.
+Resolution: `Household` is the canonical architecture/code term. User interfaces may localize it as `Casa` or another product-language term.
 
 ## Decisions deliberately deferred to later phases
 
-The following are not DB-00 blockers:
+The following are intentionally unresolved because they depend on the accepted domain/database contracts and are not DB-00 blockers:
 
 - PostgreSQL physical type/index choices;
 - ORM/query layer;
@@ -63,4 +51,4 @@ The following are not DB-00 blockers:
 - Kubernetes or other orchestrators;
 - telemetry storage technology.
 
-They must not be inferred from legacy option lists.
+These subjects must not be inferred from legacy option lists. Each becomes a governed decision only when its owning phase has enough evidence to close it.
