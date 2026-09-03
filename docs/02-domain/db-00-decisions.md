@@ -36,9 +36,11 @@ Package-to-quantity relationships such as "1 package = 500 g" are product/packag
 
 Source expiration must be representable at the concrete StockItem/package level even when no manufacturer Batch is known. Rule-version selection is anchored to the domain occurrence time of the fact that activates the rule, and recomputation must reuse that same anchor rather than current time.
 
-Applicable source expirations and rule-derived deadlines form an explicit candidate set. Unless a future governed semantic-class rule defines a different composition, the effective operational expiration is the earliest applicable candidate: a later candidate may not extend an earlier authoritative deadline. Date-only or unequal-precision candidates must be compared under an explicit precision/timezone policy rather than by silently inventing precision.
+Applicable source expirations and rule-derived deadlines form an explicit candidate set. Unless a future governed semantic-class rule defines a different composition, the effective operational expiration is the earliest applicable candidate: a later candidate may not extend an earlier authoritative deadline.
 
-The materialized value must be recomputable and must retain provenance sufficient to explain the candidate set, selected rule versions, evaluation anchor and final combination result. Changing an authoritative input must invalidate/recalculate the projection deterministically.
+A source expiration expressed only as a calendar date preserves its original date-only precision as authoritative source truth. For operational comparison only, that date is interpreted as the end of the local calendar day in the canonical Household timezone applicable to the StockItem, unless the source itself supplies an explicit timezone/offset or governed source context. The timezone/context used for interpretation is versioned/as-of so later configuration changes cannot alter historical recomputation. Instant-valued candidates retain exact instant semantics. Operational normalization must not overwrite the original source precision.
+
+The materialized value must be recomputable and must retain provenance sufficient to explain the candidate set, selected rule versions, evaluation anchor, date-only interpretation timezone/context and final combination result. Changing an authoritative input must invalidate/recalculate the projection deterministically.
 
 The projection must never become an unexplained second source of truth.
 
