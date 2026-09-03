@@ -51,7 +51,7 @@ DB-00: durable InventoryMovement semantics are authoritative; current balance ma
 ### Measurement conversion
 Earlier: unit/package conversion could be interpreted as current configuration.
 
-DB-00: same-dimension conversion remains governed by canonical unit semantics, while contextual, package-equivalence and cross-dimension conversion requires explicit product/ingredient evidence. When such a conversion participates in a committed receipt, movement, reconciliation or allocation, the exact source/target units, factor/formula inputs, conversion profile/rule identity and version, evaluation context and provenance are retained so later profile changes cannot reinterpret historical quantities.
+DB-00: same-dimension conversion remains governed by canonical unit semantics, while contextual, package-equivalence and cross-dimension conversion requires explicit product/ingredient evidence. When such a conversion participates in a committed receipt, movement, reconciliation or allocation, the exact source/target units, factor/formula inputs, conversion profile/rule identity and version, evaluation context and provenance are retained so later profile changes cannot reinterpret historical quantities. Authoritative quantities, operative factors and converted results use exact rational semantics, so non-terminating decimal expansions do not depend on implementation precision and conservation never rounds away a residual.
 
 ### Consumption / movement / disposal
 Earlier: separate operational tables each mutated the current quantity.
@@ -66,7 +66,7 @@ DB-00: InventoryTransfer is one domain operation backed by paired conserved effe
 ### Purchase / receiving
 Earlier: a Purchase record could imply that goods entered stock, and line monetary fields could be read as generic price/value scalars.
 
-DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explicit by semantic role: any unit/basis price identifies its pricing quantity/unit, while line gross, discount, tax/governed charges and net are distinct exact-money facts reconciled under an explicit rounding policy. Purchase-level discounts/taxes/fees remain Purchase-level unless an explicit derived allocation records method, basis, rounding and provenance; they are never silently folded into line unit cost. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared purchased-quantity availability pool per PurchaseItem.
+DB-00: Purchase and Receipt are separate concepts. PurchaseItem money is explicit by semantic role: any unit/basis price identifies its pricing quantity/unit, while line gross, discount, tax/governed charges and net are distinct exact-money facts reconciled under an explicit rounding policy. Purchase-level discounts/taxes/fees remain Purchase-level unless an explicit derived allocation records method, basis, rounding and provenance; they are never silently folded into line unit cost. ReceiptItem carries received Product/quantity/unit, optional same-Product PurchaseItem provenance and authoritative inventory-entry linkage with quantity conservation. Substitution and over-receipt are explicit governed exceptions rather than silent ordinary fulfillment, and ordinary receipts plus substitutions consume one shared physical-receiving pool per PurchaseItem. ShoppingListFulfillment uses a separate intent-attribution pool, independently preventing double counting without making receipt evidence compete with the shopping intent it fulfills.
 
 ### Recipe ingredients
 Earlier: RecipeIngredient referenced a concrete Batch.
@@ -134,10 +134,10 @@ DB-00 introduces or makes explicit:
 - Product as a stockable identity broader than retail SKU, with explicit global-vs-Household catalog governance;
 - ProductIdentifier with scheme plus issuer/namespace scoping;
 - MeasurementUnit and dimensional semantics;
-- versioned MeasurementConversionEvidence for committed contextual/package/cross-dimension conversions;
+- versioned MeasurementConversionEvidence and exact-rational semantics for committed contextual/package/cross-dimension conversions and conservation;
 - exact Money/Currency semantics plus explicit PurchaseItem pricing basis, line gross/discount/tax-or-charge/net roles and governed rounding/reconciliation;
 - Receiving distinct from Purchase and ReceiptItem for line-level receiving;
-- shared PurchaseItem allocation semantics across ordinary receipts and substitutions;
+- one shared physical-receiving PurchaseItem pool across ordinary receipts/substitutions plus a distinct shopping-intent attribution pool;
 - StockItem distinct from Batch;
 - SourceExpirationFact independent of Batch, with a preserved domain/source temporal anchor for deterministic date-only timezone selection;
 - InventoryMovement with occurrence/recording time, immutable placement evidence, conservation rules and reconcilable balances;
