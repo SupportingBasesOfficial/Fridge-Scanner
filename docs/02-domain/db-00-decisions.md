@@ -8,19 +8,19 @@ Proposed canonical decisions for DB-00. These decisions close the conceptual amb
 
 **Decision:** a StockItem is the inventory unit of record, not necessarily one physical package. It may represent an aggregate measurable quantity only while all identity-affecting state is coherent.
 
-A StockItem must be split when part of its quantity acquires materially different state, including location, package/open state, shelf-life trigger/effective expiry, reservation/hold state, provenance requirements or other lifecycle facts that must be tracked independently.
+A StockItem must be split when part of its quantity acquires materially different state, including location, package/open state, shelf-life trigger/effective expiry, provenance requirements or other lifecycle facts that must be tracked independently. Future reservation/hold semantics are not part of DB-00 and must not be treated as canonical StockItem state unless introduced through an explicit governed decision.
 
 Two StockItems may be merged only when their merge cannot erase required lineage/audit meaning and all attributes that affect lifecycle, ownership, measurement and storage semantics are compatible.
 
 This avoids one-row-per-grain over-modeling while preserving physical truth whenever state diverges.
 
-## D-002 — RecipeIngredient targets IngredientConcept, not commercial stock
+## D-002 — RecipeIngredient targets IngredientConcept, not concrete stock
 
 **Decision:** introduce `IngredientConcept` as the recipe-facing abstraction. `RecipeIngredient` references an IngredientConcept plus quantity/unit and optional constraints.
 
-`Product` remains the catalog/SKU-facing concept. A controlled compatibility mapping determines which Products can satisfy an IngredientConcept. A recipe may optionally impose an exact-product constraint when the recipe genuinely requires it.
+`Product` is the canonical stockable food/product identity referenced by StockItem. It may represent a commercial packaged product, loose/unbranded food, a household-defined item, or a reusable identity for prepared food/output; commercial identifiers and manufacturer metadata are optional. A controlled compatibility mapping determines which Products can satisfy an IngredientConcept. A recipe may optionally impose an exact-Product constraint when the recipe genuinely requires it.
 
-This prevents generic recipes such as "milk" from being tied to one barcode/SKU while avoiding uncontrolled free-text ingredient matching.
+This prevents generic recipes such as "milk" from being tied to one barcode/SKU while ensuring prepared, loose and non-commercial food can still have valid stock identity without fabricated commercial metadata.
 
 ## D-003 — Measurement conversion is dimension-safe and context-aware
 
