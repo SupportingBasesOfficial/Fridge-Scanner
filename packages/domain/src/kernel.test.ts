@@ -3,9 +3,11 @@ import test from 'node:test';
 
 import {
   HouseholdId,
+  addExactDecimal,
   addExactRational,
   addMoney,
   equalExactRational,
+  exactDecimal,
   exactRational,
   instant,
   money,
@@ -26,17 +28,29 @@ test('invalid rational denominator fails closed', () => {
   assert.throws(() => exactRational(1n, 0n), /denominator must not be zero/);
 });
 
-test('money arithmetic rejects currency mismatch', () => {
-  assert.deepEqual(addMoney(money(125n, 'BRL'), money(75n, 'BRL')), {
-    minorUnits: 200n,
-    currency: 'BRL',
-  });
-  assert.throws(() => addMoney(money(1n, 'BRL'), money(1n, 'USD')), /currencies must match/);
+test('exact decimal preserves PostgreSQL numeric semantics without floating point', () => {
+  assert.equal(addExactDecimal(exactDecimal('0.1'), exactDecimal('0.2')), '0.3');
+  assert.equal(addExactDecimal(exactDecimal('12.345'), exactDecimal('-2.345')), '10');
+  assert.throws(() => exactDecimal('01.20'), /canonical finite decimal/);
+  assert.throws(() => exactDecimal('1e-3'), /canonical finite decimal/);
+  assert.throws(() => exactDecimal('1.2300'), /canonical finite decimal/);
+});
+
+test('money arithmetic is exact and rejects currency mismatch', () => {
+  assert.deepEqual(
+    addMoney(money(exactDecimal('1.25'), 'BRL'), money(exactDecimal('0.75'), 'BRL')),
+    { amount: '2', currency: 'BRL' },
+  );
+  assert.throws(
+    () => addMoney(money(exactDecimal('1'), 'BRL'), money(exactDecimal('1'), 'USD')),
+    /currencies must match/,
+  );
 });
 
 test('opaque identifiers validate canonical UUID input', () => {
   assert.equal(HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   assert.throws(() => HouseholdId('household-from-request-header'), /Invalid HouseholdId/);
+  assert.throws(() => HouseholdId('AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'), /Invalid HouseholdId/);
 });
 
 test('instant accepts valid UTC timestamps including leap day', () => {
