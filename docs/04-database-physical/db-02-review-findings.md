@@ -116,9 +116,31 @@ The first ledger draft placed `source_expiration_date` directly on Batch. That w
 
 **Status:** CLOSED.
 
+## Pass 5 — inventory count and reconciliation
+
+### F2-011 — Count allocation FK had no matching candidate key
+
+**Severity:** executable-schema blocker.
+
+The first `000008__inventory_count.sql` draft made `inventory_count_allocation` reference `(household_id, inventory_count_item_id, product_id)` but did not declare that exact referenced column set as a candidate key on `inventory_count_item`. PostgreSQL would reject creation of the FK.
+
+**Resolution:** added `inventory_count_item_household_product_identity_uq` on `(household_id, inventory_count_item_id, product_id)` before the allocation table is created. The structural Product equality between CountItem and target StockItem remains enforced through the two composite FKs.
+
+**Status:** CLOSED.
+
+### F2-012 — Physical count layer invented lifecycle/status defaults
+
+**Severity:** domain-governance overreach.
+
+The initial count draft defaulted session status to `OPEN` and line reconciliation status to `PENDING` even though DB-01 requires lifecycle/reconciliation state but does not canonically establish those concrete codes.
+
+**Resolution:** removed both defaults. Status remains required and nonblank, but concrete business values must come from the governed mutation/reference contract rather than being invented by DB-02 DDL.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-Known findings F2-001 through F2-010 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, rational execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-012 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
 
 ## Rule
 
