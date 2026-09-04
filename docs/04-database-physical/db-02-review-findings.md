@@ -172,9 +172,21 @@ The first shelf-life draft allowed `LOCAL_CALENDAR` duration semantics while lea
 
 **Status:** CLOSED.
 
+## Pass 8 — alerts and notifications
+
+### F2-016 — Notification delivery could precede its attempt
+
+**Severity:** historical delivery-evidence inconsistency.
+
+The first notification-delivery constraint required `attempted_at` whenever `delivered_at` existed but did not require chronological ordering, so a delivery timestamp earlier than its attempt could be persisted.
+
+**Resolution:** `000012_01__notification_delivery_time_guard.sql` replaces the constraint with `delivered_at >= attempted_at` whenever delivery exists. The alert/notification integrity test proves the invalid chronology is rejected.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-Known findings F2-001 through F2-015 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, catalog/rule scope visibility still requires its planned governed mutation enforcement, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-016 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, catalog/rule scope visibility still requires its planned governed mutation enforcement, at-least-one primary alert trigger remains a transaction-boundary invariant, and further physical-schema red-team remains required.
 
 ## Rule
 
