@@ -61,7 +61,6 @@ declare
     'purchase_item_receipt_allocation',
     'purchase_item_substitution_allocation',
     'purchase_receiving_exception',
-    'batch',
     'stock_item',
     'inventory_movement',
     'inventory_transfer',
@@ -152,6 +151,46 @@ begin
   end loop;
 end;
 $$;
+
+-- Batch has no direct Household column. Its confidentiality follows Product:
+-- global Product batches are readable, private Product batches only by owner Household.
+alter table fridge.batch enable row level security;
+alter table fridge.batch force row level security;
+create policy batch_visible
+  on fridge.batch
+  for select
+  using (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = batch.product_id
+        and (
+          p.catalog_scope = 'GLOBAL'
+          or p.owner_household_id = fridge_internal.current_household_id()
+        )
+    )
+  );
+create policy batch_household_write
+  on fridge.batch
+  for all
+  using (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = batch.product_id
+        and p.catalog_scope = 'HOUSEHOLD'
+        and p.owner_household_id = fridge_internal.current_household_id()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = batch.product_id
+        and p.catalog_scope = 'HOUSEHOLD'
+        and p.owner_household_id = fridge_internal.current_household_id()
+    )
+  );
 
 -- Child catalog rows inherit visibility from their governed parent/version.
 alter table fridge.product_identifier enable row level security;
