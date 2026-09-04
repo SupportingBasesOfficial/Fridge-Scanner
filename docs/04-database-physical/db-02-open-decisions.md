@@ -2,25 +2,25 @@
 
 ## Status
 
-DB-02 has an initial physical baseline. The items below are proof/review targets that can still change the physical implementation while preserving DB-01 semantics.
+DB-02 physical decisions and proof targets are closed on the current branch. New SQL/red-team evidence may still reopen this register until the exact-HEAD final review is accepted.
 
 ## A. Current physical blockers
 
-### O2-002 — Rational canonicalization execution proof
-
-**State:** physical design implemented; execution proof pending.
-
-`000001__bootstrap.sql` provides a PostgreSQL-17-compatible arbitrary-precision Euclidean GCD and rational normalization using integral `numeric`, positive denominator and canonical `0/1`. No fixed-width cast or decimal approximation participates.
-
-**Gate:** automated PostgreSQL 17 execution must pass `database/tests/integrity/000001__rational_primitives.sql`, including exact 1/3, sign normalization, large values and invalid-input rejection. PostgreSQL 18 compatibility should also be exercised.
-
-No other intentional physical-model blocker is currently open. New SQL/red-team findings may reopen this section.
+None.
 
 ## B. Closed physical decisions
 
 ### O2-001 — Final application schema namespace names — CLOSED
 
 Canonical business/database objects use schema `fridge`; privileged implementation helpers use `fridge_internal`. Canonical application truth does not rely on an uncontrolled default `public` namespace. Provider-managed schemas remain separate.
+
+### O2-002 — Rational canonicalization execution proof — CLOSED
+
+`000001__bootstrap.sql` provides a PostgreSQL-compatible arbitrary-precision Euclidean GCD and rational normalization using integral `numeric`, positive denominator and canonical `0/1`. No fixed-width cast or decimal approximation participates.
+
+**Execution evidence:** DB-02 PostgreSQL Gate run #18 (`33831776509`) passed on both PostgreSQL 17 and PostgreSQL 18 at exact branch HEAD `c09d050af0bc99f20e7f650acb3ae9e43e1cdbd9`. The gate applied the complete canonical migration lineage from zero and executed the integrity/RLS suite. `database/tests/integrity/000001__rational_primitives.sql` passed exact 1/3 equality, sign normalization, zero canonicalization, arbitrary-precision large-value complete-GCD reduction, normalized-form detection and invalid-input rejection.
+
+**Status:** CLOSED.
 
 ### O2-003 — Constraint-trigger versus transaction-function boundary — CLOSED
 
@@ -58,7 +58,7 @@ Also resolved by `db-02-decisions.md` and not open for convenience:
 - date-only expiration retained as date precision plus provenance;
 - `jsonb` restricted away from invariant-bearing relational truth;
 - no default partitioning without measured need;
-- plain ordered SQL migrations as canonical schema lineage;
+- canonical parsed SQL migration ordering rather than filesystem lexical order;
 - migration forward-fix/expand-contract posture;
 - ORM subordinate to the database contract;
 - extension deny-by-default.
@@ -77,4 +77,4 @@ These do not block physical schema acceptance unless implementation proves they 
 
 ## Exit criterion
 
-DB-02 cannot be declared CLEAN while any open proof requirement can still reveal a materially different correctness/enforcement outcome. New schema findings reopen this register even when previously known items are closed.
+DB-02 can be declared CLEAN only after the exact final HEAD remains free of open physical decisions/findings and its PostgreSQL 17/18 execution gate is green. Any new evidence that can materially change correctness or enforcement reopens the relevant decision/finding.
