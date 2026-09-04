@@ -1,0 +1,72 @@
+name: BE-00 Backend Gate
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'docs/05-backend/**'
+      - '.github/workflows/be-00-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    name: Runtime / TypeScript / Unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build and test
+        run: npm run verify
+
+  database-contract:
+    name: PostgreSQL 17 Contract Regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fridge_scanner_be00
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fridge_scanner_be00"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fridge_scanner_be00
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Replay accepted DB-02 contract and tests
+        run: python3 database/scripts/run_db02_gate.py
