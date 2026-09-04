@@ -7,6 +7,7 @@ import { buildApiServer } from './server.js';
 const config: RuntimeConfig = {
   nodeEnv: 'test',
   databaseUrl: 'postgresql://test:test@localhost:5432/test',
+  databaseCapabilityRole: 'fridge_app',
   httpHost: '127.0.0.1',
   httpPort: 3000,
   logLevel: 'fatal',
