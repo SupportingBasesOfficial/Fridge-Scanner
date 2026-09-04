@@ -6,6 +6,15 @@
 
 begin;
 
+alter table fridge.preparation_input
+  add constraint preparation_input_execution_product_identity_uq
+  unique (
+    household_id,
+    preparation_id,
+    preparation_input_id,
+    product_id
+  );
+
 alter table fridge.preparation_recipe_requirement
   add constraint preparation_requirement_execution_line_identity_uq
   unique (
