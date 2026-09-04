@@ -184,9 +184,75 @@ The first notification-delivery constraint required `attempted_at` whenever `del
 
 **Status:** CLOSED.
 
+## Pass 9 — integrations and security boundaries
+
+### F2-017 — Nullable composite ImportRun FK could be bypassed by MATCH SIMPLE
+
+**Severity:** provider-provenance integrity gap.
+
+The first ExternalReference→ImportRun FK used `(integration_id, household_id, import_run_id)`. Under PostgreSQL `MATCH SIMPLE`, a NULL `household_id` makes the composite reference exempt from validation, so a global ExternalReference could name an ImportRun belonging to a different Integration.
+
+**Resolution:** `000013_01__external_reference_import_context.sql` adds an unconditional `(integration_id, import_run_id)` candidate key/FK while retaining the Household-aware composite FK for tenant-bound runs. The matching adversarial test proves the NULL path cannot switch Integration identity.
+
+**Status:** CLOSED.
+
+### F2-018 — RLS migration contained relation-name drift
+
+**Severity:** fresh-install executable-schema blocker.
+
+The first `000017__security_context_rls.sql` draft referenced stale/nonexistent relation names (`product_identifier_staged_claim` and `inventory_shelf_life_lineage`). An ordered install from zero would fail when applying RLS.
+
+**Resolution:** corrected the names to the canonical physical relations `staged_identifier_claim` and `quantity_lineage_shelf_life_fact` before RLS testing.
+
+**Status:** CLOSED.
+
+### F2-019 — Mixed GLOBAL/HOUSEHOLD catalog rows lacked tenant-aware RLS
+
+**Severity:** cross-Household confidentiality gap.
+
+Applying RLS only to direct `household_id` tables would still leave mixed-scope Product, IngredientConcept, compatibility, Recipe/RecipeVersion and ShelfLifeRule relations exposed by ordinary SELECT grants. That could reveal another Household's private catalog rows.
+
+**Resolution:** `000017__security_context_rls.sql` now installs read policies allowing GLOBAL rows plus only the current Household's private rows, with write checks limited to current-Household private rows. RecipeIngredient visibility is inherited through visible RecipeVersion membership.
+
+**Status:** CLOSED.
+
+### F2-020 — Idempotency boundary could not be both function-only and SECURITY INVOKER
+
+**Severity:** privilege-boundary design conflict.
+
+The initial `acquire_idempotency()` routine was SECURITY INVOKER. Granting only EXECUTE would make it unable to write `idempotency_record`; granting table DML so it could work would defeat the intended function-only mutation boundary.
+
+**Resolution:** `000018__idempotency_security_hardening.sql` converts the routine to hardened SECURITY DEFINER, keeps PUBLIC revoked, validates the trusted Household transaction context and allows ordinary app/worker execution without direct table DML.
+
+**Status:** CLOSED.
+
+### F2-021 — Tenant/global idempotency authorization was ambiguous under SET ROLE
+
+**Severity:** authority-escalation/test-validity ambiguity.
+
+The first hardened routine attempted to authorize GLOBAL idempotency by inspecting `session_user` role membership. `SET ROLE fridge_app` does not change `session_user`, so a privileged test/bootstrap session could make an ordinary-role test appear authorized and the same API surface mixed tenant/global authority classes.
+
+**Resolution:** the ordinary `acquire_idempotency()` boundary is now strictly HOUSEHOLD-only. `000020__global_idempotency_boundary.sql` introduces a separate GLOBAL boundary granted only to owner/migrator capabilities, so tenant callers cannot elevate scope by changing a parameter.
+
+**Status:** CLOSED.
+
+### F2-022 — Pre-existing unsafe capability roles could be silently reused
+
+**Severity:** database privilege-escalation gap.
+
+The first capability-role migration created secure roles only when they did not already exist. A pre-existing role named `fridge_app`/`fridge_worker`/etc. with LOGIN, SUPERUSER, CREATEDB, CREATEROLE, INHERIT, REPLICATION or BYPASSRLS could therefore be silently accepted.
+
+**Resolution:** `000019__capability_roles_privileges.sql` now fails fast unless every pre-existing capability role matches the expected NOLOGIN/NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOINHERIT/NOREPLICATION/NOBYPASSRLS posture.
+
+**Status:** CLOSED.
+
+## Pass 10 — exact conservation guards
+
+No new defect finding is open in this pass yet. `000021__inventory_transfer_conservation.sql` and `000022__procurement_shopping_conservation.sql` add deferred exact-rational postconditions and parent-row serialization while preserving the deliberate separation between physical receiving and shopping-intent pools.
+
 ## Current review state
 
-Known findings F2-001 through F2-016 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, catalog/rule scope visibility still requires its planned governed mutation enforcement, at-least-one primary alert trigger remains a transaction-boundary invariant, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-022 are closed on the branch. DB-02 is **not CLEAN**: PostgreSQL 17 execution proof is still pending; PostgreSQL 18 compatibility proof is still pending; Preparation, lineage, waste, alert-primary-trigger and remaining catalog/rule mutation guards are not yet complete; RLS/privilege tests have not yet been executed by CI; and further exact-HEAD red-team remains required.
 
 ## Rule
 
