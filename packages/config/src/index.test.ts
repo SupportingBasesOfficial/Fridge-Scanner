@@ -8,10 +8,27 @@ test('parseRuntimeConfig applies safe non-secret defaults', () => {
   });
 
   assert.equal(config.nodeEnv, 'development');
+  assert.equal(config.databaseCapabilityRole, 'fridge_app');
   assert.equal(config.httpHost, '0.0.0.0');
   assert.equal(config.httpPort, 3000);
   assert.equal(config.logLevel, 'info');
   assert.equal(config.shutdownTimeoutMs, 10_000);
+});
+
+test('parseRuntimeConfig rejects privileged database roles', () => {
+  assert.throws(
+    () => parseRuntimeConfig({
+      DATABASE_URL: 'postgresql://app:secret@localhost:5432/fridge',
+      DATABASE_CAPABILITY_ROLE: 'fridge_owner',
+    }),
+    (error: unknown) => {
+      if (!(error instanceof RuntimeConfigError)) {
+        return false;
+      }
+      assert.match(error.message, /DATABASE_CAPABILITY_ROLE/);
+      return true;
+    },
+  );
 });
 
 test('parseRuntimeConfig fails closed when DATABASE_URL is absent', () => {
