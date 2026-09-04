@@ -8,6 +8,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig*.json'
+      - 'Dockerfile'
+      - '.dockerignore'
       - 'docs/05-backend/**'
       - '.github/workflows/be-00-backend.yml'
   workflow_dispatch:
@@ -99,3 +101,47 @@ jobs:
 
       - name: Prove backend Household isolation and context non-leakage
         run: npm run test:integration --workspace @fridge/database
+
+  container-smoke:
+    name: Container Smoke / Non-root / Health Semantics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build --pull -t fridge-scanner-be00:ci .
+
+      - name: Start backend container without database dependency
+        run: |
+          docker run --rm -d \
+            --name fridge-scanner-be00 \
+            -p 3000:3000 \
+            -e DATABASE_URL=postgresql://app:password@127.0.0.1:5432/fridge \
+            -e DATABASE_CAPABILITY_ROLE=fridge_app \
+            -e LOG_LEVEL=fatal \
+            fridge-scanner-be00:ci
+
+      - name: Prove liveness, readiness and non-root runtime
+        run: |
+          for attempt in $(seq 1 30); do
+            live_code="$(curl -sS -o /tmp/live.json -w '%{http_code}' http://127.0.0.1:3000/health/live || true)"
+            if [ "$live_code" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          test "${live_code:-}" = "200"
+          test "$(docker exec fridge-scanner-be00 id -u)" != "0"
+
+          ready_code="$(curl -sS -o /tmp/ready.json -w '%{http_code}' http://127.0.0.1:3000/health/ready || true)"
+          test "$ready_code" = "503"
+
+      - name: Container diagnostics
+        if: always()
+        run: |
+          docker logs fridge-scanner-be00 || true
+          docker rm -f fridge-scanner-be00 || true
