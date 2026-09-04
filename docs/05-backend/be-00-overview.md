@@ -34,8 +34,9 @@ Service extraction is not a default. A module may become a service later only fo
 
 - PostgreSQL remains business data authority as defined by DB-02.
 - DB capability credentials are never exposed to browsers or other untrusted clients.
-- RLS trusted transaction context is set only after backend authorization has resolved the Household.
-- Household authorization is re-established for each request/use case; a JWT or provider session alone is not current business authority.
+- A requested Household is installed only as transaction-local candidate RLS context inside an encapsulated authorization transaction; this permits the least-privileged role to read that Household's membership row under forced RLS.
+- The authenticated platform principal must have a currently effective ACTIVE membership in that candidate Household before any tenant callback/business query can run. Failure rolls back; candidate context alone is never authority.
+- Household authorization is re-established for each request/use case; a JWT/provider session or client-provided Household identifier alone is not current business authority.
 - Provider identity is not Household authority.
 - SQL migrations remain canonical schema authority; no ORM schema generation/migration becomes authoritative.
 - Exact quantity and money remain exact end to end; no JavaScript `number` is allowed to represent authoritative rational or monetary values.
@@ -79,7 +80,7 @@ BE-00 is complete only when all of the following exist and execute in CI:
 - API process lifecycle with health/readiness endpoints;
 - structured logging and request correlation foundation;
 - PostgreSQL connection/transaction adapter;
-- trusted Household transaction-context adapter;
+- principal-bound candidate-context/membership authorization transaction adapter;
 - no-ambient-transaction policy for application use cases;
 - explicit ports for identity, authorization context, clock and identifier generation;
 - exact rational/money transport/value representation contract;
