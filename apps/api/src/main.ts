@@ -3,7 +3,10 @@ import { PgDatabase } from '@fridge/database';
 import { buildApiServer } from './server.js';
 
 const config = parseRuntimeConfig(process.env);
-const database = new PgDatabase({ connectionString: config.databaseUrl });
+const database = new PgDatabase({
+  connectionString: config.databaseUrl,
+  capabilityRole: config.databaseCapabilityRole,
+});
 const server = buildApiServer({ config, readiness: database });
 
 let shuttingDown = false;
