@@ -12,6 +12,7 @@ export {
 } from '@fridge/domain';
 export type { Instant } from '@fridge/domain';
 export * from './errors.js';
+export * from './household-context.js';
 
 declare const verifiedTransactionBrand: unique symbol;
 

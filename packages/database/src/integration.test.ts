@@ -11,6 +11,7 @@ import {
 import {
   HouseholdAuthorizationError,
   PgDatabase,
+  PgHouseholdProfileReader,
   requirePgClient,
 } from './index.js';
 
@@ -126,6 +127,26 @@ test('authorization context exposes verified principal Household membership and 
       membershipId: MEMBERSHIP_A,
       householdRoleCode: 'MEMBER',
     });
+  } finally {
+    await database.close();
+  }
+});
+
+test('intent-specific Household profile reader executes only with a verified transaction capability', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const reader = new PgHouseholdProfileReader();
+
+  try {
+    const displayName = await database.withAuthorizedHouseholdTransaction(
+      PRINCIPAL_A,
+      HOUSEHOLD_A,
+      (transaction) => reader.readDisplayName(transaction),
+    );
+    assert.equal(typeof displayName, 'string');
+    assert.ok((displayName ?? '').length > 0);
   } finally {
     await database.close();
   }

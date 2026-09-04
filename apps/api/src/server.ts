@@ -1,17 +1,86 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
-import type { ReadinessProbe } from '@fridge/application';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import {
+  ApplicationError,
+  HouseholdId,
+  InvalidInputError,
+  PrincipalId,
+  UnauthenticatedError,
+  type AuthorizedHouseholdContext,
+  type ReadAuthorizedHouseholdContextInput,
+  type ReadinessProbe,
+  type UseCase,
+} from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
+export interface AuthenticatedPrincipalResolver {
+  resolve(request: FastifyRequest): Promise<PrincipalId>;
+}
+
+export const rejectUnauthenticatedPrincipal: AuthenticatedPrincipalResolver = {
+  async resolve() {
+    throw new UnauthenticatedError();
+  },
+};
+
 export interface ApiServerDependencies {
   readonly config: RuntimeConfig;
   readonly readiness: ReadinessProbe;
+  readonly authenticatedPrincipal: AuthenticatedPrincipalResolver;
+  readonly readAuthorizedHouseholdContext: UseCase<
+    ReadAuthorizedHouseholdContextInput,
+    AuthorizedHouseholdContext
+  >;
+}
+
+function parseHouseholdId(value: string) {
+  try {
+    return HouseholdId(value);
+  } catch (error) {
+    throw new InvalidInputError('Household identifier is invalid', error);
+  }
+}
+
+function serializeAuthorizedHouseholdContext(context: AuthorizedHouseholdContext) {
+  return {
+    principalId: String(context.principalId),
+    householdId: String(context.householdId),
+    householdDisplayName: context.householdDisplayName,
+    membershipId: String(context.membershipId),
+    householdRoleCode: context.householdRoleCode,
+  };
+}
+
+function applicationStatusCode(error: ApplicationError): number {
+  switch (error.code) {
+    case 'INVALID_INPUT': return 400;
+    case 'UNAUTHENTICATED': return 401;
+    case 'HOUSEHOLD_UNAUTHORIZED':
+    case 'NOT_FOUND': return 404;
+    case 'CONFLICT':
+    case 'IDEMPOTENCY_CONFLICT':
+    case 'IDEMPOTENCY_IN_PROGRESS': return 409;
+    case 'DEPENDENCY_UNAVAILABLE': return 503;
+    case 'INTERNAL': return 500;
+  }
+}
+
+function externalApplicationErrorCode(error: ApplicationError): string {
+  if (error.code === 'HOUSEHOLD_UNAUTHORIZED' || error.code === 'NOT_FOUND') {
+    return 'NOT_FOUND';
+  }
+  return error.code;
 }
 
 export function buildApiServer(dependencies: ApiServerDependencies): FastifyInstance {
-  const { config, readiness } = dependencies;
+  const {
+    config,
+    readiness,
+    authenticatedPrincipal,
+    readAuthorizedHouseholdContext,
+  } = dependencies;
 
   const server = Fastify({
     logger: {
@@ -57,7 +126,31 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
     };
   });
 
+  server.get<{ Params: { householdId: string } }>(
+    '/be01/proving/households/:householdId/context',
+    async (request) => {
+      const principalId = await authenticatedPrincipal.resolve(request);
+      const householdId = parseHouseholdId(request.params.householdId);
+      const context = await readAuthorizedHouseholdContext.execute({ principalId, householdId });
+      return serializeAuthorizedHouseholdContext(context);
+    },
+  );
+
   server.setErrorHandler((error, request, reply) => {
+    if (error instanceof ApplicationError) {
+      const statusCode = applicationStatusCode(error);
+      if (statusCode >= 500) {
+        request.log.error({ err: error }, 'application request failed');
+      }
+      void reply.code(statusCode).send({
+        error: {
+          code: externalApplicationErrorCode(error),
+          requestId: request.id,
+        },
+      });
+      return;
+    }
+
     request.log.error({ err: error }, 'request failed');
     void reply.code(500).send({
       error: {

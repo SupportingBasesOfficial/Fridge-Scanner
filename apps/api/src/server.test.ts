@@ -1,8 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { ReadinessProbe } from '@fridge/application';
+import {
+  HouseholdId,
+  HouseholdMembershipId,
+  HouseholdUnauthorizedError,
+  PrincipalId,
+  UnauthenticatedError,
+  type AuthorizedHouseholdContext,
+  type ReadAuthorizedHouseholdContextInput,
+  type ReadinessProbe,
+  type UseCase,
+} from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
-import { buildApiServer } from './server.js';
+import {
+  buildApiServer,
+  type AuthenticatedPrincipalResolver,
+} from './server.js';
 
 const config: RuntimeConfig = {
   nodeEnv: 'test',
@@ -14,6 +27,10 @@ const config: RuntimeConfig = {
   shutdownTimeoutMs: 1_000,
 };
 
+const principalId = PrincipalId('11111111-1111-4111-8111-111111111111');
+const householdId = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+const membershipId = HouseholdMembershipId('33333333-3333-4333-8333-333333333333');
+
 function readiness(ready: boolean): ReadinessProbe {
   return {
     async check() {
@@ -22,9 +39,44 @@ function readiness(ready: boolean): ReadinessProbe {
   };
 }
 
-test('liveness is independent from dependency readiness', async () => {
-  const server = buildApiServer({ config, readiness: readiness(false) });
+function authenticatedPrincipal(
+  resolve: AuthenticatedPrincipalResolver['resolve'] = async () => principalId,
+): AuthenticatedPrincipalResolver {
+  return { resolve };
+}
 
+function householdContextUseCase(
+  execute?: (input: ReadAuthorizedHouseholdContextInput) => Promise<AuthorizedHouseholdContext>,
+): UseCase<ReadAuthorizedHouseholdContextInput, AuthorizedHouseholdContext> {
+  return {
+    async execute(input) {
+      if (execute !== undefined) return execute(input);
+      return {
+        principalId: input.principalId,
+        householdId: input.householdId,
+        householdDisplayName: 'Casa Principal',
+        membershipId,
+        householdRoleCode: 'OWNER',
+      };
+    },
+  };
+}
+
+function buildTestServer(
+  ready = true,
+  useCase = householdContextUseCase(),
+  principal = authenticatedPrincipal(),
+) {
+  return buildApiServer({
+    config,
+    readiness: readiness(ready),
+    authenticatedPrincipal: principal,
+    readAuthorizedHouseholdContext: useCase,
+  });
+}
+
+test('liveness is independent from dependency readiness', async () => {
+  const server = buildTestServer(false);
   try {
     const response = await server.inject({ method: 'GET', url: '/health/live' });
     assert.equal(response.statusCode, 200);
@@ -35,8 +87,7 @@ test('liveness is independent from dependency readiness', async () => {
 });
 
 test('readiness returns 503 when a required dependency is unavailable', async () => {
-  const server = buildApiServer({ config, readiness: readiness(false) });
-
+  const server = buildTestServer(false);
   try {
     const response = await server.inject({ method: 'GET', url: '/health/ready' });
     assert.equal(response.statusCode, 503);
@@ -50,8 +101,7 @@ test('readiness returns 503 when a required dependency is unavailable', async ()
 });
 
 test('readiness returns 200 when dependencies are available', async () => {
-  const server = buildApiServer({ config, readiness: readiness(true) });
-
+  const server = buildTestServer(true);
   try {
     const response = await server.inject({ method: 'GET', url: '/health/ready' });
     assert.equal(response.statusCode, 200);
@@ -62,8 +112,7 @@ test('readiness returns 200 when dependencies are available', async () => {
 });
 
 test('valid inbound request id is preserved', async () => {
-  const server = buildApiServer({ config, readiness: readiness(true) });
-
+  const server = buildTestServer(true);
   try {
     const response = await server.inject({
       method: 'GET',
@@ -72,6 +121,98 @@ test('valid inbound request id is preserved', async () => {
     });
     assert.equal(response.statusCode, 200);
     assert.equal(response.headers['x-request-id'], 'client-request-123');
+  } finally {
+    await server.close();
+  }
+});
+
+test('proving route uses injected authenticated principal and explicitly serializes verified context', async () => {
+  const server = buildTestServer(true, householdContextUseCase(async (input) => {
+    assert.equal(input.principalId, principalId);
+    assert.equal(input.householdId, householdId);
+    return {
+      principalId: input.principalId,
+      householdId: input.householdId,
+      householdDisplayName: 'Casa Principal',
+      membershipId,
+      householdRoleCode: 'OWNER',
+    };
+  }));
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/be01/proving/households/${householdId}/context`,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      principalId: String(principalId),
+      householdId: String(householdId),
+      householdDisplayName: 'Casa Principal',
+      membershipId: String(membershipId),
+      householdRoleCode: 'OWNER',
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+test('proving route fails closed when authentication authority cannot resolve a principal', async () => {
+  let executions = 0;
+  const server = buildTestServer(
+    true,
+    householdContextUseCase(async () => {
+      executions += 1;
+      throw new Error('must not execute');
+    }),
+    authenticatedPrincipal(async () => {
+      throw new UnauthenticatedError();
+    }),
+  );
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/be01/proving/households/${householdId}/context`,
+    });
+    assert.equal(response.statusCode, 401);
+    assert.equal(executions, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('malformed Household identifier is rejected before use-case execution', async () => {
+  let executions = 0;
+  const server = buildTestServer(true, householdContextUseCase(async () => {
+    executions += 1;
+    throw new Error('must not execute');
+  }));
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/be01/proving/households/not-a-uuid/context',
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(executions, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('unauthorized Household access is externally indistinguishable from missing Household', async () => {
+  const server = buildTestServer(true, householdContextUseCase(async () => {
+    throw new HouseholdUnauthorizedError();
+  }));
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/be01/proving/households/${householdId}/context`,
+    });
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error.code, 'NOT_FOUND');
   } finally {
     await server.close();
   }
