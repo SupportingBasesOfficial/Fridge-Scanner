@@ -1,12 +1,14 @@
 import type {
   HouseholdId,
   HouseholdMembershipId,
+  Instant,
   PrincipalId,
 } from '@fridge/domain';
 
 export {
   HouseholdId,
   HouseholdMembershipId,
+  Instant,
   PrincipalId,
 } from '@fridge/domain';
 export * from './errors.js';
@@ -41,9 +43,9 @@ export interface ReadinessResult {
 }
 
 export interface Clock {
-  now(): Date;
+  now(): Instant;
 }
 
-export interface IdentifierGenerator {
-  uuid(): string;
+export interface IdentifierGenerator<TIdentifier> {
+  generate(): TIdentifier;
 }
