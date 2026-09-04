@@ -37,9 +37,9 @@ jobs:
         run: npm run verify
 
   database-contract:
-    name: PostgreSQL 17 Contract Regression
+    name: PostgreSQL 17 Contract + Backend RLS Integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -58,10 +58,16 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fridge_scanner_be00
+      BE00_TEST_DATABASE_URL: postgresql://fridge_be00_login:be00-test@127.0.0.1:5432/fridge_scanner_be00
 
     steps:
       - name: Checkout exact PR HEAD
         uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
 
       - name: Install PostgreSQL client
         run: |
@@ -70,3 +76,26 @@ jobs:
 
       - name: Replay accepted DB-02 contract and tests
         run: python3 database/scripts/run_db02_gate.py
+
+      - name: Create least-privileged backend login and RLS fixtures
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create role fridge_be00_login
+            login password 'be00-test'
+            nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+          grant fridge_app to fridge_be00_login;
+
+          insert into fridge.household (household_id, display_name)
+          values
+            ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'BE00 Household A'),
+            ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'BE00 Household B');
+          SQL
+
+      - name: Install backend dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build backend packages
+        run: npm run build
+
+      - name: Prove backend Household isolation and context non-leakage
+        run: npm run test:integration --workspace @fridge/database
