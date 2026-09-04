@@ -67,6 +67,13 @@ function applicationStatusCode(error: ApplicationError): number {
   }
 }
 
+function externalApplicationErrorCode(error: ApplicationError): string {
+  if (error.code === 'HOUSEHOLD_UNAUTHORIZED' || error.code === 'NOT_FOUND') {
+    return 'NOT_FOUND';
+  }
+  return error.code;
+}
+
 export function buildApiServer(dependencies: ApiServerDependencies): FastifyInstance {
   const {
     config,
@@ -122,8 +129,6 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
   server.get<{ Params: { householdId: string } }>(
     '/be01/proving/households/:householdId/context',
     async (request) => {
-      // Authentication authority is deliberately injected. Raw headers, cookies,
-      // provider claims, and requested identifiers are not trusted by this route.
       const principalId = await authenticatedPrincipal.resolve(request);
       const householdId = parseHouseholdId(request.params.householdId);
       const context = await readAuthorizedHouseholdContext.execute({ principalId, householdId });
@@ -139,7 +144,7 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
       }
       void reply.code(statusCode).send({
         error: {
-          code: error.code,
+          code: externalApplicationErrorCode(error),
           requestId: request.id,
         },
       });
