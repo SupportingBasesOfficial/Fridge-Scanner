@@ -8,6 +8,16 @@ import type {
 } from '@fridge/application';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RUNTIME_CAPABILITY_ROLES = new Set([
+  'fridge_app',
+  'fridge_worker',
+  'fridge_readonly',
+] as const);
+
+export type RuntimeDatabaseCapabilityRole =
+  | 'fridge_app'
+  | 'fridge_worker'
+  | 'fridge_readonly';
 
 class PgTransactionHandle implements TransactionHandle {
   readonly kind = 'fridge-transaction' as const;
@@ -17,13 +27,20 @@ class PgTransactionHandle implements TransactionHandle {
 
 export interface PgDatabaseOptions {
   readonly connectionString: string;
+  readonly capabilityRole: RuntimeDatabaseCapabilityRole;
   readonly maxConnections?: number;
 }
 
 export class PgDatabase implements TransactionManager, ReadinessProbe {
   readonly #pool: Pool;
+  readonly #capabilityRole: RuntimeDatabaseCapabilityRole;
 
   constructor(options: PgDatabaseOptions) {
+    if (!RUNTIME_CAPABILITY_ROLES.has(options.capabilityRole)) {
+      throw new TypeError('database capability role is not allowed for runtime use');
+    }
+
+    this.#capabilityRole = options.capabilityRole;
     this.#pool = new Pool({
       connectionString: options.connectionString,
       max: options.maxConnections ?? 10,
@@ -45,6 +62,11 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     try {
       await client.query('begin');
       transactionStarted = true;
+
+      // Capability roles are validated against a closed runtime allowlist, so the
+      // identifier interpolation below cannot be influenced by arbitrary input.
+      // SET LOCAL ROLE resets automatically at transaction end.
+      await client.query(`set local role ${this.#capabilityRole}`);
 
       // Transaction-local by construction: the context cannot leak through the pool
       // after COMMIT/ROLLBACK and is subordinate to backend authorization.
@@ -73,11 +95,27 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
   }
 
   async check(): Promise<ReadinessResult> {
+    const client = await this.#pool.connect().catch(() => null);
+    if (client === null) {
+      return { ready: false, reason: 'database_unavailable' };
+    }
+
+    let transactionStarted = false;
     try {
-      await this.#pool.query('select 1');
+      await client.query('begin');
+      transactionStarted = true;
+      await client.query(`set local role ${this.#capabilityRole}`);
+      await client.query('select 1');
+      await client.query('rollback');
+      transactionStarted = false;
       return { ready: true };
     } catch {
+      if (transactionStarted) {
+        await client.query('rollback').catch(() => undefined);
+      }
       return { ready: false, reason: 'database_unavailable' };
+    } finally {
+      client.release();
     }
   }
 
