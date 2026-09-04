@@ -21,7 +21,7 @@ export type RuntimeDatabaseCapabilityRole =
   | 'fridge_worker'
   | 'fridge_readonly';
 
-class PgTransactionHandle implements TransactionHandle {
+class PgTransactionHandle {
   readonly kind = 'fridge-transaction' as const;
 
   constructor(
@@ -112,15 +112,18 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       }
 
       const membershipId = HouseholdMembershipId(authorizationRow.membership_id);
-      const result = await operation(
-        new PgTransactionHandle(
-          client,
-          verifiedPrincipalId,
-          verifiedHouseholdId,
-          membershipId,
-          authorizationRow.role_code,
-        ),
+      const verifiedTransaction = new PgTransactionHandle(
+        client,
+        verifiedPrincipalId,
+        verifiedHouseholdId,
+        membershipId,
+        authorizationRow.role_code,
       );
+
+      // TransactionHandle is deliberately opaque to ordinary callers. This adapter
+      // is the trusted authority boundary that may materialize it, and runtime DB
+      // capability access is still guarded by requirePgClient's instanceof check.
+      const result = await operation(verifiedTransaction as unknown as TransactionHandle);
       await client.query('commit');
       transactionStarted = false;
       return result;
