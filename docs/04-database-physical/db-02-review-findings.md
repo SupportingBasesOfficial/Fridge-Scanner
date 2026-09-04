@@ -160,9 +160,21 @@ The first `000009_01` correction attempted a four-column FK to `preparation_inpu
 
 **Status:** CLOSED.
 
+## Pass 7 — shelf life and expiration
+
+### F2-015 — LOCAL_CALENDAR rule could omit deterministic timezone selection
+
+**Severity:** historical temporal-reproducibility gap.
+
+The first shelf-life draft allowed `LOCAL_CALENDAR` duration semantics while leaving `timezone_selection_code` null. Calendar arithmetic cannot be reproduced deterministically without a governed rule for selecting timezone context. Conversely, `ELAPSED` duration is timezone-independent and should not carry a competing timezone policy.
+
+**Resolution:** `000010_01__shelf_life_timezone_contract.sql` requires an explicit nonblank timezone-selection contract for `LOCAL_CALENDAR` and requires null timezone selection for `ELAPSED`. The matching integrity test proves both invalid shapes are rejected.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-Known findings F2-001 through F2-014 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, Recipe/RecipeVersion scope visibility still requires its planned governed mutation enforcement, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-015 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, catalog/rule scope visibility still requires its planned governed mutation enforcement, and further physical-schema red-team remains required.
 
 ## Rule
 
