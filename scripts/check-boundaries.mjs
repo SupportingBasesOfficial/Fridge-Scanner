@@ -35,6 +35,11 @@ const FORBIDDEN_EXTERNAL_PREFIXES = [
 ];
 
 const TEST_FILE_PATTERN = /(?:\.test|\.spec|\.typecheck)\.ts$/;
+const TEST_ONLY_EXTERNAL_IMPORTS = new Set([
+  'node:test',
+  'node:assert',
+  'node:assert/strict',
+]);
 const IMPORT_PATTERN = /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"]([^'"]+)['"]/g;
 
 async function walk(directory) {
@@ -43,7 +48,7 @@ async function walk(directory) {
   for (const entry of entries) {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await walk(fullPath));
-    else if (entry.isFile() && entry.name.endsWith('.ts') && !TEST_FILE_PATTERN.test(entry.name)) files.push(fullPath);
+    else if (entry.isFile() && entry.name.endsWith('.ts')) files.push(fullPath);
   }
   return files;
 }
@@ -62,11 +67,15 @@ function validateImport(packageRule, file, specifier) {
     return `${packageRule.name} must not import workspace dependency ${specifier}`;
   }
 
+  if (TEST_FILE_PATTERN.test(file) && TEST_ONLY_EXTERNAL_IMPORTS.has(specifier)) {
+    return null;
+  }
+
   if (isForbiddenExternal(specifier)) {
     return `${packageRule.name} must not import infrastructure/runtime dependency ${specifier}`;
   }
 
-  return `${packageRule.name} production code must not import undeclared external dependency ${specifier}`;
+  return `${packageRule.name} protected code must not import undeclared external dependency ${specifier}`;
 }
 
 const violations = [];
@@ -84,7 +93,7 @@ for (const packageRule of PROTECTED_PACKAGES) {
     }
 
     if (/\bprocess\s*\./.test(source)) {
-      violations.push(`${path.relative(ROOT, file)}: protected production code must not read process globals`);
+      violations.push(`${path.relative(ROOT, file)}: protected code must not read process globals`);
     }
   }
 }
