@@ -1,10 +1,21 @@
-export type PrincipalId = string;
-export type HouseholdId = string;
+import type {
+  HouseholdId,
+  HouseholdMembershipId,
+  PrincipalId,
+} from '@fridge/domain';
+
+export {
+  HouseholdId,
+  HouseholdMembershipId,
+  PrincipalId,
+} from '@fridge/domain';
+export * from './errors.js';
 
 export interface TransactionHandle {
   readonly kind: 'fridge-transaction';
   readonly principalId: PrincipalId;
   readonly householdId: HouseholdId;
+  readonly membershipId: HouseholdMembershipId;
   readonly householdRoleCode: string;
 }
 
@@ -14,6 +25,10 @@ export interface TransactionManager {
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T>;
+}
+
+export interface UseCase<TInput, TOutput> {
+  execute(input: TInput): Promise<TOutput>;
 }
 
 export interface ReadinessProbe {
