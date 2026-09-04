@@ -1,11 +1,16 @@
+export type PrincipalId = string;
 export type HouseholdId = string;
 
 export interface TransactionHandle {
   readonly kind: 'fridge-transaction';
+  readonly principalId: PrincipalId;
+  readonly householdId: HouseholdId;
+  readonly householdRoleCode: string;
 }
 
 export interface TransactionManager {
-  withHouseholdTransaction<T>(
+  withAuthorizedHouseholdTransaction<T>(
+    principalId: PrincipalId,
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T>;
