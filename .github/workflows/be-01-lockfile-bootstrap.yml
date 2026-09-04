@@ -1,0 +1,44 @@
+name: BE-01 Lockfile Bootstrap
+
+on:
+  push:
+    branches:
+      - backend/be-01-kernel-implementation
+    paths:
+      - package.json
+      - package-lock.json
+      - packages/*/package.json
+      - .github/workflows/be-01-lockfile-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: backend/be-01-kernel-implementation
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Regenerate lockfile only
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit canonical lockfile when changed
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already canonical"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "build(be-01): pin domain workspace dependency graph"
+          git push origin HEAD:backend/be-01-kernel-implementation
