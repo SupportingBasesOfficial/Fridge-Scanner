@@ -170,16 +170,27 @@ insert into fridge.shopping_list_item (
   requested_quantity_den,
   requested_unit_id,
   lifecycle_status
-) values (
-  'b9000000-0000-4000-8000-000000000001',
-  'b1000000-0000-4000-8000-000000000001',
-  'b8000000-0000-4000-8000-000000000001',
-  'b3000000-0000-4000-8000-000000000001',
-  1,
-  1,
-  'b2000000-0000-4000-8000-000000000001',
-  'TEST_OPEN'
-);
+) values
+  (
+    'b9000000-0000-4000-8000-000000000001',
+    'b1000000-0000-4000-8000-000000000001',
+    'b8000000-0000-4000-8000-000000000001',
+    'b3000000-0000-4000-8000-000000000001',
+    1,
+    1,
+    'b2000000-0000-4000-8000-000000000001',
+    'TEST_OPEN'
+  ),
+  (
+    'b9000000-0000-4000-8000-000000000004',
+    'b1000000-0000-4000-8000-000000000001',
+    'b8000000-0000-4000-8000-000000000001',
+    'b3000000-0000-4000-8000-000000000001',
+    1,
+    1,
+    'b2000000-0000-4000-8000-000000000001',
+    'TEST_OPEN'
+  );
 
 -- Shopping item cannot carry Product and IngredientConcept simultaneously.
 do $$
@@ -318,6 +329,8 @@ end;
 $$;
 
 -- Purchase Product identity is pinned and cannot be rewritten by fulfillment.
+-- A dedicated ShoppingListItem avoids colliding with the pair uniqueness that is
+-- independently exercised by the valid fulfillment above.
 do $$
 begin
   begin
@@ -333,7 +346,7 @@ begin
     ) values (
       'bc000000-0000-4000-8000-000000000003',
       'b1000000-0000-4000-8000-000000000001',
-      'b9000000-0000-4000-8000-000000000001',
+      'b9000000-0000-4000-8000-000000000004',
       'bb000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000002',
       1,
