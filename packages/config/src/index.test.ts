@@ -18,7 +18,9 @@ test('parseRuntimeConfig fails closed when DATABASE_URL is absent', () => {
   assert.throws(
     () => parseRuntimeConfig({}),
     (error: unknown) => {
-      assert.ok(error instanceof RuntimeConfigError);
+      if (!(error instanceof RuntimeConfigError)) {
+        return false;
+      }
       assert.match(error.message, /DATABASE_URL/);
       return true;
     },
@@ -31,7 +33,9 @@ test('configuration errors never echo the rejected database URL value', () => {
   assert.throws(
     () => parseRuntimeConfig({ DATABASE_URL: rejected }),
     (error: unknown) => {
-      assert.ok(error instanceof RuntimeConfigError);
+      if (!(error instanceof RuntimeConfigError)) {
+        return false;
+      }
       assert.doesNotMatch(error.message, /super-secret-password/);
       return true;
     },
