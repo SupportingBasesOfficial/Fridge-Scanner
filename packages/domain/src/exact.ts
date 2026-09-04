@@ -1,6 +1,7 @@
 import { invalidDomainValue } from './errors.js';
 
 declare const exactRationalBrand: unique symbol;
+declare const exactDecimalBrand: unique symbol;
 declare const moneyBrand: unique symbol;
 
 function gcd(a: bigint, b: bigint): bigint {
@@ -48,26 +49,78 @@ export function equalExactRational(left: ExactRational, right: ExactRational): b
   return left.numerator === right.numerator && left.denominator === right.denominator;
 }
 
+export type ExactDecimal = string & { readonly [exactDecimalBrand]: 'ExactDecimal' };
+
+const CANONICAL_DECIMAL_PATTERN = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/;
+
+export function exactDecimal(value: string): ExactDecimal {
+  if (!CANONICAL_DECIMAL_PATTERN.test(value) || value === '-0') {
+    throw invalidDomainValue('ExactDecimal must be a canonical finite decimal string');
+  }
+  return value as ExactDecimal;
+}
+
+interface DecimalParts {
+  readonly coefficient: bigint;
+  readonly scale: number;
+}
+
+function decimalParts(value: ExactDecimal): DecimalParts {
+  const negative = value.startsWith('-');
+  const unsigned = negative ? value.slice(1) : value;
+  const [whole = '0', fraction = ''] = unsigned.split('.');
+  const coefficient = BigInt(`${negative ? '-' : ''}${whole}${fraction}`);
+  return { coefficient, scale: fraction.length };
+}
+
+function powerOfTen(exponent: number): bigint {
+  return 10n ** BigInt(exponent);
+}
+
+function decimalFromParts(coefficient: bigint, scale: number): ExactDecimal {
+  if (coefficient === 0n) return exactDecimal('0');
+
+  const negative = coefficient < 0n;
+  let digits = (negative ? -coefficient : coefficient).toString();
+  if (scale === 0) return exactDecimal(`${negative ? '-' : ''}${digits}`);
+
+  digits = digits.padStart(scale + 1, '0');
+  const split = digits.length - scale;
+  let fraction = digits.slice(split).replace(/0+$/, '');
+  const whole = digits.slice(0, split);
+  if (fraction.length === 0) return exactDecimal(`${negative ? '-' : ''}${whole}`);
+  return exactDecimal(`${negative ? '-' : ''}${whole}.${fraction}`);
+}
+
+export function addExactDecimal(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  const leftParts = decimalParts(left);
+  const rightParts = decimalParts(right);
+  const scale = Math.max(leftParts.scale, rightParts.scale);
+  const leftCoefficient = leftParts.coefficient * powerOfTen(scale - leftParts.scale);
+  const rightCoefficient = rightParts.coefficient * powerOfTen(scale - rightParts.scale);
+  return decimalFromParts(leftCoefficient + rightCoefficient, scale);
+}
+
 export interface Money {
-  readonly minorUnits: bigint;
+  readonly amount: ExactDecimal;
   readonly currency: string;
   readonly [moneyBrand]: 'Money';
 }
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
-function asMoney(minorUnits: bigint, currency: string): Money {
-  return Object.freeze({ minorUnits, currency }) as Money;
+function asMoney(amount: ExactDecimal, currency: string): Money {
+  return Object.freeze({ amount, currency }) as Money;
 }
 
-export function money(minorUnits: bigint, currency: string): Money {
+export function money(amount: ExactDecimal, currency: string): Money {
   if (!CURRENCY_PATTERN.test(currency)) {
     throw invalidDomainValue('Money currency must be an uppercase three-letter code');
   }
-  return asMoney(minorUnits, currency);
+  return asMoney(amount, currency);
 }
 
 export function addMoney(left: Money, right: Money): Money {
   if (left.currency !== right.currency) throw invalidDomainValue('Money currencies must match');
-  return money(left.minorUnits + right.minorUnits, left.currency);
+  return money(addExactDecimal(left.amount, right.amount), left.currency);
 }
