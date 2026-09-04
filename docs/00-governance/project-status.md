@@ -25,7 +25,7 @@ Earlier DDL/design notes remain historical input only. They are not production-r
 
 BE-00 establishes the backend runtime architecture and executable foundation that will consume the accepted database contract without becoming a second source of domain truth. It defines service boundaries, dependency direction, configuration/secrets handling, database transaction/context discipline, identity/authentication boundary, API error/observability contracts, health/readiness semantics, container/runtime baseline, testing layers and CI gates.
 
-The first backend implementation must remain replaceable at infrastructure boundaries, must never expose privileged database capabilities to untrusted clients, and must set trusted Household context only after application-level authorization has already succeeded.
+The first backend implementation must remain replaceable at infrastructure boundaries and must never expose privileged database capabilities to untrusted clients. With DB-02 forced RLS on membership, ordinary tenant authorization uses a least-privileged, transaction-local candidate Household context solely to read the candidate Household's membership row; the adapter exposes tenant work only after verifying the authenticated principal's current membership. Candidate context alone is never authority and any failure rolls back.
 
 ## Governance rule
 
