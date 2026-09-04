@@ -2,7 +2,7 @@ import type { ExactDecimal, ExactRational, Money } from './exact.js';
 import type { HouseholdId, ProductId } from './identifiers.js';
 
 // These declarations are compile-time proofs for BE-01 opacity. If any
-// @ts-expect-error becomes unused, the protected type has become forgeable.
+// expectation directive below becomes unused, the protected type has become forgeable.
 
 // @ts-expect-error ExactRational must be created through exactRational().
 const forgedRational: ExactRational = { numerator: 1n, denominator: 0n };
