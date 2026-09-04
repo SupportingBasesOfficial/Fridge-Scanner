@@ -64,7 +64,10 @@ begin
 end;
 $$;
 
--- Large arbitrary-precision values must avoid bigint-style overflow assumptions.
+-- Large arbitrary-precision values must avoid bigint-style overflow assumptions
+-- and must reduce by the complete GCD, not merely by the obvious injected factor.
+-- The source pair below has intrinsic GCD 9; multiplying both sides by 7 yields
+-- total GCD 63 and therefore the canonical result asserted here.
 do $$
 declare
   v_num numeric;
@@ -77,8 +80,8 @@ begin
       999999999999999999999999999999999999999::numeric * 7
     );
 
-  if v_num <> 1234567890123456789012345678901234567890::numeric
-     or v_den <> 999999999999999999999999999999999999999::numeric then
+  if v_num <> 137174210013717421001371742100137174210::numeric
+     or v_den <> 111111111111111111111111111111111111111::numeric then
     raise exception 'large rational normalization failed: %/%', v_num, v_den;
   end if;
 end;
