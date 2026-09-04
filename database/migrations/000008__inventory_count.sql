@@ -7,7 +7,7 @@ begin;
 create table fridge.inventory_count (
   inventory_count_id uuid primary key,
   household_id uuid not null,
-  lifecycle_status text not null default 'OPEN',
+  lifecycle_status text not null,
   common_snapshot_token text,
   common_snapshot_ordering_domain text,
   common_snapshot_captured_at timestamptz,
@@ -120,29 +120,10 @@ create table fridge.inventory_ledger_basis (
     ),
   constraint inventory_ledger_basis_placement_shape
     check (
-      (
-        placement_anchor_kind is null
-        and storage_location_id is null
-        and compartment_id is null
-      )
-      or
-      (
-        placement_anchor_kind = 'LOCATION'
-        and storage_location_id is not null
-        and compartment_id is null
-      )
-      or
-      (
-        placement_anchor_kind = 'COMPARTMENT'
-        and storage_location_id is null
-        and compartment_id is not null
-      )
-      or
-      (
-        placement_anchor_kind = 'UNPLACED'
-        and storage_location_id is null
-        and compartment_id is null
-      )
+      (placement_anchor_kind is null and storage_location_id is null and compartment_id is null)
+      or (placement_anchor_kind = 'LOCATION' and storage_location_id is not null and compartment_id is null)
+      or (placement_anchor_kind = 'COMPARTMENT' and storage_location_id is null and compartment_id is not null)
+      or (placement_anchor_kind = 'UNPLACED' and storage_location_id is null and compartment_id is null)
     ),
   constraint inventory_ledger_basis_household_identity_uq
     unique (household_id, inventory_ledger_basis_id),
@@ -177,7 +158,7 @@ create table fridge.inventory_count_item (
   inventory_ledger_basis_id uuid not null,
   observation_ordering_domain text,
   observation_ordering_token text,
-  reconciliation_status text not null default 'PENDING',
+  reconciliation_status text not null,
   observation_provenance text,
   recorded_at timestamptz not null default clock_timestamp(),
   constraint inventory_count_item_count_same_household_fk
@@ -229,34 +210,17 @@ create table fridge.inventory_count_item (
     ),
   constraint inventory_count_item_placement_shape
     check (
-      (
-        placement_anchor_kind is null
-        and storage_location_id is null
-        and compartment_id is null
-      )
-      or
-      (
-        placement_anchor_kind = 'LOCATION'
-        and storage_location_id is not null
-        and compartment_id is null
-      )
-      or
-      (
-        placement_anchor_kind = 'COMPARTMENT'
-        and storage_location_id is null
-        and compartment_id is not null
-      )
-      or
-      (
-        placement_anchor_kind = 'UNPLACED'
-        and storage_location_id is null
-        and compartment_id is null
-      )
+      (placement_anchor_kind is null and storage_location_id is null and compartment_id is null)
+      or (placement_anchor_kind = 'LOCATION' and storage_location_id is not null and compartment_id is null)
+      or (placement_anchor_kind = 'COMPARTMENT' and storage_location_id is null and compartment_id is not null)
+      or (placement_anchor_kind = 'UNPLACED' and storage_location_id is null and compartment_id is null)
     ),
   constraint inventory_count_item_status_nonblank
     check (btrim(reconciliation_status) <> ''),
   constraint inventory_count_item_household_identity_uq
     unique (household_id, inventory_count_item_id),
+  constraint inventory_count_item_household_product_identity_uq
+    unique (household_id, inventory_count_item_id, product_id),
   constraint inventory_count_item_basis_identity_uq
     unique (
       household_id,
@@ -316,9 +280,9 @@ create table fridge.inventory_count_allocation (
     foreign key (conversion_evidence_id)
     references fridge.measurement_conversion_evidence (measurement_conversion_evidence_id)
     on update restrict on delete restrict,
-  constraint inventory_count_allocation_quantity_nonnegative_normalized
+  constraint inventory_count_allocation_quantity_positive_normalized
     check (
-      allocated_quantity_num >= 0
+      allocated_quantity_num > 0
       and fridge_internal.assert_normalized_rational(
         allocated_quantity_num,
         allocated_quantity_den
