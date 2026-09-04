@@ -248,11 +248,61 @@ The first capability-role migration created secure roles only when they did not 
 
 ## Pass 10 — exact conservation guards
 
-No new defect finding is open in this pass yet. `000021__inventory_transfer_conservation.sql` and `000022__procurement_shopping_conservation.sql` add deferred exact-rational postconditions and parent-row serialization while preserving the deliberate separation between physical receiving and shopping-intent pools.
+### F2-023 — One Preparation movement evidence edge could imply two incompatible unit conversions
+
+**Severity:** quantity-reproducibility ambiguity.
+
+A Preparation input/output movement edge carries one `conversion_evidence_id`, but the edge participates both in reconciliation against its InventoryMovement and against the Preparation input/output aggregate. If those two targets use different units, one evidence row cannot prove two distinct conversions without ambiguity.
+
+**Resolution:** `000024__preparation_movement_unit_alignment.sql` requires the InventoryMovement and Preparation input/output to share the same canonical reconciliation unit. The edge may still use a different source unit only when its single pinned conversion evidence converts exactly into that shared target unit.
+
+**Status:** CLOSED.
+
+### F2-024 — Alert primariness was implicit in unconstrained free-text role
+
+**Severity:** explainability integrity ambiguity.
+
+DB-01 requires at least one primary trigger subject, but `subject_role` is governed free text and no canonical literal such as `PRIMARY` had been accepted. Interpreting one magic string inside the guard would invent domain taxonomy.
+
+**Resolution:** `000026__alert_trigger_completeness.sql` adds typed `is_primary boolean` evidence. Deferred postconditions require at least one trigger subject and at least one explicitly primary subject without redefining `subject_role` semantics.
+
+**Status:** CLOSED.
+
+### F2-025 — Naive lexical migration order could execute correction substeps before their base migration
+
+**Severity:** fresh-install executable-schema blocker.
+
+Files such as `000009_01__preparation_allocation_scope.sql`, `000010_01__shelf_life_timezone_contract.sql`, `000012_01__notification_delivery_time_guard.sql` and `000013_01__external_reference_import_context.sql` sort before their `000009__...`, `000010__...`, `000012__...`, `000013__...` base files under ordinary lexical ordering. Those substeps reference objects created by the base migration.
+
+**Resolution:** the canonical migration ordering is now parsed as `(major_sequence, substep)`, where `NNNNNN__...` is substep `00` and `NNNNNN_01__...` is substep `01`. `database/scripts/run_db02_gate.py` rejects malformed names/duplicate slots and implements that exact order. `db-02-migration-strategy.md` now makes raw filesystem order explicitly non-authoritative.
+
+**Status:** CLOSED.
+
+## Pass 11 — catalog scope and identifier contracts
+
+### F2-026 — Shelf-life activation draft overconstrained compatibility evidence to Household-only
+
+**Severity:** catalog-reuse semantic overconstraint.
+
+The first catalog-scope guard draft required concept-targeted ShelfLifeRuleActivation to use CompatibilityDecisionEvidence whose `household_id` exactly matched the activation Household. That incorrectly rejected valid GLOBAL compatibility evidence over GLOBAL Product/IngredientConcept/mapping endpoints.
+
+**Resolution:** `000028__catalog_scope_guards.sql` accepts either GLOBAL compatibility evidence or same-Household evidence, while still requiring exact Product/IngredientConcept endpoint identity and rule visibility.
+
+**Status:** CLOSED.
+
+### F2-027 — ProductIdentifier could diverge from its normalization-rule namespace contract
+
+**Severity:** canonical identifier integrity gap.
+
+`product_identifier` originally referenced only `normalization_rule_id`; it could declare a different `scheme_code`, use an issuer namespace inconsistent with the rule, or attach a GLOBAL namespace identifier to a private Household Product. A staged claim could similarly persist a normalized value without an exact normalization rule.
+
+**Resolution:** `000029__product_identifier_contract_guards.sql` pins scheme, namespace mode/issuer and GLOBAL Product applicability to the exact normalization rule, and requires staged normalized values to carry the exact rule. Matching adversarial tests cover scheme mismatch, GLOBAL→private Product rejection, issuer mismatch and staged normalization/candidate scope.
+
+**Status:** CLOSED.
 
 ## Current review state
 
-Known findings F2-001 through F2-022 are closed on the branch. DB-02 is **not CLEAN**: PostgreSQL 17 execution proof is still pending; PostgreSQL 18 compatibility proof is still pending; Preparation, lineage, waste, alert-primary-trigger and remaining catalog/rule mutation guards are not yet complete; RLS/privilege tests have not yet been executed by CI; and further exact-HEAD red-team remains required.
+Known findings F2-001 through F2-027 are closed on the branch. DB-02 is **not CLEAN**: PostgreSQL 17 execution proof is still pending; PostgreSQL 18 compatibility proof is still pending; the new GitHub Actions gate has not yet produced an execution run for this PR HEAD; remaining Household→catalog consumers and additional mutation-boundary/red-team checks are still under review; and exact-HEAD final review remains required.
 
 ## Rule
 
