@@ -1,5 +1,8 @@
 import { invalidDomainValue } from './errors.js';
 
+declare const exactRationalBrand: unique symbol;
+declare const moneyBrand: unique symbol;
+
 function gcd(a: bigint, b: bigint): bigint {
   let left = a < 0n ? -a : a;
   let right = b < 0n ? -b : b;
@@ -16,17 +19,22 @@ function gcd(a: bigint, b: bigint): bigint {
 export interface ExactRational {
   readonly numerator: bigint;
   readonly denominator: bigint;
+  readonly [exactRationalBrand]: 'ExactRational';
+}
+
+function asExactRational(numerator: bigint, denominator: bigint): ExactRational {
+  return Object.freeze({ numerator, denominator }) as ExactRational;
 }
 
 export function exactRational(numerator: bigint, denominator: bigint): ExactRational {
   if (denominator === 0n) throw invalidDomainValue('ExactRational denominator must not be zero');
-  if (numerator === 0n) return Object.freeze({ numerator: 0n, denominator: 1n });
+  if (numerator === 0n) return asExactRational(0n, 1n);
 
   const sign = denominator < 0n ? -1n : 1n;
   const n = numerator * sign;
   const d = denominator * sign;
   const divisor = gcd(n, d);
-  return Object.freeze({ numerator: n / divisor, denominator: d / divisor });
+  return asExactRational(n / divisor, d / divisor);
 }
 
 export function addExactRational(left: ExactRational, right: ExactRational): ExactRational {
@@ -43,15 +51,20 @@ export function equalExactRational(left: ExactRational, right: ExactRational): b
 export interface Money {
   readonly minorUnits: bigint;
   readonly currency: string;
+  readonly [moneyBrand]: 'Money';
 }
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
+
+function asMoney(minorUnits: bigint, currency: string): Money {
+  return Object.freeze({ minorUnits, currency }) as Money;
+}
 
 export function money(minorUnits: bigint, currency: string): Money {
   if (!CURRENCY_PATTERN.test(currency)) {
     throw invalidDomainValue('Money currency must be an uppercase three-letter code');
   }
-  return Object.freeze({ minorUnits, currency });
+  return asMoney(minorUnits, currency);
 }
 
 export function addMoney(left: Money, right: Money): Money {
