@@ -7,6 +7,9 @@ values
   ('51000000-0000-4000-8000-000000000001', 'Ledger household A'),
   ('51000000-0000-4000-8000-000000000002', 'Ledger household B');
 
+insert into fridge.currency (currency_code, display_name)
+values ('BRL', 'Brazilian Real');
+
 insert into fridge.storage_location_kind (kind_code, display_name)
 values ('LEDGER_STORAGE_TEST', 'Ledger storage test');
 
@@ -435,7 +438,6 @@ begin
 end;
 $$;
 
--- Same-Product lineage is structural across both movement endpoints.
 insert into fridge.inventory_quantity_lineage (
   inventory_quantity_lineage_id,
   household_id,
@@ -464,7 +466,6 @@ insert into fridge.inventory_quantity_lineage (
   'transfer-causation-test'
 );
 
--- Seed a minimal ReceiptItem and materialize it into a same-Product movement.
 insert into fridge.purchase (
   purchase_id,
   household_id,
@@ -567,7 +568,6 @@ insert into fridge.receipt_item_inventory_effect (
   '54000000-0000-4000-8000-000000000001'
 );
 
--- Waste semantics do not carry a second delta; they link to one ledger movement.
 insert into fridge.inventory_movement (
   inventory_movement_id,
   household_id,
