@@ -84,9 +84,41 @@ The first contextual conversion model preserved the applied factor and contract 
 
 **Status:** CLOSED.
 
+## Pass 4 — procurement and inventory ledger
+
+### F2-008 — Monetary fact could pin a rounding policy for another currency
+
+**Severity:** monetary reproducibility/integrity gap.
+
+`purchase_money_fact`, `purchase_item_money_fact` and `purchase_item_pricing_discrepancy` currently reference `money_rounding_policy_id` by identity only. Without a composite currency/policy relationship or equivalent enforced transaction boundary, a BRL fact could pin a policy whose governed currency is USD.
+
+**Required resolution:** bind every persisted rounding-policy reference to the same `currency_code` as the monetary fact, structurally where practical and with an adversarial rejection test. The DB-02 gate remains blocked until this is enforced.
+
+**Status:** OPEN.
+
+### F2-009 — Inventory correction reference was not Household/Product scoped
+
+**Severity:** tenant-integrity and historical-correction gap.
+
+The first `000007__inventory_ledger.sql` draft referenced `correction_of_movement_id` by movement identity alone, which could relate a correction in Household/Product A to historical movement in Household/Product B.
+
+**Resolution:** the correction FK now uses `(household_id, correction_of_movement_id, product_id)` against the movement composite candidate key. `000007_01__inventory_correction_scope.sql` proves cross-Household and cross-Product correction attempts are rejected.
+
+**Status:** CLOSED.
+
+### F2-010 — Batch carried simplified expiration truth
+
+**Severity:** historical shelf-life ambiguity.
+
+The first ledger draft placed `source_expiration_date` directly on Batch. That would create a simplified expiration fact without the source precision, temporal anchor and provenance required by the accepted shelf-life model, while a later canonical SourceExpirationFact model is still planned.
+
+**Resolution:** removed the Batch expiration column. Batch keeps manufacturer/commercial lot provenance only; source expiration is modeled in the shelf-life migration with explicit precision, anchors and provenance and may reference Batch without making Batch a second expiration authority.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-All findings recorded above are closed on the branch. DB-02 is **not** CLEAN: the migration lineage is still incomplete and rational execution proof plus future physical-schema red-team remain required.
+Known findings F2-001 through F2-007 and F2-009 through F2-010 are closed on the branch. F2-008 remains OPEN. DB-02 is **not CLEAN**: the migration lineage is incomplete, rational execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
 
 ## Rule
 
