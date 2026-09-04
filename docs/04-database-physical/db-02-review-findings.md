@@ -138,9 +138,31 @@ The initial count draft defaulted session status to `OPEN` and line reconciliati
 
 **Status:** CLOSED.
 
+## Pass 6 — recipes and preparation
+
+### F2-013 — Preparation input allocation was not bound to one execution
+
+**Severity:** historical transformation integrity gap.
+
+The first recipe/preparation draft could link a PreparationInput from one Preparation to a frozen RecipeRequirement from another Preparation in the same Household because the allocation FKs did not carry `preparation_id`.
+
+**Resolution:** `000009_01__preparation_allocation_scope.sql` adds `preparation_id` to `preparation_input_allocation` and replaces both endpoint FKs with execution-scoped composite FKs. The integrity test intentionally attempts a cross-Preparation allocation and requires FK rejection.
+
+**Status:** CLOSED.
+
+### F2-014 — Preparation allocation correction migration referenced a non-candidate key
+
+**Severity:** executable-schema blocker.
+
+The first `000009_01` correction attempted a four-column FK to `preparation_input` before a matching four-column candidate key existed. A later `000009_02` file initially added the key, but migration ordering meant the earlier FK would still fail on a fresh install.
+
+**Resolution:** moved `preparation_input_execution_product_identity_uq` into `000009_01` before the FK creation and removed the redundant later migration. The ordered lineage is again executable by construction.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-Known findings F2-001 through F2-012 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-014 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, PostgreSQL execution proof is pending, cross-row conservation/mutation guards are not yet installed, Recipe/RecipeVersion scope visibility still requires its planned governed mutation enforcement, and further physical-schema red-team remains required.
 
 ## Rule
 
