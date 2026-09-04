@@ -25,6 +25,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
 export function serializeExactRational(value: ExactRational): ExactRationalWire {
   return {
     numerator: value.numerator.toString(),
@@ -33,8 +39,8 @@ export function serializeExactRational(value: ExactRational): ExactRationalWire 
 }
 
 export function parseExactRationalWire(value: unknown): ExactRational {
-  if (!isRecord(value)) {
-    throw invalidDomainValue('ExactRational wire value must be an object');
+  if (!isRecord(value) || !hasExactKeys(value, ['numerator', 'denominator'])) {
+    throw invalidDomainValue('ExactRational wire value must contain only numerator and denominator');
   }
 
   const numerator = value.numerator;
@@ -81,14 +87,12 @@ export function serializeMoney(value: Money): MoneyWire {
 }
 
 export function parseMoneyWire(value: unknown): Money {
-  if (!isRecord(value)) {
-    throw invalidDomainValue('Money wire value must be an object');
+  if (!isRecord(value) || !hasExactKeys(value, ['amount', 'currency'])) {
+    throw invalidDomainValue('Money wire value must contain only amount and currency');
+  }
+  if (typeof value.currency !== 'string') {
+    throw invalidDomainValue('Money wire currency must be a string');
   }
 
-  return money(
-    parseExactDecimalWire(value.amount),
-    typeof value.currency === 'string'
-      ? value.currency
-      : (() => { throw invalidDomainValue('Money wire currency must be a string'); })(),
-  );
+  return money(parseExactDecimalWire(value.amount), value.currency);
 }
