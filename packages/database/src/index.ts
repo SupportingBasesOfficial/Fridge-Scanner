@@ -1,14 +1,15 @@
 import { Pool, type PoolClient } from 'pg';
-import type {
+import {
   HouseholdId,
+  HouseholdMembershipId,
+  HouseholdUnauthorizedError,
   PrincipalId,
-  ReadinessProbe,
-  ReadinessResult,
-  TransactionHandle,
-  TransactionManager,
+  type ReadinessProbe,
+  type ReadinessResult,
+  type TransactionHandle,
+  type TransactionManager,
 } from '@fridge/application';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RUNTIME_CAPABILITY_ROLES = new Set([
   'fridge_app',
   'fridge_worker',
@@ -27,13 +28,14 @@ class PgTransactionHandle implements TransactionHandle {
     readonly client: PoolClient,
     readonly principalId: PrincipalId,
     readonly householdId: HouseholdId,
+    readonly membershipId: HouseholdMembershipId,
     readonly householdRoleCode: string,
   ) {}
 }
 
-export class HouseholdAuthorizationError extends Error {
+export class HouseholdAuthorizationError extends HouseholdUnauthorizedError {
   constructor() {
-    super('principal is not authorized for the requested Household');
+    super();
     this.name = 'HouseholdAuthorizationError';
   }
 }
@@ -66,12 +68,10 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T> {
-    if (!UUID_PATTERN.test(principalId)) {
-      throw new TypeError('principalId must be a canonical UUID string');
-    }
-    if (!UUID_PATTERN.test(householdId)) {
-      throw new TypeError('householdId must be a canonical UUID string');
-    }
+    // Re-validate at this capability boundary without inventing adapter-local UUID rules.
+    // This protects JavaScript callers and deliberately forged TypeScript casts.
+    const verifiedPrincipalId = PrincipalId(principalId);
+    const verifiedHouseholdId = HouseholdId(householdId);
 
     const client = await this.#pool.connect();
     let transactionStarted = false;
@@ -88,11 +88,14 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       // for this Household. It is not authority and no caller callback runs yet.
       await client.query(
         "select set_config('fridge.household_id', $1, true)",
-        [householdId],
+        [verifiedHouseholdId],
       );
 
-      const authorization = await client.query<{ role_code: string }>(
-        `select role_code
+      const authorization = await client.query<{
+        membership_id: string;
+        role_code: string;
+      }>(
+        `select membership_id::text, role_code
            from fridge.household_membership
           where household_id = $1::uuid
             and user_id = $2::uuid
@@ -101,15 +104,22 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
             and (effective_to is null or effective_to > statement_timestamp())
           order by effective_from desc, membership_id
           limit 1`,
-        [householdId, principalId],
+        [verifiedHouseholdId, verifiedPrincipalId],
       );
-      const householdRoleCode = authorization.rows[0]?.role_code;
-      if (householdRoleCode === undefined) {
+      const authorizationRow = authorization.rows[0];
+      if (authorizationRow === undefined) {
         throw new HouseholdAuthorizationError();
       }
 
+      const membershipId = HouseholdMembershipId(authorizationRow.membership_id);
       const result = await operation(
-        new PgTransactionHandle(client, principalId, householdId, householdRoleCode),
+        new PgTransactionHandle(
+          client,
+          verifiedPrincipalId,
+          verifiedHouseholdId,
+          membershipId,
+          authorizationRow.role_code,
+        ),
       );
       await client.query('commit');
       transactionStarted = false;
