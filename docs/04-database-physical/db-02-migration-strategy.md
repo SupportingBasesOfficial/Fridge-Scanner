@@ -10,6 +10,19 @@ Ordered SQL migration files are the canonical schema-change source. ORM schema g
 
 Every accepted migration is immutable. A correction after acceptance is a new migration.
 
+### 1.1 Deterministic filename ordering
+
+Filesystem or raw lexicographic order is never authoritative. Canonical SQL order is the parsed tuple `(major_sequence, substep)`:
+
+- `NNNNNN__name.sql` means substep `00`;
+- `NNNNNN_01__name.sql` means substep `01`;
+- `NNNNNN_02__name.sql` means substep `02`;
+- and so on.
+
+Therefore `000009__recipes_preparation.sql` executes before `000009_01__preparation_allocation_scope.sql`, even though a naive lexical sort could produce the opposite result.
+
+`database/scripts/run_db02_gate.py` is the current reference implementation of this ordering contract. It rejects invalid filenames and duplicate `(major_sequence, substep)` slots before executing SQL. Future orchestration tooling may replace the script only if it implements the same canonical order and checksum/drift contract.
+
 ## 2. Directory contract
 
 Initial target layout:
@@ -20,6 +33,8 @@ database/
     000001__bootstrap.sql
     000002__identity_tenancy.sql
     ...
+  scripts/
+    run_db02_gate.py
   tests/
     integrity/
     rls/
@@ -121,18 +136,23 @@ The same canonical SQL migration lineage runs in local Docker, CI/test and hoste
 
 CI must create a fresh PostgreSQL 17 database and apply all migrations from zero. A schema dump alone is not sufficient evidence.
 
+The DB-02 branch also runs the same lineage on PostgreSQL 18 as a forward-compatibility lane. Both lanes execute the same canonical migration order, integrity suite and RLS suite through `database/scripts/run_db02_gate.py`.
+
 ## 16. Upgrade compatibility
 
-A second CI lane should periodically exercise the migration lineage and database integrity tests on PostgreSQL 18. Failure there is a forward-compatibility finding, not permission to weaken PostgreSQL 17 correctness.
+A second CI lane exercises the migration lineage and database integrity tests on PostgreSQL 18. Failure there is a forward-compatibility finding, not permission to weaken PostgreSQL 17 correctness.
 
 ## 17. Migration acceptance gate
 
 A migration set is acceptable only when:
 
+- canonical ordering validation succeeds;
 - fresh install succeeds;
 - repeat/metadata checksum behavior is deterministic;
 - integrity tests pass;
 - RLS negative tests pass;
+- PostgreSQL 17 lane is green;
+- PostgreSQL 18 compatibility lane is green;
 - schema contains no unexpected provider/UI drift;
 - downgrade/forward-fix classification is documented;
 - exact migration HEAD has been reviewed.
