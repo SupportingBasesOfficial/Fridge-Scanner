@@ -10,7 +10,6 @@ create table fridge.batch (
   manufacturer_id uuid,
   commercial_lot_code text,
   produced_at timestamptz,
-  source_expiration_date date,
   provenance text,
   recorded_at timestamptz not null default clock_timestamp(),
   constraint batch_product_fk
@@ -28,7 +27,7 @@ create table fridge.batch (
 );
 
 comment on table fridge.batch is
-  'Optional Product provenance for manufacturer/commercial lot facts. Batch is never stock placement, never a prerequisite for Product identity and never a substitute for StockItem.';
+  'Optional Product provenance for manufacturer/commercial lot facts. Batch is never stock placement, never a prerequisite for Product identity and never a substitute for StockItem. Expiration evidence is modeled separately with full source precision/provenance rather than as a simplified Batch column.';
 
 create index batch_product_idx
   on fridge.batch (product_id, batch_id);
@@ -155,9 +154,13 @@ create table fridge.inventory_movement (
     foreign key (household_id, compartment_id)
     references fridge.compartment (household_id, compartment_id)
     on update restrict on delete restrict,
-  constraint inventory_movement_correction_fk
-    foreign key (correction_of_movement_id)
-    references fridge.inventory_movement (inventory_movement_id)
+  constraint inventory_movement_correction_same_scope_fk
+    foreign key (household_id, correction_of_movement_id, product_id)
+    references fridge.inventory_movement (
+      household_id,
+      inventory_movement_id,
+      product_id
+    )
     on update restrict on delete restrict,
   constraint inventory_movement_kind_nonblank
     check (btrim(movement_kind) <> ''),
@@ -217,7 +220,7 @@ create table fridge.inventory_movement (
 );
 
 comment on table fridge.inventory_movement is
-  'Authoritative append-only stock delta. Sign semantics, movement-kind policy, Product visibility and required placement snapshots are validated by governed mutation boundaries; committed rows later receive immutable guards/privilege enforcement.';
+  'Authoritative append-only stock delta. Sign semantics, movement-kind policy, Product visibility and required placement snapshots are validated by governed mutation boundaries; committed rows later receive immutable guards/privilege enforcement. Correction references are structurally confined to the same Household and Product.';
 
 create index inventory_movement_household_product_time_idx
   on fridge.inventory_movement (
