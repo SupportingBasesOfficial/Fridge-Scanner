@@ -32,8 +32,19 @@ jobs:
         with:
           node-version: '24.20.0'
 
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+      - name: Generate canonical npm lockfile candidate
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Upload lockfile candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: be00-package-lock-${{ github.event.pull_request.head.sha || github.sha }}
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Install dependencies from generated lockfile
+        run: npm ci --ignore-scripts
 
       - name: Build and test
         run: npm run verify
