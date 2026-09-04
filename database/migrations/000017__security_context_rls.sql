@@ -3,9 +3,9 @@
 -- PostgreSQL 17.x baseline; core PostgreSQL only.
 --
 -- Installs the trusted per-transaction Household context reader and fail-closed
--- RLS for directly Household-scoped canonical relations. Authentication and
--- current authorization remain service-boundary responsibilities; the GUC is
--- defense in depth and is never treated as cryptographic authority.
+-- RLS for directly Household-scoped and mixed GLOBAL/HOUSEHOLD canonical data.
+-- Authentication/current authorization remain service-boundary responsibilities;
+-- the GUC is defense in depth and is never treated as cryptographic authority.
 
 begin;
 
@@ -42,8 +42,6 @@ revoke all on function fridge_internal.current_household_id() from public;
 
 -- Direct Household-scoped tables. Every listed relation owns a household_id
 -- column and therefore receives the same deny-by-default tenant predicate.
--- Structural composite FKs remain the primary integrity boundary; RLS is
--- defense in depth against accidental cross-tenant access by ordinary roles.
 do $$
 declare
   v_table text;
@@ -118,9 +116,131 @@ begin
 end;
 $$;
 
--- Nullable-Household scope relations need explicit global-vs-Household handling.
--- Ordinary tenant roles may see/write only rows scoped to their active Household;
--- GLOBAL rows are not implicitly exposed through these policies.
+-- Household itself is filtered by identity rather than a household_id child column.
+alter table fridge.household enable row level security;
+alter table fridge.household force row level security;
+create policy household_identity_isolation
+  on fridge.household
+  using (household_id = fridge_internal.current_household_id())
+  with check (household_id = fridge_internal.current_household_id());
+
+-- Mixed GLOBAL/HOUSEHOLD catalog roots: GLOBAL is readable by tenant contexts;
+-- only the current Household's private rows are readable/writable through RLS.
+do $$
+declare
+  v_table text;
+  v_tables constant text[] := array[
+    'ingredient_concept',
+    'product',
+    'product_ingredient_compatibility',
+    'recipe',
+    'recipe_version',
+    'shelf_life_rule'
+  ];
+begin
+  foreach v_table in array v_tables loop
+    execute format('alter table fridge.%I enable row level security', v_table);
+    execute format('alter table fridge.%I force row level security', v_table);
+    execute format(
+      'create policy catalog_visible on fridge.%I for select using (catalog_scope = ''GLOBAL'' or (catalog_scope = ''HOUSEHOLD'' and owner_household_id = fridge_internal.current_household_id()))',
+      v_table
+    );
+    execute format(
+      'create policy catalog_household_write on fridge.%I for all using (catalog_scope = ''HOUSEHOLD'' and owner_household_id = fridge_internal.current_household_id()) with check (catalog_scope = ''HOUSEHOLD'' and owner_household_id = fridge_internal.current_household_id())',
+      v_table
+    );
+  end loop;
+end;
+$$;
+
+-- Child catalog rows inherit visibility from their governed parent/version.
+alter table fridge.product_identifier enable row level security;
+alter table fridge.product_identifier force row level security;
+create policy product_identifier_visible
+  on fridge.product_identifier
+  for select
+  using (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = product_identifier.product_id
+        and (
+          p.catalog_scope = 'GLOBAL'
+          or p.owner_household_id = fridge_internal.current_household_id()
+        )
+    )
+  );
+create policy product_identifier_household_write
+  on fridge.product_identifier
+  for all
+  using (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = product_identifier.product_id
+        and p.catalog_scope = 'HOUSEHOLD'
+        and p.owner_household_id = fridge_internal.current_household_id()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from fridge.product p
+      where p.product_id = product_identifier.product_id
+        and p.catalog_scope = 'HOUSEHOLD'
+        and p.owner_household_id = fridge_internal.current_household_id()
+    )
+  );
+
+alter table fridge.recipe_ingredient enable row level security;
+alter table fridge.recipe_ingredient force row level security;
+create policy recipe_ingredient_visible
+  on fridge.recipe_ingredient
+  for select
+  using (
+    exists (
+      select 1
+      from fridge.recipe_version rv
+      where rv.recipe_version_id = recipe_ingredient.recipe_version_id
+        and (
+          rv.catalog_scope = 'GLOBAL'
+          or rv.owner_household_id = fridge_internal.current_household_id()
+        )
+    )
+  );
+create policy recipe_ingredient_household_write
+  on fridge.recipe_ingredient
+  for all
+  using (
+    exists (
+      select 1
+      from fridge.recipe_version rv
+      where rv.recipe_version_id = recipe_ingredient.recipe_version_id
+        and rv.catalog_scope = 'HOUSEHOLD'
+        and rv.owner_household_id = fridge_internal.current_household_id()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from fridge.recipe_version rv
+      where rv.recipe_version_id = recipe_ingredient.recipe_version_id
+        and rv.catalog_scope = 'HOUSEHOLD'
+        and rv.owner_household_id = fridge_internal.current_household_id()
+    )
+  );
+
+-- Evidence with nullable Household is tenant-visible only when explicitly bound
+-- to the active Household. Global/governance evidence stays outside tenant RLS.
+alter table fridge.compatibility_decision_evidence enable row level security;
+alter table fridge.compatibility_decision_evidence force row level security;
+create policy compatibility_evidence_household_isolation
+  on fridge.compatibility_decision_evidence
+  using (household_id = fridge_internal.current_household_id())
+  with check (household_id = fridge_internal.current_household_id());
+
+-- Integrations/idempotency can also be GLOBAL, but ordinary Household contexts do
+-- not implicitly gain access to those global operational rows.
 alter table fridge.integration enable row level security;
 alter table fridge.integration force row level security;
 create policy integration_household_isolation
@@ -153,13 +273,5 @@ create policy idempotency_household_isolation
     target_scope = 'HOUSEHOLD'
     and household_id = fridge_internal.current_household_id()
   );
-
--- Household itself is filtered by identity rather than a household_id child column.
-alter table fridge.household enable row level security;
-alter table fridge.household force row level security;
-create policy household_identity_isolation
-  on fridge.household
-  using (household_id = fridge_internal.current_household_id())
-  with check (household_id = fridge_internal.current_household_id());
 
 commit;
