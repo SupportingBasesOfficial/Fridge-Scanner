@@ -34,6 +34,10 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
     },
   });
 
+  server.addHook('onRequest', async (request, reply) => {
+    void reply.header('x-request-id', request.id);
+  });
+
   server.get('/health/live', async () => ({
     status: 'live',
   }));
