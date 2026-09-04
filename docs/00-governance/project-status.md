@@ -8,8 +8,11 @@
 - DB-02 exact reviewed HEAD: `8952856e48807d9a50e7adb0b5d16dee5911e90c`
 - Canonical SQL migrations: **accepted**
 - PostgreSQL execution gate: **accepted on PostgreSQL 17 and PostgreSQL 18**
-- Active phase: **BE-00 — Backend Foundation & Runtime Contracts**
-- Backend implementation: **foundation in progress; not yet accepted**
+- Accepted BE-00 baseline: **Backend Foundation & Runtime Contracts**, squash-merged at `0ad61f38da15ebb237d9e6feda01bf1f8489f5d5`
+- BE-00 exact reviewed HEAD: `7901afe9e78e5ab2e1d24732790396b0aedaccc4`
+- BE-00 final execution gate: **accepted** — runtime/build/test, PostgreSQL/RLS integration and container non-root/health all CLEAN on the exact reviewed HEAD
+- Active phase: **BE-01 — Application Contracts & Domain Kernel**
+- Backend implementation: **runtime foundation accepted; application/domain kernel in progress**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -17,18 +20,22 @@
 
 DB-00 defines domain truth and invariants. DB-01 translates those contracts into the accepted technology-neutral logical relational model. DB-02 translates them into the accepted PostgreSQL physical schema, canonical ordered migration lineage, database privileges/RLS, append-only protections, transaction-safe mutation boundaries and adversarial database tests.
 
-DB-00, DB-01 and DB-02 are normative for BE-00 and all later implementation. Backend convenience, framework defaults, ORM behavior or hosting-provider features may not silently weaken those accepted contracts.
+BE-00 establishes the accepted executable backend runtime foundation: npm workspace topology, strict TypeScript baseline, validated immutable runtime configuration, Fastify delivery adapter, structured request correlation/logging, PostgreSQL transaction adapter, least-privileged Household candidate-context authorization bootstrap, liveness/readiness semantics, graceful shutdown, reproducible dependency graph, Docker non-root runtime and CI integration gates.
 
-Earlier DDL/design notes remain historical input only. They are not production-ready or canonical unless explicitly reconciled with the accepted DB-00/DB-01/DB-02 contracts.
+DB-00, DB-01, DB-02 and BE-00 are normative for BE-01 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
 
-## Purpose of BE-00
+Earlier DDL/design notes remain historical input only. They are not production-ready or canonical unless explicitly reconciled with the accepted baselines.
 
-BE-00 establishes the backend runtime architecture and executable foundation that will consume the accepted database contract without becoming a second source of domain truth. It defines service boundaries, dependency direction, configuration/secrets handling, database transaction/context discipline, identity/authentication boundary, API error/observability contracts, health/readiness semantics, container/runtime baseline, testing layers and CI gates.
+## Purpose of BE-01
 
-The first backend implementation must remain replaceable at infrastructure boundaries and must never expose privileged database capabilities to untrusted clients. With DB-02 forced RLS on membership, ordinary tenant authorization uses a least-privileged, transaction-local candidate Household context solely to read the candidate Household's membership row; the adapter exposes tenant work only after verifying the authenticated principal's current membership. Candidate context alone is never authority and any failure rolls back.
+BE-01 establishes the provider-neutral application contracts and domain kernel that sit above the accepted BE-00 runtime and below later feature delivery. It defines strongly typed identifiers, exact numeric/value semantics, stable application error taxonomy, command/query/use-case contracts, transaction-aware application context, clock/identifier ports, authorization context semantics and package dependency direction before feature CRUD is allowed to proliferate.
+
+BE-01 must not turn database rows, Fastify request objects, PostgreSQL clients, Supabase/provider identities or JSON transport shapes into domain objects. Domain/application code must remain executable without HTTP, PostgreSQL, a queue or a specific identity provider.
+
+BE-01 is a structural phase, not a feature-delivery phase. Household CRUD, catalog, inventory, procurement, replenishment, recipes, notifications and external provider workflows remain later phases unless a minimal fixture is necessary to prove a kernel contract.
 
 ## Governance rule
 
-The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization. A passing implementation does not override a violated domain, relational or physical invariant.
+The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization. A passing implementation does not override a violated domain, relational, physical or runtime invariant.
 
-BE-00 must not silently reopen or weaken DB-00/DB-01/DB-02. If backend implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
+BE-01 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
