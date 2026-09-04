@@ -3,13 +3,13 @@
 FROM node:24.20.0-bookworm-slim AS build
 WORKDIR /workspace
 
-COPY package.json tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY packages/application/package.json ./packages/application/package.json
 COPY packages/config/package.json ./packages/config/package.json
 COPY packages/database/package.json ./packages/database/package.json
 
-RUN npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY apps ./apps
 COPY packages ./packages
