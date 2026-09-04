@@ -1,0 +1,55 @@
+name: DB-02 PostgreSQL Gate
+
+on:
+  pull_request:
+    paths:
+      - "database/**"
+      - "docs/04-database-physical/**"
+      - ".github/workflows/db-02-postgresql-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database-gate:
+    name: PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17", "18"]
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fridge_scanner_db02
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fridge_scanner_db02"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fridge_scanner_db02
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Show canonical SQL order
+        run: python3 database/scripts/run_db02_gate.py --print-order
+
+      - name: Run migrations and database tests
+        run: python3 database/scripts/run_db02_gate.py
