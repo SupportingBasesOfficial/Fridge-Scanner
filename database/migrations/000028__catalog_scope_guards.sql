@@ -283,10 +283,10 @@ begin
     select * into v_evidence
       from fridge.compatibility_decision_evidence
      where compatibility_evidence_id = v_activation.compatibility_evidence_id;
-    if v_evidence.household_id is distinct from p_household_id
+    if (v_evidence.household_id is not null and v_evidence.household_id <> p_household_id)
        or v_evidence.product_id <> v_activation.product_id
        or v_evidence.ingredient_concept_id <> v_rule.target_ingredient_concept_id then
-      raise exception using errcode = '23514', message = 'ShelfLifeRuleActivation compatibility evidence does not match Household/Product/Concept';
+      raise exception using errcode = '23514', message = 'ShelfLifeRuleActivation compatibility evidence does not match visible Household/Product/Concept context';
     end if;
   end if;
 end;
