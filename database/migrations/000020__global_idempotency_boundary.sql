@@ -129,6 +129,10 @@ revoke all on function fridge_internal.acquire_global_idempotency(
   timestamptz
 ) from public;
 
+-- Owner/migrator need namespace visibility only to name the privileged boundary
+-- and its composite return type. This does not grant table, sequence or DML access.
+grant usage on schema fridge_internal
+  to fridge_owner, fridge_migrator;
 grant usage on type fridge_internal.idempotency_acquire_result
   to fridge_owner, fridge_migrator;
 grant execute on function fridge_internal.acquire_global_idempotency(
