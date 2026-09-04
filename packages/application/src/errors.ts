@@ -13,7 +13,7 @@ export class ApplicationError extends Error {
   constructor(
     readonly code: ApplicationErrorCode,
     message: string,
-    readonly cause?: unknown,
+    cause?: unknown,
   ) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = new.target.name;
