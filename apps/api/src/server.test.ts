@@ -5,13 +5,17 @@ import {
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
+  UnauthenticatedError,
   type AuthorizedHouseholdContext,
   type ReadAuthorizedHouseholdContextInput,
   type ReadinessProbe,
   type UseCase,
 } from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
-import { buildApiServer } from './server.js';
+import {
+  buildApiServer,
+  type AuthenticatedPrincipalResolver,
+} from './server.js';
 
 const config: RuntimeConfig = {
   nodeEnv: 'test',
@@ -35,6 +39,12 @@ function readiness(ready: boolean): ReadinessProbe {
   };
 }
 
+function authenticatedPrincipal(
+  resolve: AuthenticatedPrincipalResolver['resolve'] = async () => principalId,
+): AuthenticatedPrincipalResolver {
+  return { resolve };
+}
+
 function householdContextUseCase(
   execute?: (input: ReadAuthorizedHouseholdContextInput) => Promise<AuthorizedHouseholdContext>,
 ): UseCase<ReadAuthorizedHouseholdContextInput, AuthorizedHouseholdContext> {
@@ -55,17 +65,18 @@ function householdContextUseCase(
 function buildTestServer(
   ready = true,
   useCase = householdContextUseCase(),
+  principal = authenticatedPrincipal(),
 ) {
   return buildApiServer({
     config,
     readiness: readiness(ready),
+    authenticatedPrincipal: principal,
     readAuthorizedHouseholdContext: useCase,
   });
 }
 
 test('liveness is independent from dependency readiness', async () => {
   const server = buildTestServer(false);
-
   try {
     const response = await server.inject({ method: 'GET', url: '/health/live' });
     assert.equal(response.statusCode, 200);
@@ -77,7 +88,6 @@ test('liveness is independent from dependency readiness', async () => {
 
 test('readiness returns 503 when a required dependency is unavailable', async () => {
   const server = buildTestServer(false);
-
   try {
     const response = await server.inject({ method: 'GET', url: '/health/ready' });
     assert.equal(response.statusCode, 503);
@@ -92,7 +102,6 @@ test('readiness returns 503 when a required dependency is unavailable', async ()
 
 test('readiness returns 200 when dependencies are available', async () => {
   const server = buildTestServer(true);
-
   try {
     const response = await server.inject({ method: 'GET', url: '/health/ready' });
     assert.equal(response.statusCode, 200);
@@ -104,7 +113,6 @@ test('readiness returns 200 when dependencies are available', async () => {
 
 test('valid inbound request id is preserved', async () => {
   const server = buildTestServer(true);
-
   try {
     const response = await server.inject({
       method: 'GET',
@@ -118,7 +126,7 @@ test('valid inbound request id is preserved', async () => {
   }
 });
 
-test('proving route parses untrusted identifiers once and explicitly serializes verified context', async () => {
+test('proving route uses injected authenticated principal and explicitly serializes verified context', async () => {
   const server = buildTestServer(true, householdContextUseCase(async (input) => {
     assert.equal(input.principalId, principalId);
     assert.equal(input.householdId, householdId);
@@ -135,9 +143,7 @@ test('proving route parses untrusted identifiers once and explicitly serializes 
     const response = await server.inject({
       method: 'GET',
       url: `/be01/proving/households/${householdId}/context`,
-      headers: { 'x-principal-id': principalId },
     });
-
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json(), {
       principalId: String(principalId),
@@ -151,7 +157,32 @@ test('proving route parses untrusted identifiers once and explicitly serializes 
   }
 });
 
-test('proving route rejects missing or malformed identity before use-case execution', async () => {
+test('proving route fails closed when authentication authority cannot resolve a principal', async () => {
+  let executions = 0;
+  const server = buildTestServer(
+    true,
+    householdContextUseCase(async () => {
+      executions += 1;
+      throw new Error('must not execute');
+    }),
+    authenticatedPrincipal(async () => {
+      throw new UnauthenticatedError();
+    }),
+  );
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/be01/proving/households/${householdId}/context`,
+    });
+    assert.equal(response.statusCode, 401);
+    assert.equal(executions, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('malformed Household identifier is rejected before use-case execution', async () => {
   let executions = 0;
   const server = buildTestServer(true, householdContextUseCase(async () => {
     executions += 1;
@@ -159,18 +190,11 @@ test('proving route rejects missing or malformed identity before use-case execut
   }));
 
   try {
-    const missingPrincipal = await server.inject({
-      method: 'GET',
-      url: `/be01/proving/households/${householdId}/context`,
-    });
-    assert.equal(missingPrincipal.statusCode, 401);
-
-    const malformedHousehold = await server.inject({
+    const response = await server.inject({
       method: 'GET',
       url: '/be01/proving/households/not-a-uuid/context',
-      headers: { 'x-principal-id': principalId },
     });
-    assert.equal(malformedHousehold.statusCode, 400);
+    assert.equal(response.statusCode, 400);
     assert.equal(executions, 0);
   } finally {
     await server.close();
@@ -186,10 +210,9 @@ test('unauthorized Household access is externally indistinguishable from missing
     const response = await server.inject({
       method: 'GET',
       url: `/be01/proving/households/${householdId}/context`,
-      headers: { 'x-principal-id': principalId },
     });
     assert.equal(response.statusCode, 404);
-    assert.equal(response.json().error.code, 'HOUSEHOLD_UNAUTHORIZED');
+    assert.equal(response.json().error.code, 'NOT_FOUND');
   } finally {
     await server.close();
   }
