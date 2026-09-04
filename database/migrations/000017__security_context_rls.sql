@@ -115,7 +115,6 @@ begin
 end;
 $$;
 
--- Household itself is filtered by identity rather than a household_id child column.
 alter table fridge.household enable row level security;
 alter table fridge.household force row level security;
 create policy household_identity_isolation
@@ -123,8 +122,6 @@ create policy household_identity_isolation
   using (household_id = fridge_internal.current_household_id())
   with check (household_id = fridge_internal.current_household_id());
 
--- Mixed GLOBAL/HOUSEHOLD catalog roots: GLOBAL is readable by tenant contexts;
--- only the current Household's private rows are readable/writable through RLS.
 do $$
 declare
   v_table text;
@@ -152,8 +149,6 @@ begin
 end;
 $$;
 
--- Batch has no direct Household column. Its confidentiality follows Product:
--- global Product batches are readable, private Product batches only by owner Household.
 alter table fridge.batch enable row level security;
 alter table fridge.batch force row level security;
 create policy batch_visible
@@ -192,7 +187,6 @@ create policy batch_household_write
     )
   );
 
--- Child catalog rows inherit visibility from their governed parent/version.
 alter table fridge.product_identifier enable row level security;
 alter table fridge.product_identifier force row level security;
 create policy product_identifier_visible
@@ -269,8 +263,6 @@ create policy recipe_ingredient_household_write
     )
   );
 
--- Evidence with nullable Household is tenant-visible only when explicitly bound
--- to the active Household. Global/governance evidence stays outside tenant RLS.
 alter table fridge.compatibility_decision_evidence enable row level security;
 alter table fridge.compatibility_decision_evidence force row level security;
 create policy compatibility_evidence_household_isolation
@@ -278,18 +270,16 @@ create policy compatibility_evidence_household_isolation
   using (household_id = fridge_internal.current_household_id())
   with check (household_id = fridge_internal.current_household_id());
 
--- Integrations/idempotency can also be GLOBAL, but ordinary Household contexts do
--- not implicitly gain access to those global operational rows.
 alter table fridge.integration enable row level security;
 alter table fridge.integration force row level security;
 create policy integration_household_isolation
   on fridge.integration
   using (
-    binding_scope = 'HOUSEHOLD'
+    integration_scope = 'HOUSEHOLD'
     and household_id = fridge_internal.current_household_id()
   )
   with check (
-    binding_scope = 'HOUSEHOLD'
+    integration_scope = 'HOUSEHOLD'
     and household_id = fridge_internal.current_household_id()
   );
 
