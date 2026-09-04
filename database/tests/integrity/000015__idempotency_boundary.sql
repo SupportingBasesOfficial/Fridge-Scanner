@@ -1,9 +1,14 @@
--- FridgeScanner DB-02 integrity checks for 000015__idempotency_boundary.sql
+-- FridgeScanner DB-02 integrity checks for the HOUSEHOLD-only idempotency boundary.
 
 begin;
 
 insert into fridge.household (household_id, display_name)
-values ('b5000000-0000-4000-8000-000000000001', 'Idempotency household');
+values
+  ('b5000000-0000-4000-8000-000000000001', 'Idempotency household A'),
+  ('b5000000-0000-4000-8000-000000000002', 'Idempotency household B');
+
+-- Trusted backend transaction context must match the command Household.
+set local fridge.household_id = 'b5000000-0000-4000-8000-000000000001';
 
 do $$
 declare
@@ -68,42 +73,52 @@ begin
 end;
 $$;
 
--- GLOBAL scope uses an independent identity domain and still has one winner.
+-- The tenant boundary must reject another Household even for a trusted caller.
 do $$
-declare
-  v_first fridge_internal.idempotency_acquire_result;
-  v_again fridge_internal.idempotency_acquire_result;
 begin
-  v_first := fridge_internal.acquire_idempotency(
-    'b6000000-0000-4000-8000-000000000010',
-    'GLOBAL',
-    null,
-    'principal:test',
-    'GLOBAL_COMMAND',
-    'v1',
-    'global-key-test',
-    'sha256:global-request',
-    'TEST_RUNNING',
-    null
-  );
+  begin
+    perform fridge_internal.acquire_idempotency(
+      'b6000000-0000-4000-8000-000000000004',
+      'HOUSEHOLD',
+      'b5000000-0000-4000-8000-000000000002',
+      'principal:test',
+      'CREATE_RECEIPT',
+      'v1',
+      'other-household-key',
+      'sha256:other-household',
+      'TEST_RUNNING',
+      null
+    );
+    raise exception 'cross-Household idempotency acquisition unexpectedly accepted';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+end;
+$$;
 
-  v_again := fridge_internal.acquire_idempotency(
-    'b6000000-0000-4000-8000-000000000011',
-    'GLOBAL',
-    null,
-    'principal:test',
-    'GLOBAL_COMMAND',
-    'v1',
-    'global-key-test',
-    'sha256:global-request',
-    'TEST_RUNNING',
-    null
-  );
-
-  if not v_first.is_executor or v_again.is_executor
-     or v_first.idempotency_record_id <> v_again.idempotency_record_id then
-    raise exception 'GLOBAL idempotency create-or-observe contract failed';
-  end if;
+-- GLOBAL is a different authority surface and must not be reachable through the
+-- ordinary HOUSEHOLD boundary. Its behavior is covered by 000020.
+do $$
+begin
+  begin
+    perform fridge_internal.acquire_idempotency(
+      'b6000000-0000-4000-8000-000000000010',
+      'GLOBAL',
+      null,
+      'principal:test',
+      'GLOBAL_COMMAND',
+      'v1',
+      'global-key-test',
+      'sha256:global-request',
+      'TEST_RUNNING',
+      null
+    );
+    raise exception 'GLOBAL scope unexpectedly accepted by HOUSEHOLD idempotency boundary';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 end;
 $$;
 
