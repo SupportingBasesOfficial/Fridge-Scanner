@@ -4,6 +4,7 @@ import {
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
+  type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
   type TransactionHandle,
@@ -68,8 +69,6 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T> {
-    // Re-validate at this capability boundary without inventing adapter-local UUID rules.
-    // This protects JavaScript callers and deliberately forged TypeScript casts.
     const verifiedPrincipalId = PrincipalId(principalId);
     const verifiedHouseholdId = HouseholdId(householdId);
 
@@ -79,13 +78,7 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     try {
       await client.query('begin');
       transactionStarted = true;
-
-      // Capability roles are validated against a closed runtime allowlist, so the
-      // identifier interpolation below cannot be influenced by arbitrary input.
       await client.query(`set local role ${this.#capabilityRole}`);
-
-      // The candidate context only narrows forced RLS enough to inspect membership
-      // for this Household. It is not authority and no caller callback runs yet.
       await client.query(
         "select set_config('fridge.household_id', $1, true)",
         [verifiedHouseholdId],
@@ -120,9 +113,6 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
         authorizationRow.role_code,
       );
 
-      // TransactionHandle is deliberately opaque to ordinary callers. This adapter
-      // is the trusted authority boundary that may materialize it, and runtime DB
-      // capability access is still guarded by requirePgClient's instanceof check.
       const result = await operation(verifiedTransaction as unknown as TransactionHandle);
       await client.query('commit');
       transactionStarted = false;
@@ -168,6 +158,20 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
 
   async close(): Promise<void> {
     await this.#pool.end();
+  }
+}
+
+export class PgHouseholdProfileReader implements HouseholdProfileReader {
+  async readDisplayName(transaction: TransactionHandle): Promise<string | null> {
+    const client = requirePgClient(transaction);
+    const result = await client.query<{ display_name: string }>(
+      `select display_name
+         from fridge.household
+        where household_id = $1::uuid`,
+      [transaction.householdId],
+    );
+
+    return result.rows[0]?.display_name ?? null;
   }
 }
 
