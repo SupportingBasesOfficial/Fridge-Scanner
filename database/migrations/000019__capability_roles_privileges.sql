@@ -19,13 +19,32 @@ declare
     'fridge_worker',
     'fridge_readonly'
   ];
+  v_existing pg_catalog.pg_roles%rowtype;
 begin
   foreach v_role in array v_roles loop
-    if not exists (select 1 from pg_catalog.pg_roles where rolname = v_role) then
+    select * into v_existing
+    from pg_catalog.pg_roles
+    where rolname = v_role;
+
+    if not found then
       execute format(
         'create role %I nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls',
         v_role
       );
+    else
+      if v_existing.rolcanlogin
+         or v_existing.rolsuper
+         or v_existing.rolcreatedb
+         or v_existing.rolcreaterole
+         or v_existing.rolinherit
+         or v_existing.rolbypassrls then
+        raise exception using
+          errcode = '42501',
+          message = format(
+            'preexisting capability role %I has unsafe attributes; expected NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+            v_role
+          );
+      end if;
     end if;
   end loop;
 end;
