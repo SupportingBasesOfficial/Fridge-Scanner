@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
   ApplicationError,
   HouseholdId,
@@ -15,22 +15,24 @@ import type { RuntimeConfig } from '@fridge/config';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
+export interface AuthenticatedPrincipalResolver {
+  resolve(request: FastifyRequest): Promise<PrincipalId>;
+}
+
+export const rejectUnauthenticatedPrincipal: AuthenticatedPrincipalResolver = {
+  async resolve() {
+    throw new UnauthenticatedError();
+  },
+};
+
 export interface ApiServerDependencies {
   readonly config: RuntimeConfig;
   readonly readiness: ReadinessProbe;
+  readonly authenticatedPrincipal: AuthenticatedPrincipalResolver;
   readonly readAuthorizedHouseholdContext: UseCase<
     ReadAuthorizedHouseholdContextInput,
     AuthorizedHouseholdContext
   >;
-}
-
-function parsePrincipalId(value: string | undefined) {
-  if (value === undefined) throw new UnauthenticatedError();
-  try {
-    return PrincipalId(value);
-  } catch (error) {
-    throw new InvalidInputError('principal identifier is invalid', error);
-  }
 }
 
 function parseHouseholdId(value: string) {
@@ -66,7 +68,12 @@ function applicationStatusCode(error: ApplicationError): number {
 }
 
 export function buildApiServer(dependencies: ApiServerDependencies): FastifyInstance {
-  const { config, readiness, readAuthorizedHouseholdContext } = dependencies;
+  const {
+    config,
+    readiness,
+    authenticatedPrincipal,
+    readAuthorizedHouseholdContext,
+  } = dependencies;
 
   const server = Fastify({
     logger: {
@@ -115,10 +122,9 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
   server.get<{ Params: { householdId: string } }>(
     '/be01/proving/households/:householdId/context',
     async (request) => {
-      const principalHeader = request.headers['x-principal-id'];
-      const principalId = parsePrincipalId(
-        typeof principalHeader === 'string' ? principalHeader : undefined,
-      );
+      // Authentication authority is deliberately injected. Raw headers, cookies,
+      // provider claims, and requested identifiers are not trusted by this route.
+      const principalId = await authenticatedPrincipal.resolve(request);
       const householdId = parseHouseholdId(request.params.householdId);
       const context = await readAuthorizedHouseholdContext.execute({ principalId, householdId });
       return serializeAuthorizedHouseholdContext(context);
