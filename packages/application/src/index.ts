@@ -13,7 +13,10 @@ export {
 export type { Instant } from '@fridge/domain';
 export * from './errors.js';
 
+declare const verifiedTransactionBrand: unique symbol;
+
 export interface TransactionHandle {
+  readonly [verifiedTransactionBrand]: 'VerifiedTransactionHandle';
   readonly kind: 'fridge-transaction';
   readonly principalId: PrincipalId;
   readonly householdId: HouseholdId;
