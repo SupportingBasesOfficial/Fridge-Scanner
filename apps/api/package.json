@@ -1,0 +1,19 @@
+{
+  "name": "@fridge/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/*.test.js",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@fridge/application": "*",
+    "@fridge/config": "*",
+    "@fridge/database": "*",
+    "fastify": "^5.12.1"
+  }
+}

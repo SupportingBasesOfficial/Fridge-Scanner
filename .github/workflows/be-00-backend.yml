@@ -1,0 +1,181 @@
+name: BE-00 Backend Gate
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docs/05-backend/**'
+      - '.github/workflows/be-00-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    name: Runtime / TypeScript / Unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Install dependencies from lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Build and test
+        run: npm run verify
+
+  database-contract:
+    name: PostgreSQL 17 Contract + Backend RLS Integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fridge_scanner_be00
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fridge_scanner_be00"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fridge_scanner_be00
+      BE00_TEST_DATABASE_URL: postgresql://fridge_be00_login:be00-test@127.0.0.1:5432/fridge_scanner_be00
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Replay accepted DB-02 contract and tests
+        run: python3 database/scripts/run_db02_gate.py
+
+      - name: Create least-privileged backend login and RLS fixtures
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create role fridge_be00_login
+            login password 'be00-test'
+            nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+          grant fridge_app to fridge_be00_login;
+
+          insert into fridge.user_profile (user_id, display_name)
+          values
+            ('11111111-1111-4111-8111-111111111111', 'BE00 Principal A'),
+            ('22222222-2222-4222-8222-222222222222', 'BE00 Principal B');
+
+          insert into fridge.household (household_id, display_name)
+          values
+            ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'BE00 Household A'),
+            ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'BE00 Household B');
+
+          insert into fridge.household_role (role_code, display_name)
+          values ('MEMBER', 'Member');
+
+          insert into fridge.household_membership (
+            membership_id,
+            household_id,
+            user_id,
+            role_code,
+            lifecycle_status,
+            effective_from
+          )
+          values
+            (
+              'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+              'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              '11111111-1111-4111-8111-111111111111',
+              'MEMBER',
+              'ACTIVE',
+              clock_timestamp() - interval '1 hour'
+            ),
+            (
+              'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb',
+              'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              '22222222-2222-4222-8222-222222222222',
+              'MEMBER',
+              'ACTIVE',
+              clock_timestamp() - interval '1 hour'
+            );
+          SQL
+
+      - name: Install backend dependencies from lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Build backend packages
+        run: npm run build
+
+      - name: Prove backend Household isolation and context non-leakage
+        run: npm run test:integration --workspace @fridge/database
+
+  container-smoke:
+    name: Container Smoke / Non-root / Health Semantics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build --pull -t fridge-scanner-be00:ci .
+
+      - name: Start backend container without database dependency
+        run: |
+          docker run --rm -d \
+            --name fridge-scanner-be00 \
+            -p 3000:3000 \
+            -e DATABASE_URL=postgresql://app:password@127.0.0.1:5432/fridge \
+            -e DATABASE_CAPABILITY_ROLE=fridge_app \
+            -e LOG_LEVEL=fatal \
+            fridge-scanner-be00:ci
+
+      - name: Prove liveness, readiness and non-root runtime
+        run: |
+          for attempt in $(seq 1 30); do
+            live_code="$(curl -sS -o /tmp/live.json -w '%{http_code}' http://127.0.0.1:3000/health/live || true)"
+            if [ "$live_code" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          test "${live_code:-}" = "200"
+          test "$(docker exec fridge-scanner-be00 id -u)" != "0"
+
+          ready_code="$(curl -sS -o /tmp/ready.json -w '%{http_code}' http://127.0.0.1:3000/health/ready || true)"
+          test "$ready_code" = "503"
+
+      - name: Container diagnostics
+        if: always()
+        run: |
+          docker logs fridge-scanner-be00 || true
+          docker rm -f fridge-scanner-be00 || true
