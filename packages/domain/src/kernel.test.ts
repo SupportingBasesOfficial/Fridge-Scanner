@@ -28,17 +28,19 @@ test('invalid rational denominator fails closed', () => {
   assert.throws(() => exactRational(1n, 0n), /denominator must not be zero/);
 });
 
-test('exact decimal preserves PostgreSQL numeric semantics without floating point', () => {
+test('exact decimal canonicalizes PostgreSQL numeric text without floating point', () => {
+  assert.equal(exactDecimal('01.2300'), '1.23');
+  assert.equal(exactDecimal('-0.00'), '0');
+  assert.equal(exactDecimal('00012'), '12');
   assert.equal(addExactDecimal(exactDecimal('0.1'), exactDecimal('0.2')), '0.3');
   assert.equal(addExactDecimal(exactDecimal('12.345'), exactDecimal('-2.345')), '10');
-  assert.throws(() => exactDecimal('01.20'), /canonical finite decimal/);
-  assert.throws(() => exactDecimal('1e-3'), /canonical finite decimal/);
-  assert.throws(() => exactDecimal('1.2300'), /canonical finite decimal/);
+  assert.throws(() => exactDecimal('1e-3'), /finite plain decimal/);
+  assert.throws(() => exactDecimal(' 1.23 '), /finite plain decimal/);
 });
 
 test('money arithmetic is exact and rejects currency mismatch', () => {
   assert.deepEqual(
-    addMoney(money(exactDecimal('1.25'), 'BRL'), money(exactDecimal('0.75'), 'BRL')),
+    addMoney(money(exactDecimal('1.2500'), 'BRL'), money(exactDecimal('0.750'), 'BRL')),
     { amount: '2', currency: 'BRL' },
   );
   assert.throws(
@@ -47,8 +49,9 @@ test('money arithmetic is exact and rejects currency mismatch', () => {
   );
 });
 
-test('opaque identifiers validate canonical UUID input', () => {
+test('opaque identifiers accept DB-02 uuid values in canonical text form', () => {
   assert.equal(HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  assert.equal(HouseholdId('00000000-0000-0000-0000-000000000000'), '00000000-0000-0000-0000-000000000000');
   assert.throws(() => HouseholdId('household-from-request-header'), /Invalid HouseholdId/);
   assert.throws(() => HouseholdId('AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'), /Invalid HouseholdId/);
 });
