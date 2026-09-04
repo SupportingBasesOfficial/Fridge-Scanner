@@ -11,6 +11,12 @@ import {
   exactRational,
   instant,
   money,
+  parseExactDecimalWire,
+  parseExactRationalWire,
+  parseMoneyWire,
+  serializeExactDecimal,
+  serializeExactRational,
+  serializeMoney,
 } from './index.js';
 
 test('exact rational normalizes equivalent values', () => {
@@ -28,6 +34,36 @@ test('invalid rational denominator fails closed', () => {
   assert.throws(() => exactRational(1n, 0n), /denominator must not be zero/);
 });
 
+test('exact rational wire codec preserves values beyond JavaScript safe integer range', () => {
+  const source = exactRational(
+    900719925474099312345678901234567890n,
+    700000000000000000000000000000000001n,
+  );
+  const wire = serializeExactRational(source);
+
+  assert.deepEqual(wire, {
+    numerator: '900719925474099312345678901234567890',
+    denominator: '700000000000000000000000000000000001',
+  });
+  assert.equal(typeof JSON.stringify(wire), 'string');
+  assert.equal(equalExactRational(parseExactRationalWire(JSON.parse(JSON.stringify(wire))), source), true);
+});
+
+test('exact rational wire parser rejects noncanonical equivalent representations', () => {
+  assert.throws(
+    () => parseExactRationalWire({ numerator: '2', denominator: '4' }),
+    /must be normalized/,
+  );
+  assert.throws(
+    () => parseExactRationalWire({ numerator: '01', denominator: '2' }),
+    /canonical integer strings/,
+  );
+  assert.throws(
+    () => parseExactRationalWire({ numerator: '1', denominator: '-2' }),
+    /canonical integer strings/,
+  );
+});
+
 test('exact decimal canonicalizes PostgreSQL numeric text without floating point', () => {
   assert.equal(exactDecimal('01.2300'), '1.23');
   assert.equal(exactDecimal('-0.00'), '0');
@@ -38,6 +74,16 @@ test('exact decimal canonicalizes PostgreSQL numeric text without floating point
   assert.throws(() => exactDecimal(' 1.23 '), /finite plain decimal/);
 });
 
+test('exact decimal wire codec round-trips only canonical strings', () => {
+  const source = exactDecimal('123456789012345678901234567890.000000000000000001');
+  const wire = serializeExactDecimal(source);
+
+  assert.equal(wire, '123456789012345678901234567890.000000000000000001');
+  assert.equal(parseExactDecimalWire(JSON.parse(JSON.stringify(wire))), source);
+  assert.throws(() => parseExactDecimalWire('01.2300'), /must be canonical/);
+  assert.throws(() => parseExactDecimalWire(1.23), /must be a string/);
+});
+
 test('money arithmetic is exact and rejects currency mismatch', () => {
   assert.deepEqual(
     addMoney(money(exactDecimal('1.2500'), 'BRL'), money(exactDecimal('0.750'), 'BRL')),
@@ -46,6 +92,24 @@ test('money arithmetic is exact and rejects currency mismatch', () => {
   assert.throws(
     () => addMoney(money(exactDecimal('1'), 'BRL'), money(exactDecimal('1'), 'USD')),
     /currencies must match/,
+  );
+});
+
+test('money wire codec is explicit and precision-safe', () => {
+  const source = money(
+    exactDecimal('999999999999999999999999999999.123456789012345678'),
+    'BRL',
+  );
+  const wire = serializeMoney(source);
+
+  assert.deepEqual(wire, {
+    amount: '999999999999999999999999999999.123456789012345678',
+    currency: 'BRL',
+  });
+  assert.deepEqual(parseMoneyWire(JSON.parse(JSON.stringify(wire))), source);
+  assert.throws(
+    () => parseMoneyWire({ amount: '01.00', currency: 'BRL' }),
+    /must be canonical/,
   );
 });
 
