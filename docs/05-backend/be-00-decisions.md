@@ -26,9 +26,9 @@ This register contains backend-foundation decisions that are authoritative for B
 
 ## B0-004 — Household database context
 
-**Decision:** trusted Household context is installed inside the same PostgreSQL transaction that executes tenant-scoped work, after backend authorization resolves the Household.
+**Decision:** ordinary tenant authorization uses an encapsulated candidate-context bootstrap inside the same PostgreSQL transaction that executes tenant-scoped work. After provider authentication yields a canonical platform principal, the adapter sets the requested Household only as transaction-local candidate context so forced RLS can expose that Household's membership row; it then verifies a currently effective ACTIVE membership for `(principal, Household)` from platform truth. Only after that check succeeds may the adapter expose the transaction handle to application work.
 
-**Rule:** context must use transaction-local semantics. Missing/invalid context fails closed. The context value is defense in depth, not cryptographic authentication.
+**Rule:** candidate context is not authority. No tenant callback or business query may run before membership verification. Missing/invalid context, absent/inactive/expired membership or principal/Household mismatch rolls back and fails closed without disclosing tenant data. The capability role remains least-privileged and non-bypass; authorization is re-established per request/transaction. Transaction-local context resets on commit/rollback and must not leak through pooled connections.
 
 ## B0-005 — Credentials and database roles
 
@@ -83,7 +83,7 @@ This register contains backend-foundation decisions that are authoritative for B
 
 **Decision:** provider authentication and platform authorization are separate.
 
-**Rule:** a valid identity-provider token/session proves a provider-authenticated principal, not Household permission. Current authority must be resolved against platform truth before tenant-scoped work.
+**Rule:** a valid identity-provider token/session proves a provider-authenticated principal, not Household permission. Current authority is resolved from the RLS-visible membership row inside the adapter's encapsulated candidate-context bootstrap before any tenant-scoped callback executes. A requested Household identifier and the installed candidate GUC remain untrusted until that membership check succeeds.
 
 ## B0-014 — Idempotency
 
