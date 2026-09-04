@@ -1,17 +1,27 @@
 import { z } from 'zod';
 
+const databaseCapabilityRoleSchema = z.enum([
+  'fridge_app',
+  'fridge_worker',
+  'fridge_readonly',
+]);
+
 const runtimeConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1).url(),
+  DATABASE_CAPABILITY_ROLE: databaseCapabilityRoleSchema.default('fridge_app'),
   HTTP_HOST: z.string().min(1).default('0.0.0.0'),
   HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(10_000),
 });
 
+export type DatabaseCapabilityRole = z.infer<typeof databaseCapabilityRoleSchema>;
+
 export interface RuntimeConfig {
   readonly nodeEnv: 'development' | 'test' | 'production';
   readonly databaseUrl: string;
+  readonly databaseCapabilityRole: DatabaseCapabilityRole;
   readonly httpHost: string;
   readonly httpPort: number;
   readonly logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
@@ -43,6 +53,7 @@ export function parseRuntimeConfig(env: NodeJS.ProcessEnv): RuntimeConfig {
   return Object.freeze({
     nodeEnv: parsed.data.NODE_ENV,
     databaseUrl: parsed.data.DATABASE_URL,
+    databaseCapabilityRole: parsed.data.DATABASE_CAPABILITY_ROLE,
     httpHost: parsed.data.HTTP_HOST,
     httpPort: parsed.data.HTTP_PORT,
     logLevel: parsed.data.LOG_LEVEL,
