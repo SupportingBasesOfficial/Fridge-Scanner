@@ -49,7 +49,7 @@ test('exact rational wire codec preserves values beyond JavaScript safe integer 
   assert.equal(equalExactRational(parseExactRationalWire(JSON.parse(JSON.stringify(wire))), source), true);
 });
 
-test('exact rational wire parser rejects noncanonical equivalent representations', () => {
+test('exact rational wire parser rejects noncanonical or open-ended shapes', () => {
   assert.throws(
     () => parseExactRationalWire({ numerator: '2', denominator: '4' }),
     /must be normalized/,
@@ -61,6 +61,10 @@ test('exact rational wire parser rejects noncanonical equivalent representations
   assert.throws(
     () => parseExactRationalWire({ numerator: '1', denominator: '-2' }),
     /canonical integer strings/,
+  );
+  assert.throws(
+    () => parseExactRationalWire({ numerator: '1', denominator: '2', ignored: 'field' }),
+    /contain only numerator and denominator/,
   );
 });
 
@@ -95,7 +99,7 @@ test('money arithmetic is exact and rejects currency mismatch', () => {
   );
 });
 
-test('money wire codec is explicit and precision-safe', () => {
+test('money wire codec is explicit, closed and precision-safe', () => {
   const source = money(
     exactDecimal('999999999999999999999999999999.123456789012345678'),
     'BRL',
@@ -110,6 +114,10 @@ test('money wire codec is explicit and precision-safe', () => {
   assert.throws(
     () => parseMoneyWire({ amount: '01.00', currency: 'BRL' }),
     /must be canonical/,
+  );
+  assert.throws(
+    () => parseMoneyWire({ amount: '1', currency: 'BRL', ignored: true }),
+    /contain only amount and currency/,
   );
 });
 
