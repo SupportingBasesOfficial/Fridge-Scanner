@@ -1,10 +1,26 @@
-export type PrincipalId = string;
-export type HouseholdId = string;
+import type {
+  HouseholdId,
+  HouseholdMembershipId,
+  Instant,
+  PrincipalId,
+} from '@fridge/domain';
+
+export {
+  HouseholdId,
+  HouseholdMembershipId,
+  PrincipalId,
+} from '@fridge/domain';
+export type { Instant } from '@fridge/domain';
+export * from './errors.js';
+
+declare const verifiedTransactionBrand: unique symbol;
 
 export interface TransactionHandle {
+  readonly [verifiedTransactionBrand]: 'VerifiedTransactionHandle';
   readonly kind: 'fridge-transaction';
   readonly principalId: PrincipalId;
   readonly householdId: HouseholdId;
+  readonly membershipId: HouseholdMembershipId;
   readonly householdRoleCode: string;
 }
 
@@ -14,6 +30,10 @@ export interface TransactionManager {
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T>;
+}
+
+export interface UseCase<TInput, TOutput> {
+  execute(input: TInput): Promise<TOutput>;
 }
 
 export interface ReadinessProbe {
@@ -26,9 +46,9 @@ export interface ReadinessResult {
 }
 
 export interface Clock {
-  now(): Date;
+  now(): Instant;
 }
 
-export interface IdentifierGenerator {
-  uuid(): string;
+export interface IdentifierGenerator<TIdentifier> {
+  generate(): TIdentifier;
 }

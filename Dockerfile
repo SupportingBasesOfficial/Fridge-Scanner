@@ -8,6 +8,7 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY packages/application/package.json ./packages/application/package.json
 COPY packages/config/package.json ./packages/config/package.json
 COPY packages/database/package.json ./packages/database/package.json
+COPY packages/domain/package.json ./packages/domain/package.json
 
 RUN npm ci --ignore-scripts
 
@@ -31,6 +32,8 @@ COPY --from=build /workspace/packages/config/package.json ./packages/config/pack
 COPY --from=build /workspace/packages/config/dist ./packages/config/dist
 COPY --from=build /workspace/packages/database/package.json ./packages/database/package.json
 COPY --from=build /workspace/packages/database/dist ./packages/database/dist
+COPY --from=build /workspace/packages/domain/package.json ./packages/domain/package.json
+COPY --from=build /workspace/packages/domain/dist ./packages/domain/dist
 
 USER node
 EXPOSE 3000

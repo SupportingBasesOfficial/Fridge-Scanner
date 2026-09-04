@@ -11,10 +11,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @fridge/application && npm run build --workspace @fridge/config && npm run build --workspace @fridge/database && npm run build --workspace @fridge/api",
-    "typecheck": "npm run build --workspace @fridge/application && npm run build --workspace @fridge/config && npm run build --workspace @fridge/database && npm run typecheck --workspace @fridge/api",
+    "build": "npm run build --workspace @fridge/domain && npm run build --workspace @fridge/application && npm run build --workspace @fridge/config && npm run build --workspace @fridge/database && npm run build --workspace @fridge/api",
+    "typecheck": "npm run typecheck --workspace @fridge/domain && npm run build --workspace @fridge/application && npm run build --workspace @fridge/config && npm run build --workspace @fridge/database && npm run typecheck --workspace @fridge/api",
     "test": "npm run test --workspaces --if-present",
-    "verify": "npm run build && npm run test",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "verify": "npm run check:boundaries && npm run build && npm run test",
     "start:api": "npm run start --workspace @fridge/api",
     "dev:api": "npm run dev --workspace @fridge/api"
   },
