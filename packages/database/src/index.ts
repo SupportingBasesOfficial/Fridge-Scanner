@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from 'pg';
 import type {
   HouseholdId,
+  PrincipalId,
   ReadinessProbe,
   ReadinessResult,
   TransactionHandle,
@@ -22,7 +23,19 @@ export type RuntimeDatabaseCapabilityRole =
 class PgTransactionHandle implements TransactionHandle {
   readonly kind = 'fridge-transaction' as const;
 
-  constructor(readonly client: PoolClient) {}
+  constructor(
+    readonly client: PoolClient,
+    readonly principalId: PrincipalId,
+    readonly householdId: HouseholdId,
+    readonly householdRoleCode: string,
+  ) {}
+}
+
+export class HouseholdAuthorizationError extends Error {
+  constructor() {
+    super('principal is not authorized for the requested Household');
+    this.name = 'HouseholdAuthorizationError';
+  }
 }
 
 export interface PgDatabaseOptions {
@@ -48,10 +61,14 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     });
   }
 
-  async withHouseholdTransaction<T>(
+  async withAuthorizedHouseholdTransaction<T>(
+    principalId: PrincipalId,
     householdId: HouseholdId,
     operation: (transaction: TransactionHandle) => Promise<T>,
   ): Promise<T> {
+    if (!UUID_PATTERN.test(principalId)) {
+      throw new TypeError('principalId must be a canonical UUID string');
+    }
     if (!UUID_PATTERN.test(householdId)) {
       throw new TypeError('householdId must be a canonical UUID string');
     }
@@ -65,17 +82,35 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
 
       // Capability roles are validated against a closed runtime allowlist, so the
       // identifier interpolation below cannot be influenced by arbitrary input.
-      // SET LOCAL ROLE resets automatically at transaction end.
       await client.query(`set local role ${this.#capabilityRole}`);
 
-      // Transaction-local by construction: the context cannot leak through the pool
-      // after COMMIT/ROLLBACK and is subordinate to backend authorization.
+      // The candidate context only narrows forced RLS enough to inspect membership
+      // for this Household. It is not authority and no caller callback runs yet.
       await client.query(
         "select set_config('fridge.household_id', $1, true)",
         [householdId],
       );
 
-      const result = await operation(new PgTransactionHandle(client));
+      const authorization = await client.query<{ role_code: string }>(
+        `select role_code
+           from fridge.household_membership
+          where household_id = $1::uuid
+            and user_id = $2::uuid
+            and lifecycle_status = 'ACTIVE'
+            and effective_from <= statement_timestamp()
+            and (effective_to is null or effective_to > statement_timestamp())
+          order by effective_from desc, membership_id
+          limit 1`,
+        [householdId, principalId],
+      );
+      const householdRoleCode = authorization.rows[0]?.role_code;
+      if (householdRoleCode === undefined) {
+        throw new HouseholdAuthorizationError();
+      }
+
+      const result = await operation(
+        new PgTransactionHandle(client, principalId, householdId, householdRoleCode),
+      );
       await client.query('commit');
       transactionStarted = false;
       return result;
@@ -84,8 +119,7 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
         try {
           await client.query('rollback');
         } catch {
-          // Preserve the original failure. Pool release below discards lifecycle ownership;
-          // connection-level failure is surfaced by subsequent readiness checks.
+          // Preserve the original failure. A broken connection is discarded by pg.
         }
       }
       throw error;
