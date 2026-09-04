@@ -35,7 +35,7 @@ const FORBIDDEN_EXTERNAL_PREFIXES = [
 ];
 
 const TEST_FILE_PATTERN = /(?:\.test|\.spec|\.typecheck)\.ts$/;
-const IMPORT_PATTERN = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;
+const IMPORT_PATTERN = /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"]([^'"]+)['"]/g;
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
