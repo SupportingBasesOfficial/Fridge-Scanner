@@ -90,11 +90,11 @@ The first contextual conversion model preserved the applied factor and contract 
 
 **Severity:** monetary reproducibility/integrity gap.
 
-`purchase_money_fact`, `purchase_item_money_fact` and `purchase_item_pricing_discrepancy` currently reference `money_rounding_policy_id` by identity only. Without a composite currency/policy relationship or equivalent enforced transaction boundary, a BRL fact could pin a policy whose governed currency is USD.
+`purchase_money_fact`, `purchase_item_money_fact` and `purchase_item_pricing_discrepancy` initially referenced `money_rounding_policy_id` by identity only. That allowed a monetary fact in one currency to pin a policy governed for another currency.
 
-**Required resolution:** bind every persisted rounding-policy reference to the same `currency_code` as the monetary fact, structurally where practical and with an adversarial rejection test. The DB-02 gate remains blocked until this is enforced.
+**Resolution:** `000007_02__procurement_money_guards.sql` adds candidate key `(currency_code, money_rounding_policy_id)` and replaces all three rounding-policy references with composite FKs using the monetary fact's own `currency_code`. `000007_02__procurement_money_guards.sql` under `database/tests/integrity` adversarially proves that BRL purchase, line and discrepancy facts reject a USD rounding policy.
 
-**Status:** OPEN.
+**Status:** CLOSED.
 
 ### F2-009 — Inventory correction reference was not Household/Product scoped
 
@@ -118,7 +118,7 @@ The first ledger draft placed `source_expiration_date` directly on Batch. That w
 
 ## Current review state
 
-Known findings F2-001 through F2-007 and F2-009 through F2-010 are closed on the branch. F2-008 remains OPEN. DB-02 is **not CLEAN**: the migration lineage is incomplete, rational execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
+Known findings F2-001 through F2-010 are closed on the branch. DB-02 is **not CLEAN**: the migration lineage is incomplete, rational execution proof is pending, cross-row conservation/mutation guards are not yet installed, and further physical-schema red-team remains required.
 
 ## Rule
 
