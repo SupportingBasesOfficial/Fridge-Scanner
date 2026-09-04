@@ -4,7 +4,10 @@ declare const brand: unique symbol;
 
 type Brand<TName extends string> = string & { readonly [brand]: TName };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// DB-02 uses PostgreSQL uuid without a version/variant CHECK constraint. The
+// application boundary therefore enforces only the canonical lowercase,
+// hyphenated textual representation and must not silently narrow database truth.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function parseUuid<TName extends string>(value: string, name: TName): Brand<TName> {
   if (!UUID_PATTERN.test(value)) {
