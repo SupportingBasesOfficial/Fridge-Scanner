@@ -83,14 +83,16 @@ insert into fridge.source_expiration_fact (
   source_expiration_fact_id,
   household_id,
   stock_item_id,
+  product_id,
   expiration_precision,
-  expiration_date,
-  source_temporal_anchor,
+  source_expiration_date,
+  observed_at,
   provenance
 ) values (
   'c6000000-0000-4000-8000-000000000001',
   'c1000000-0000-4000-8000-000000000001',
   'c4000000-0000-4000-8000-000000000001',
+  'c3000000-0000-4000-8000-000000000001',
   'DATE',
   date '2026-02-01',
   '2026-01-28T10:01:00Z',
@@ -102,7 +104,7 @@ do $$
 begin
   begin
     update fridge.source_expiration_fact
-       set expiration_date = date '2026-02-02'
+       set source_expiration_date = date '2026-02-02'
      where source_expiration_fact_id = 'c6000000-0000-4000-8000-000000000001';
     raise exception 'SourceExpirationFact UPDATE unexpectedly accepted';
   exception
