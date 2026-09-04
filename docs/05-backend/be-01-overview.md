@@ -59,9 +59,12 @@ At minimum the kernel must define branded/opaque types and parsing/validation bo
 - PrincipalId
 - HouseholdId
 - HouseholdMembershipId
-- ProductId / ProductVariantId where required by accepted DB contracts
-- LocationId / CompartmentId where required by accepted DB contracts
+- ProductId
+- StorageLocationId
+- CompartmentId
 - command/idempotency identifiers when they enter application contracts
+
+The first kernel set is intentionally aligned to identities already present in DB-02. Later feature phases add additional opaque identifiers only when the accepted schema/use case requires them.
 
 Transport strings are converted once at the boundary. Internal APIs must not permit accidental substitution of one identifier class for another.
 
@@ -69,12 +72,13 @@ Transport strings are converted once at the boundary. Internal APIs must not per
 
 Authoritative quantity and money must never be represented by JavaScript binary floating point.
 
-BE-01 must provide canonical value semantics for the accepted database numeric model, using exact integer/bigint/string-backed representations as appropriate.
+BE-01 must provide canonical value semantics for the accepted database numeric model, using exact integer/bigint/string-backed representations as appropriate. DB-02 represents measurement quantities and exact conversion factors as normalized rational numerator/denominator pairs and requires explicit currency identity for monetary facts; BE-01 must preserve those semantics rather than collapse them into floating point.
 
 Required behavior includes:
 
 - canonical parse;
 - validation;
+- normalized rational representation where required;
 - equality;
 - safe serialization;
 - no implicit conversion to `number`;
