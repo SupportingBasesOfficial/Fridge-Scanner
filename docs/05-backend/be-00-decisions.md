@@ -97,17 +97,20 @@ This register contains backend-foundation decisions that are authoritative for B
 
 **Rule:** business mutation and outbox responsibility are committed atomically; broker publish is asynchronous and retryable.
 
-## B0-016 — Runtime/framework/version selection — OPEN
+## B0-016 — Runtime/framework/version selection — CLOSED
 
-The concrete Node.js runtime, package manager, HTTP framework, PostgreSQL driver and validation library will be pinned in the executable foundation after current-version/security/support verification. Selection criteria:
+**Decision:**
 
-- maintained and supported release line;
-- TypeScript-first ergonomics;
-- minimal hidden runtime magic;
-- robust graceful shutdown and request lifecycle support;
-- PostgreSQL transaction/control primitives exposed without ORM schema authority;
-- good testability;
-- container portability;
-- no provider lock-in.
+- Runtime baseline: **Node.js 24 LTS**; CI/container pin the maintained 24.x line and the workspace rejects unsupported older majors.
+- Language/compiler baseline: **TypeScript 7.0.x**, strict mode.
+- Workspace/package manager: **npm workspaces**, using the package manager bundled/provisioned with the pinned Node 24 runtime; dependency lockfile is mandatory before BE-00 acceptance.
+- HTTP delivery adapter: **Fastify 5.12.x**.
+- PostgreSQL driver: **`pg` 8.23.x (node-postgres)**, used directly behind repository/transaction adapters; no ORM owns schema/migrations.
+- Runtime/transport/config validation: **Zod 4.x**, isolated to boundaries; domain invariants remain domain types/functions and database contracts rather than Zod schemas.
+- Test execution: Node.js test runner for low-level tests, with TypeScript execution/build tooling kept replaceable and non-architectural.
 
-This decision must close before the first executable backend package is accepted.
+**Why this stack:** Node 24 is an active LTS line; Fastify exposes a small, lifecycle-oriented HTTP surface and does not require the application architecture to inherit framework abstractions; `pg` exposes PostgreSQL transactions and session-local context directly; npm workspaces avoid an additional package-manager dependency at the foundation layer.
+
+**Version policy:** package manifests pin compatible release ranges while the lockfile pins the exact dependency graph. Dependency upgrades are reviewed changes and must pass the same BE gate; `latest` is never an execution contract.
+
+**Boundary rule:** Fastify, `pg` and Zod imports are forbidden from domain/application packages except where a specifically reviewed adapter/contract package owns that dependency.
