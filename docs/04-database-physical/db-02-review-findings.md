@@ -300,9 +300,105 @@ The first catalog-scope guard draft required concept-targeted ShelfLifeRuleActiv
 
 **Status:** CLOSED.
 
+## Pass 12 — household catalog consumption and cross-row structure
+
+### F2-028 — Household operational rows could reference another Household's private catalog
+
+**Severity:** cross-Household integrity gap.
+
+Several Household-scoped operational tables used ordinary Product/IngredientConcept FKs. Existence was enforced, but a row owned by Household A could still point to a private catalog object owned by Household B.
+
+**Resolution:** `000030__household_catalog_visibility_guards.sql` adds reusable Product/IngredientConcept visibility assertions and deferred guards for procurement, receiving, StockItem/InventoryMovement, PreparationOutput, replenishment policy, shopping intent and alert Product subjects. GLOBAL and same-Household private catalog objects are accepted; cross-Household private references are rejected.
+
+**Status:** CLOSED.
+
+### F2-029 — Household timezone intervals had no transaction-safe non-overlap guard
+
+**Severity:** historical temporal-authority gap.
+
+DB-01 requires a deterministic versioned Household timezone history, but local row checks alone cannot prevent two effective intervals for the same Household from overlapping.
+
+**Resolution:** `000031__temporal_hierarchy_guards.sql` serializes interval writers through the Household row and rejects any pair of overlapping intervals while allowing adjacent boundaries and independent Household timelines.
+
+**Status:** CLOSED.
+
+### F2-030 — ProductCategory hierarchy could form indirect cycles
+
+**Severity:** hierarchical integrity gap.
+
+The base DDL rejected only direct self-parenting. A multi-row chain could still be reparented into an indirect cycle.
+
+**Resolution:** `000031__temporal_hierarchy_guards.sql` adds a recursive ancestor validation under a hierarchy-writer lock and rejects any reparenting that makes the category its own ancestor.
+
+**Status:** CLOSED.
+
+## Pass 13 — executable PostgreSQL gate
+
+### F2-031 — Batch was incorrectly treated as directly Household-scoped by RLS
+
+**Severity:** fresh-install executable-schema blocker and confidentiality-model error.
+
+The first executable `000017` RLS list included `batch` under the generic `household_id` policy even though Batch is Product-scoped and has no `household_id`. PostgreSQL 17/18 fresh install failed on the nonexistent column.
+
+**Resolution:** Batch was removed from the direct-Household list and now has Product-derived RLS: GLOBAL Product batches are readable to tenant contexts; private Product batches are visible/writable only to the owning Household.
+
+**Status:** CLOSED.
+
+### F2-032 — Integration RLS referenced a nonexistent scope column
+
+**Severity:** fresh-install executable-schema blocker.
+
+The initial Integration policy used stale name `binding_scope`; the canonical physical column is `integration_scope`.
+
+**Resolution:** `000017__security_context_rls.sql` now uses `integration_scope = 'HOUSEHOLD'` with exact Household context equality. PostgreSQL 17/18 migration execution subsequently passed.
+
+**Status:** CLOSED.
+
+### F2-033 — `--print-order` unexpectedly executed migrations when DATABASE_URL existed
+
+**Severity:** migration-runner correctness gap.
+
+The first DB-02 runner implementation printed canonical order and then continued into execution whenever the workflow environment already supplied `DATABASE_URL`, causing the diagnostic step to mutate the database.
+
+**Resolution:** `--print-order` now always returns immediately after filename/order validation. The workflow's order step is side-effect free; the subsequent gate step is the single migration/test execution.
+
+**Status:** CLOSED.
+
+### F2-034 — Large rational test expected partial rather than canonical GCD reduction
+
+**Severity:** test-oracle correctness gap.
+
+The arbitrary-precision fixture multiplied both inputs by seven but the underlying pair already shared GCD nine. The implementation correctly removed total GCD 63 while the test expected only the injected factor.
+
+**Resolution:** the test now asserts the fully canonical coprime result. PostgreSQL 17/18 subsequently pass the large-value rational case.
+
+**Status:** CLOSED.
+
+### F2-035 — Integrity fixtures had drifted behind the accepted physical schema
+
+**Severity:** executable test-suite blocker.
+
+Real PG17/18 execution exposed several stale fixtures: Preparation output omitted nullable `stock_item_id`; Shopping wrong-Product testing collided with pair uniqueness before reaching the intended FK; the idempotency test omitted trusted Household context after security hardening; and the immutability test used pre-final SourceExpirationFact column names.
+
+**Resolution:** each fixture was updated to exercise the intended current invariant rather than weakening schema enforcement. By DB-02 Gate run #18 the complete integrity suite passed on both PostgreSQL versions.
+
+**Status:** CLOSED.
+
+### F2-036 — Privileged GLOBAL idempotency callers lacked internal-schema namespace usage
+
+**Severity:** least-privilege boundary usability gap.
+
+`fridge_owner`/`fridge_migrator` had EXECUTE on `acquire_global_idempotency()` and USAGE on its composite return type but lacked `USAGE ON SCHEMA fridge_internal`, so an authorized `SET ROLE fridge_migrator` caller could not name the function/type.
+
+**Resolution:** `000020__global_idempotency_boundary.sql` grants only `USAGE ON SCHEMA fridge_internal` in addition to the already narrow type/function grants. No table, sequence or direct DML privilege is added. DB-02 Gate run #18 passed this boundary on PostgreSQL 17 and 18.
+
+**Status:** CLOSED.
+
 ## Current review state
 
-Known findings F2-001 through F2-027 are closed on the branch. DB-02 is **not CLEAN**: PostgreSQL 17 execution proof is still pending; PostgreSQL 18 compatibility proof is still pending; the new GitHub Actions gate has not yet produced an execution run for this PR HEAD; remaining Household→catalog consumers and additional mutation-boundary/red-team checks are still under review; and exact-HEAD final review remains required.
+Known findings F2-001 through F2-036 are CLOSED. DB-02 PostgreSQL Gate run #18 (`33831776509`) passed the complete canonical migration lineage, integrity suite and RLS suite on both PostgreSQL 17 and PostgreSQL 18 at branch HEAD `c09d050af0bc99f20e7f650acb3ae9e43e1cdbd9`.
+
+The branch has since received governance-only documentation updates, so DB-02 is **not yet declared CLEAN** until the new exact HEAD receives its own green PG17/PG18 gate and final panoramic/red-team review. No known material physical finding is currently open.
 
 ## Rule
 
