@@ -39,8 +39,17 @@ test('opaque identifiers validate canonical UUID input', () => {
   assert.throws(() => HouseholdId('household-from-request-header'), /Invalid HouseholdId/);
 });
 
-test('instant rejects offset and ambiguous local timestamps', () => {
+test('instant accepts valid UTC timestamps including leap day', () => {
   assert.equal(instant('2026-09-04T15:26:17Z'), '2026-09-04T15:26:17Z');
+  assert.equal(instant('2024-02-29T23:59:59.123456789Z'), '2024-02-29T23:59:59.123456789Z');
+});
+
+test('instant rejects offset, ambiguous, normalized-invalid and out-of-range timestamps', () => {
   assert.throws(() => instant('2026-09-04T12:26:17-03:00'), /UTC RFC3339/);
   assert.throws(() => instant('2026-09-04 15:26:17'), /UTC RFC3339/);
+  assert.throws(() => instant('2026-02-30T00:00:00Z'), /UTC RFC3339/);
+  assert.throws(() => instant('2026-09-04T24:00:00Z'), /UTC RFC3339/);
+  assert.throws(() => instant('2026-13-01T00:00:00Z'), /UTC RFC3339/);
+  assert.throws(() => instant('2026-01-01T00:60:00Z'), /UTC RFC3339/);
+  assert.throws(() => instant('2026-01-01T00:00:60Z'), /UTC RFC3339/);
 });
