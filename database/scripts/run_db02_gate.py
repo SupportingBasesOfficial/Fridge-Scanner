@@ -88,8 +88,7 @@ def main() -> int:
             print(f"[{group}]")
             for path in paths:
                 print(path.relative_to(ROOT))
-        if not args.database_url:
-            return 0
+        return 0
 
     if not args.database_url:
         parser.error("--database-url or DATABASE_URL is required")
