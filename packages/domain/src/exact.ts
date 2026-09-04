@@ -51,13 +51,26 @@ export function equalExactRational(left: ExactRational, right: ExactRational): b
 
 export type ExactDecimal = string & { readonly [exactDecimalBrand]: 'ExactDecimal' };
 
-const CANONICAL_DECIMAL_PATTERN = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/;
+const DECIMAL_INPUT_PATTERN = /^(-?)([0-9]+)(?:\.([0-9]+))?$/;
 
 export function exactDecimal(value: string): ExactDecimal {
-  if (!CANONICAL_DECIMAL_PATTERN.test(value) || value === '-0') {
-    throw invalidDomainValue('ExactDecimal must be a canonical finite decimal string');
+  const match = DECIMAL_INPUT_PATTERN.exec(value);
+  if (match === null) {
+    throw invalidDomainValue('ExactDecimal must be a finite plain decimal string');
   }
-  return value as ExactDecimal;
+
+  const negative = match[1] === '-';
+  const rawWhole = match[2] ?? '0';
+  const rawFraction = match[3] ?? '';
+  const whole = rawWhole.replace(/^0+(?=\d)/, '');
+  const fraction = rawFraction.replace(/0+$/, '');
+  const isZero = whole === '0' && fraction.length === 0;
+  const sign = negative && !isZero ? '-' : '';
+  const canonical = fraction.length === 0
+    ? `${sign}${whole}`
+    : `${sign}${whole}.${fraction}`;
+
+  return canonical as ExactDecimal;
 }
 
 interface DecimalParts {
@@ -86,7 +99,7 @@ function decimalFromParts(coefficient: bigint, scale: number): ExactDecimal {
 
   digits = digits.padStart(scale + 1, '0');
   const split = digits.length - scale;
-  let fraction = digits.slice(split).replace(/0+$/, '');
+  const fraction = digits.slice(split).replace(/0+$/, '');
   const whole = digits.slice(0, split);
   if (fraction.length === 0) return exactDecimal(`${negative ? '-' : ''}${whole}`);
   return exactDecimal(`${negative ? '-' : ''}${whole}.${fraction}`);
