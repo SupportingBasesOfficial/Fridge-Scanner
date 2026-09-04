@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
-import type { HouseholdId, PrincipalId } from '@fridge/application';
+import {
+  HouseholdId,
+  HouseholdMembershipId,
+  PrincipalId,
+  type HouseholdId as HouseholdIdType,
+  type PrincipalId as PrincipalIdType,
+} from '@fridge/application';
 import {
   HouseholdAuthorizationError,
   PgDatabase,
@@ -9,10 +15,11 @@ import {
 } from './index.js';
 
 const DATABASE_URL = process.env.BE00_TEST_DATABASE_URL;
-const HOUSEHOLD_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as HouseholdId;
-const HOUSEHOLD_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as HouseholdId;
-const PRINCIPAL_A = '11111111-1111-4111-8111-111111111111' as PrincipalId;
-const PRINCIPAL_B = '22222222-2222-4222-8222-222222222222' as PrincipalId;
+const HOUSEHOLD_A = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+const HOUSEHOLD_B = HouseholdId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+const PRINCIPAL_A = PrincipalId('11111111-1111-4111-8111-111111111111');
+const PRINCIPAL_B = PrincipalId('22222222-2222-4222-8222-222222222222');
+const MEMBERSHIP_A = HouseholdMembershipId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa');
 
 if (!DATABASE_URL) {
   throw new Error('BE00_TEST_DATABASE_URL is required for database integration tests');
@@ -20,8 +27,8 @@ if (!DATABASE_URL) {
 
 async function visibleHouseholds(
   database: PgDatabase,
-  principalId: PrincipalId,
-  householdId: HouseholdId,
+  principalId: PrincipalIdType,
+  householdId: HouseholdIdType,
 ): Promise<string[]> {
   return database.withAuthorizedHouseholdTransaction(
     principalId,
@@ -96,7 +103,7 @@ test('candidate Household context never reaches tenant work without current memb
   }
 });
 
-test('authorization context exposes the verified principal Household and role', async () => {
+test('authorization context exposes verified principal Household membership and role', async () => {
   const database = new PgDatabase({
     connectionString: DATABASE_URL,
     capabilityRole: 'fridge_app',
@@ -109,12 +116,14 @@ test('authorization context exposes the verified principal Household and role', 
       async (transaction) => ({
         principalId: transaction.principalId,
         householdId: transaction.householdId,
+        membershipId: transaction.membershipId,
         householdRoleCode: transaction.householdRoleCode,
       }),
     );
     assert.deepEqual(context, {
       principalId: PRINCIPAL_A,
       householdId: HOUSEHOLD_A,
+      membershipId: MEMBERSHIP_A,
       householdRoleCode: 'MEMBER',
     });
   } finally {
@@ -122,7 +131,7 @@ test('authorization context exposes the verified principal Household and role', 
   }
 });
 
-test('PgDatabase rejects malformed authorization identifiers before tenant work', async () => {
+test('PgDatabase rejects forged malformed authorization identifiers before tenant work', async () => {
   const database = new PgDatabase({
     connectionString: DATABASE_URL,
     capabilityRole: 'fridge_app',
@@ -131,19 +140,19 @@ test('PgDatabase rejects malformed authorization identifiers before tenant work'
   try {
     await assert.rejects(
       database.withAuthorizedHouseholdTransaction(
-        'not-a-uuid' as PrincipalId,
+        'not-a-uuid' as PrincipalIdType,
         HOUSEHOLD_A,
         async () => undefined,
       ),
-      /principalId/,
+      /Invalid PrincipalId/,
     );
     await assert.rejects(
       database.withAuthorizedHouseholdTransaction(
         PRINCIPAL_A,
-        'not-a-uuid' as HouseholdId,
+        'not-a-uuid' as HouseholdIdType,
         async () => undefined,
       ),
-      /householdId/,
+      /Invalid HouseholdId/,
     );
   } finally {
     await database.close();
