@@ -37,6 +37,14 @@ const runtimeConfigSchema = z.object({
     });
   }
 
+  if (configuredCount === authValues.length && value.DATABASE_CAPABILITY_ROLE !== 'fridge_app') {
+    context.addIssue({
+      code: 'custom',
+      path: ['DATABASE_CAPABILITY_ROLE'],
+      message: 'configured authentication requires the fridge_app database capability role',
+    });
+  }
+
   if (
     value.NODE_ENV === 'production'
     && value.AUTH_JWT_JWKS_URL !== undefined

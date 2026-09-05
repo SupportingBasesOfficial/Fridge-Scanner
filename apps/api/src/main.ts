@@ -1,10 +1,8 @@
 import { ReadAuthorizedHouseholdContext } from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
-import {
-  buildApiServer,
-  rejectUnauthenticatedPrincipal,
-} from './server.js';
+import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
+import { buildApiServer } from './server.js';
 
 const config = parseRuntimeConfig(process.env);
 const database = new PgDatabase({
@@ -16,10 +14,14 @@ const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(
   database,
   householdProfiles,
 );
+const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
+  config,
+  database,
+);
 const server = buildApiServer({
   config,
   readiness: database,
-  authenticatedPrincipal: rejectUnauthenticatedPrincipal,
+  authenticatedPrincipal,
   readAuthorizedHouseholdContext,
 });
 

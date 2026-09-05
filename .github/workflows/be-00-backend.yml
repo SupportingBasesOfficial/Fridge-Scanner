@@ -171,6 +171,9 @@ jobs:
       - name: Prove backend identity mapping, Household isolation and context non-leakage
         run: npm run test:integration --workspace @fridge/database
 
+      - name: Prove configured authentication runtime end to end
+        run: npm run test:integration --workspace @fridge/api
+
   container-smoke:
     name: Container Smoke / Non-root / Health Semantics
     runs-on: ubuntu-24.04
