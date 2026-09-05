@@ -242,10 +242,34 @@ export class PgDatabase
       householdId,
       async (transaction) => {
         const client = requirePgClient(transaction);
+
+        // READ COMMITTED takes a fresh snapshot per statement. Re-read the exact
+        // actor membership and lock it before authority elevation so a concurrent
+        // end/role-change cannot invalidate authority while the stronger handle is in use.
+        const currentActor = await client.query<{
+          membership_id: string;
+          role_code: string;
+        }>(
+          `select membership_id::text, role_code
+             from fridge.household_membership
+            where household_id = $1::uuid
+              and user_id = $2::uuid
+              and membership_id = $3::uuid
+              and lifecycle_status = 'ACTIVE'
+              and effective_from <= statement_timestamp()
+              and (effective_to is null or effective_to > statement_timestamp())
+            for update`,
+          [transaction.householdId, transaction.principalId, transaction.membershipId],
+        );
+        const currentActorRow = currentActor.rows[0];
+        if (currentActorRow === undefined) {
+          throw new HouseholdAuthorizationError();
+        }
+
         const capability = await client.query<{ allowed: boolean }>(
           `select fridge_internal.household_role_has_capability($1, $2) as allowed`,
           [
-            transaction.householdRoleCode,
+            currentActorRow.role_code,
             HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
           ],
         );
