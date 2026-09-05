@@ -173,6 +173,32 @@ test('JWKS body is rejected as soon as the bounded response size is exceeded', a
   );
 });
 
+test('concurrent cold JWKS loads share one in-flight fetch', async () => {
+  const fixture = createFixture('ES256');
+  const token = buildJwt('ES256', fixture.pair.privateKey, fixture.kid);
+  let fetches = 0;
+  let releaseFetch: ((response: Response) => void) | undefined;
+  const shared = new JwtJwksAuthenticationEvidenceVerifier({
+    trust,
+    now: () => NOW_MS,
+    jwksCacheMs: 60_000,
+    fetch: async () => {
+      fetches += 1;
+      return new Promise<Response>((resolve) => {
+        releaseFetch = resolve;
+      });
+    },
+  });
+
+  const first = shared.verify({ kind: 'bearer', token });
+  const second = shared.verify({ kind: 'bearer', token });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(fetches, 1);
+  assert.ok(releaseFetch !== undefined);
+  releaseFetch(new Response(JSON.stringify({ keys: [fixture.jwk] }), { status: 200 }));
+  await Promise.all([first, second]);
+});
+
 test('repeated unknown kid cannot trigger unbounded forced JWKS refreshes', async () => {
   const fixture = createFixture('ES256');
   const unknownKidToken = buildJwt('ES256', fixture.pair.privateKey, 'unknown-kid');
