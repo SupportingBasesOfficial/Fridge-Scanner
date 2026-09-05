@@ -13,6 +13,7 @@ import type {
 const MAX_TOKEN_LENGTH = 32_768;
 const MAX_JWKS_BYTES = 262_144;
 const DEFAULT_JWKS_CACHE_MS = 60_000;
+const DEFAULT_JWKS_FETCH_TIMEOUT_MS = 5_000;
 
 type JsonObject = Record<string, unknown>;
 
@@ -35,6 +36,7 @@ export interface JwtJwksVerifierOptions {
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
   readonly jwksCacheMs?: number;
+  readonly jwksFetchTimeoutMs?: number;
 }
 
 function decodeBase64Url(value: string): Buffer {
@@ -146,11 +148,40 @@ function verifyCompactSignature(
   }
 }
 
+async function readBoundedResponseBody(response: Response): Promise<string> {
+  if (response.body === null) {
+    return '';
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_JWKS_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new DependencyUnavailableError();
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof DependencyUnavailableError) throw error;
+    throw new DependencyUnavailableError();
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+}
+
 export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvidenceVerifier {
   readonly #trust: JwtAuthenticationConfig;
   readonly #fetch: typeof globalThis.fetch;
   readonly #now: () => number;
   readonly #jwksCacheMs: number;
+  readonly #jwksFetchTimeoutMs: number;
   #cache: CachedJwks | null = null;
 
   constructor(options: JwtJwksVerifierOptions) {
@@ -158,9 +189,17 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#now = options.now ?? Date.now;
     this.#jwksCacheMs = options.jwksCacheMs ?? DEFAULT_JWKS_CACHE_MS;
+    this.#jwksFetchTimeoutMs = options.jwksFetchTimeoutMs ?? DEFAULT_JWKS_FETCH_TIMEOUT_MS;
 
     if (!Number.isInteger(this.#jwksCacheMs) || this.#jwksCacheMs < 0 || this.#jwksCacheMs > 600_000) {
       throw new TypeError('JWKS cache duration is outside the accepted range');
+    }
+    if (
+      !Number.isInteger(this.#jwksFetchTimeoutMs)
+      || this.#jwksFetchTimeoutMs < 100
+      || this.#jwksFetchTimeoutMs > 30_000
+    ) {
+      throw new TypeError('JWKS fetch timeout is outside the accepted range');
     }
   }
 
@@ -222,30 +261,40 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
       return this.#cache.keys;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.#jwksFetchTimeoutMs);
+    timeout.unref();
+
     let response: Response;
     try {
-      response = await this.#fetch(this.#trust.jwksUrl, {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-        redirect: 'error',
-      });
-    } catch {
+      response = await Promise.race([
+        this.#fetch(this.#trust.jwksUrl, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+          redirect: 'error',
+          signal: controller.signal,
+        }),
+        new Promise<never>((_, reject) => {
+          const deadline = setTimeout(
+            () => reject(new DependencyUnavailableError()),
+            this.#jwksFetchTimeoutMs,
+          );
+          deadline.unref();
+          controller.signal.addEventListener('abort', () => clearTimeout(deadline), { once: true });
+        }),
+      ]);
+    } catch (error) {
+      if (error instanceof DependencyUnavailableError) throw error;
       throw new DependencyUnavailableError();
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) {
       throw new DependencyUnavailableError();
     }
 
-    let body: string;
-    try {
-      body = await response.text();
-    } catch {
-      throw new DependencyUnavailableError();
-    }
-    if (Buffer.byteLength(body, 'utf8') > MAX_JWKS_BYTES) {
-      throw new DependencyUnavailableError();
-    }
+    const body = await readBoundedResponseBody(response);
 
     let parsed: unknown;
     try {
