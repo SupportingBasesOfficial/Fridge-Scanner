@@ -233,6 +233,10 @@ export class PgDatabase
       transaction: HouseholdMembershipAdministrationTransaction,
     ) => Promise<T>,
   ): Promise<T> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household membership administration requires fridge_app capability');
+    }
+
     return this.withAuthorizedHouseholdTransaction(
       principalId,
       householdId,
@@ -252,7 +256,7 @@ export class PgDatabase
 
         Object.defineProperty(transaction, 'membershipAdministrationCapability', {
           value: HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
-          enumerable: true,
+          enumerable: false,
           configurable: false,
           writable: false,
         });
