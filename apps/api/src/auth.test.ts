@@ -29,9 +29,7 @@ function verifier(
   return { verify };
 }
 
-function unsafeVerifier(
-  value: unknown,
-): AuthenticationEvidenceVerifier {
+function unsafeVerifier(value: unknown): AuthenticationEvidenceVerifier {
   return {
     async verify() {
       return value as VerifiedExternalIdentity;
@@ -39,9 +37,7 @@ function unsafeVerifier(
   };
 }
 
-function mapper(
-  resolve: PlatformPrincipalMapper['resolve'],
-): PlatformPrincipalMapper {
+function mapper(resolve: PlatformPrincipalMapper['resolve']): PlatformPrincipalMapper {
   return { resolve };
 }
 
@@ -179,6 +175,76 @@ test('untyped verifier output is validated before dereferencing or platform mapp
     );
     assert.equal(mappings, 0);
   }
+});
+
+test('throwing identity accessors are sanitized before mapping', async () => {
+  let mappings = 0;
+  const hostileIdentity = Object.defineProperties({}, {
+    authority: {
+      enumerable: true,
+      get() {
+        throw new Error('provider getter leaked secret diagnostic');
+      },
+    },
+    subject: {
+      enumerable: true,
+      value: 'subject',
+    },
+  });
+
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    unsafeVerifier(hostileIdentity),
+    mapper(async () => {
+      mappings += 1;
+      return principalId;
+    }),
+  );
+
+  await assert.rejects(
+    resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+    (error: unknown) => {
+      assert.ok(error instanceof UnauthenticatedError);
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error).includes('secret diagnostic'), false);
+      return true;
+    },
+  );
+  assert.equal(mappings, 0);
+});
+
+test('mapper receives a minimal stable identity snapshot instead of provider object', async () => {
+  let authority = verifiedIdentity.authority;
+  let subject = verifiedIdentity.subject;
+  const providerObject = {
+    get authority() {
+      return authority;
+    },
+    get subject() {
+      return subject;
+    },
+    rawToken: 'must-not-cross-boundary',
+    claims: { role: 'provider-admin' },
+  };
+
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    unsafeVerifier(providerObject),
+    mapper(async (identity) => {
+      assert.deepEqual(identity, verifiedIdentity);
+      assert.notEqual(identity, providerObject);
+      assert.deepEqual(Object.keys(identity).sort(), ['authority', 'subject']);
+      assert.equal('rawToken' in identity, false);
+      assert.equal('claims' in identity, false);
+      authority = 'https://mutated.example.test';
+      subject = 'mutated-subject';
+      assert.deepEqual(identity, verifiedIdentity);
+      return principalId;
+    }),
+  );
+
+  assert.equal(
+    await resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+    principalId,
+  );
 });
 
 test('verifier exceptions are translated without leaking credential-bearing diagnostics', async () => {
