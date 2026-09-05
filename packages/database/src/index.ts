@@ -4,11 +4,14 @@ import {
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
+  verifiedExternalIdentity,
+  type ExternalIdentityPrincipalResolver,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
   type TransactionHandle,
   type TransactionManager,
+  type VerifiedExternalIdentity,
 } from '@fridge/application';
 
 const RUNTIME_CAPABILITY_ROLES = new Set([
@@ -47,7 +50,7 @@ export interface PgDatabaseOptions {
   readonly maxConnections?: number;
 }
 
-export class PgDatabase implements TransactionManager, ReadinessProbe {
+export class PgDatabase implements TransactionManager, ReadinessProbe, ExternalIdentityPrincipalResolver {
   readonly #pool: Pool;
   readonly #capabilityRole: RuntimeDatabaseCapabilityRole;
 
@@ -62,6 +65,53 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       max: options.maxConnections ?? 10,
       allowExitOnIdle: false,
     });
+  }
+
+  async resolvePrincipal(identity: VerifiedExternalIdentity): Promise<PrincipalId | null> {
+    const verifiedIdentity = verifiedExternalIdentity(identity.authority, identity.subject);
+    const client = await this.#pool.connect();
+    let transactionStarted = false;
+
+    try {
+      await client.query('begin');
+      transactionStarted = true;
+      await client.query(`set local role ${this.#capabilityRole}`);
+
+      const result = await client.query<{ user_id: string }>(
+        `select link.user_id::text
+           from fridge.external_identity_link link
+           join fridge.user_profile profile
+             on profile.user_id = link.user_id
+          where link.authority = $1
+            and link.subject = $2
+            and link.revoked_at is null
+            and profile.lifecycle_status = 'ACTIVE'
+            and profile.retired_at is null
+          order by link.external_identity_link_id
+          limit 2`,
+        [verifiedIdentity.authority, verifiedIdentity.subject],
+      );
+
+      await client.query('commit');
+      transactionStarted = false;
+
+      if (result.rows.length !== 1) {
+        return null;
+      }
+
+      return PrincipalId(result.rows[0]!.user_id);
+    } catch (error) {
+      if (transactionStarted) {
+        try {
+          await client.query('rollback');
+        } catch {
+          // Preserve the original failure. A broken connection is discarded by pg.
+        }
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async withAuthorizedHouseholdTransaction<T>(
