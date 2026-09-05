@@ -129,6 +129,62 @@ test('JWKS transport or service failure preserves dependency-unavailable semanti
   await assert.rejects(verifier([], { status: 503 }).verify({ kind: 'bearer', token }), DependencyUnavailableError);
 });
 
+test('JWKS fetch deadline covers a transport that never resolves', async () => {
+  const fixture = createFixture('ES256');
+  const token = buildJwt('ES256', fixture.pair.privateKey, fixture.kid);
+  const hanging = new JwtJwksAuthenticationEvidenceVerifier({
+    trust,
+    now: () => NOW_MS,
+    jwksFetchTimeoutMs: 100,
+    fetch: async () => new Promise<Response>(() => undefined),
+  });
+
+  await assert.rejects(
+    hanging.verify({ kind: 'bearer', token }),
+    DependencyUnavailableError,
+  );
+});
+
+test('JWKS body is rejected as soon as the bounded response size is exceeded', async () => {
+  const fixture = createFixture('ES256');
+  const token = buildJwt('ES256', fixture.pair.privateKey, fixture.kid);
+  const oversized = new JwtJwksAuthenticationEvidenceVerifier({
+    trust,
+    now: () => NOW_MS,
+    fetch: async () => new Response('x'.repeat(262_145), { status: 200 }),
+  });
+
+  await assert.rejects(
+    oversized.verify({ kind: 'bearer', token }),
+    DependencyUnavailableError,
+  );
+});
+
+test('repeated unknown kid cannot trigger unbounded forced JWKS refreshes', async () => {
+  const fixture = createFixture('ES256');
+  const unknownKidToken = buildJwt('ES256', fixture.pair.privateKey, 'unknown-kid');
+  let fetches = 0;
+  const protectedVerifier = new JwtJwksAuthenticationEvidenceVerifier({
+    trust,
+    now: () => NOW_MS,
+    jwksCacheMs: 60_000,
+    fetch: async () => {
+      fetches += 1;
+      return new Response(JSON.stringify({ keys: [fixture.jwk] }), { status: 200 });
+    },
+  });
+
+  await assert.rejects(
+    protectedVerifier.verify({ kind: 'bearer', token: unknownKidToken }),
+    UnauthenticatedError,
+  );
+  await assert.rejects(
+    protectedVerifier.verify({ kind: 'bearer', token: unknownKidToken }),
+    UnauthenticatedError,
+  );
+  assert.equal(fetches, 2);
+});
+
 test('JWT verification ignores provider roles and tenant hints for returned authority', async () => {
   const fixture = createFixture('ES256');
   const result = await verifier([fixture.jwk]).verify({
