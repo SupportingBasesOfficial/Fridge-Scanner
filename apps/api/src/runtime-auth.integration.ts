@@ -171,3 +171,25 @@ test('valid signed token with unknown platform mapping fails as unauthenticated'
     await database.close();
   }
 });
+
+test('valid signed token with revoked platform identity link fails as unauthenticated', async () => {
+  const database = new PgDatabase({
+    connectionString: databaseUrl,
+    capabilityRole: 'fridge_app',
+  });
+  const server = buildIntegrationServer(database);
+
+  try {
+    const response = await server.inject({
+      method: 'GET',
+      url: `/be01/proving/households/${householdA}/context`,
+      headers: { authorization: `Bearer ${issueToken('revoked-subject')}` },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(response.json().error.code, 'UNAUTHENTICATED');
+  } finally {
+    await server.close();
+    await database.close();
+  }
+});
