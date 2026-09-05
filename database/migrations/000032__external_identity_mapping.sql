@@ -65,7 +65,14 @@ as $$
 declare
   v_user_ids uuid[];
 begin
-  if p_authority is null or p_subject is null then
+  if p_authority is null
+     or p_subject is null
+     or p_authority = ''
+     or p_subject = ''
+     or p_authority <> btrim(p_authority)
+     or p_subject <> btrim(p_subject)
+     or char_length(p_authority) > 512
+     or char_length(p_subject) > 1024 then
     return null;
   end if;
 
@@ -85,7 +92,7 @@ end;
 $$;
 
 comment on function fridge_internal.resolve_external_identity_principal(text, text) is
-  'Intent-specific exact lookup from verified external authority+subject to one current platform PrincipalId. Missing or ambiguous mappings return null; callers cannot enumerate mapping rows.';
+  'Intent-specific exact lookup from verified external authority+subject to one current platform PrincipalId. Invalid, missing or ambiguous mappings return null; callers cannot enumerate mapping rows.';
 
 revoke all on function fridge_internal.resolve_external_identity_principal(text, text)
   from public;
