@@ -72,6 +72,20 @@ async function verifyEvidence(
   }
 }
 
+async function mapPrincipal(
+  principalMapper: PlatformPrincipalMapper,
+  identity: VerifiedExternalIdentity,
+): Promise<PrincipalId> {
+  try {
+    return await principalMapper.resolve(identity);
+  } catch (error) {
+    if (error instanceof DependencyUnavailableError) {
+      throw new DependencyUnavailableError();
+    }
+    throw new UnauthenticatedError();
+  }
+}
+
 export class BearerAuthenticatedPrincipalResolver implements AuthenticatedPrincipalResolver {
   constructor(
     private readonly verifier: AuthenticationEvidenceVerifier,
@@ -82,6 +96,6 @@ export class BearerAuthenticatedPrincipalResolver implements AuthenticatedPrinci
     const evidence = extractBearerEvidence(request);
     const externalIdentity = await verifyEvidence(this.verifier, evidence);
     assertVerifiedIdentity(externalIdentity);
-    return this.principalMapper.resolve(externalIdentity);
+    return mapPrincipal(this.principalMapper, externalIdentity);
   }
 }
