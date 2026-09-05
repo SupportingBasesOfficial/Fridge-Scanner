@@ -16,8 +16,16 @@ create table fridge.external_identity_link (
   revoked_at timestamptz,
   constraint external_identity_link_authority_nonblank
     check (btrim(authority) <> ''),
+  constraint external_identity_link_authority_exact
+    check (authority = btrim(authority)),
+  constraint external_identity_link_authority_bounded
+    check (char_length(authority) <= 512),
   constraint external_identity_link_subject_nonblank
     check (btrim(subject) <> ''),
+  constraint external_identity_link_subject_exact
+    check (subject = btrim(subject)),
+  constraint external_identity_link_subject_bounded
+    check (char_length(subject) <= 1024),
   constraint external_identity_link_revoked_after_linked
     check (revoked_at is null or revoked_at >= linked_at),
   constraint external_identity_link_user_fk
