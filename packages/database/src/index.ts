@@ -4,14 +4,11 @@ import {
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
-  verifiedExternalIdentity,
-  type ExternalIdentityPrincipalResolver,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
   type TransactionHandle,
   type TransactionManager,
-  type VerifiedExternalIdentity,
 } from '@fridge/application';
 
 const RUNTIME_CAPABILITY_ROLES = new Set([
@@ -19,11 +16,33 @@ const RUNTIME_CAPABILITY_ROLES = new Set([
   'fridge_worker',
   'fridge_readonly',
 ] as const);
+const EXTERNAL_AUTHORITY_MAX_LENGTH = 512;
+const EXTERNAL_SUBJECT_MAX_LENGTH = 1024;
 
 export type RuntimeDatabaseCapabilityRole =
   | 'fridge_app'
   | 'fridge_worker'
   | 'fridge_readonly';
+
+function requireExactExternalIdentityComponent(
+  value: string,
+  label: string,
+  maxLength: number,
+): string {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${label} must be a string`);
+  }
+  if (value.length === 0 || value.trim().length === 0) {
+    throw new TypeError(`${label} must not be blank`);
+  }
+  if (value !== value.trim()) {
+    throw new TypeError(`${label} must not contain surrounding whitespace`);
+  }
+  if (value.length > maxLength) {
+    throw new TypeError(`${label} exceeds maximum length`);
+  }
+  return value;
+}
 
 class PgTransactionHandle {
   readonly kind = 'fridge-transaction' as const;
@@ -50,7 +69,7 @@ export interface PgDatabaseOptions {
   readonly maxConnections?: number;
 }
 
-export class PgDatabase implements TransactionManager, ReadinessProbe, ExternalIdentityPrincipalResolver {
+export class PgDatabase implements TransactionManager, ReadinessProbe {
   readonly #pool: Pool;
   readonly #capabilityRole: RuntimeDatabaseCapabilityRole;
 
@@ -67,8 +86,20 @@ export class PgDatabase implements TransactionManager, ReadinessProbe, ExternalI
     });
   }
 
-  async resolvePrincipal(identity: VerifiedExternalIdentity): Promise<PrincipalId | null> {
-    const verifiedIdentity = verifiedExternalIdentity(identity.authority, identity.subject);
+  async resolvePrincipalForExternalIdentity(
+    authority: string,
+    subject: string,
+  ): Promise<PrincipalId | null> {
+    const exactAuthority = requireExactExternalIdentityComponent(
+      authority,
+      'external identity authority',
+      EXTERNAL_AUTHORITY_MAX_LENGTH,
+    );
+    const exactSubject = requireExactExternalIdentityComponent(
+      subject,
+      'external identity subject',
+      EXTERNAL_SUBJECT_MAX_LENGTH,
+    );
     const client = await this.#pool.connect();
     let transactionStarted = false;
 
@@ -89,7 +120,7 @@ export class PgDatabase implements TransactionManager, ReadinessProbe, ExternalI
             and profile.retired_at is null
           order by link.external_identity_link_id
           limit 2`,
-        [verifiedIdentity.authority, verifiedIdentity.subject],
+        [exactAuthority, exactSubject],
       );
 
       await client.query('commit');
