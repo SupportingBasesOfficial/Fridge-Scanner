@@ -198,6 +198,36 @@ test('repeated unknown kid cannot trigger unbounded forced JWKS refreshes', asyn
   assert.equal(fetches, 2);
 });
 
+test('failed forced refresh remains dependency-unavailable during refresh backoff', async () => {
+  const fixture = createFixture('ES256');
+  const validToken = buildJwt('ES256', fixture.pair.privateKey, fixture.kid);
+  const unknownKidToken = buildJwt('ES256', fixture.pair.privateKey, 'rotated-kid');
+  let fetches = 0;
+  const protectedVerifier = new JwtJwksAuthenticationEvidenceVerifier({
+    trust,
+    now: () => NOW_MS,
+    jwksCacheMs: 60_000,
+    fetch: async () => {
+      fetches += 1;
+      if (fetches === 1) {
+        return new Response(JSON.stringify({ keys: [fixture.jwk] }), { status: 200 });
+      }
+      return new Response('unavailable', { status: 503 });
+    },
+  });
+
+  await protectedVerifier.verify({ kind: 'bearer', token: validToken });
+  await assert.rejects(
+    protectedVerifier.verify({ kind: 'bearer', token: unknownKidToken }),
+    DependencyUnavailableError,
+  );
+  await assert.rejects(
+    protectedVerifier.verify({ kind: 'bearer', token: unknownKidToken }),
+    DependencyUnavailableError,
+  );
+  assert.equal(fetches, 2);
+});
+
 test('JWT verification ignores provider roles and tenant hints for returned authority', async () => {
   const fixture = createFixture('ES256');
   const result = await verifier([fixture.jwk]).verify({
