@@ -1,5 +1,6 @@
 import { Pool, type PoolClient } from 'pg';
 import {
+  DependencyUnavailableError,
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
@@ -116,10 +117,12 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       'external identity subject',
       EXTERNAL_SUBJECT_MAX_LENGTH,
     );
-    const client = await this.#pool.connect();
+
+    let client: PoolClient | null = null;
     let transactionStarted = false;
 
     try {
+      client = await this.#pool.connect();
       await client.query('begin');
       transactionStarted = true;
       await client.query('set local role fridge_app');
@@ -143,17 +146,17 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       }
 
       return PrincipalId(result.rows[0]!.user_id);
-    } catch (error) {
-      if (transactionStarted) {
+    } catch {
+      if (client !== null && transactionStarted) {
         try {
           await client.query('rollback');
         } catch {
-          // Preserve the original failure. A broken connection is discarded by pg.
+          // Preserve the provider-neutral dependency failure below.
         }
       }
-      throw error;
+      throw new DependencyUnavailableError();
     } finally {
-      client.release();
+      client?.release();
     }
   }
 
