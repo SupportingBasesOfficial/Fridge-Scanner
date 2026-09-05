@@ -176,3 +176,44 @@ test('verifier dependency failures preserve availability semantics without provi
     },
   );
 });
+
+test('principal mapper failures become unauthenticated without leaking external identity diagnostics', async () => {
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    verifier(async () => verifiedIdentity),
+    mapper(async (identity) => {
+      throw new Error(`mapping failed for ${identity.authority} / ${identity.subject}`);
+    }),
+  );
+
+  await assert.rejects(
+    resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+    (error: unknown) => {
+      assert.ok(error instanceof UnauthenticatedError);
+      assert.equal(error.message, 'authentication is required');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error).includes(verifiedIdentity.authority), false);
+      assert.equal(String(error).includes(verifiedIdentity.subject), false);
+      return true;
+    },
+  );
+});
+
+test('principal mapper dependency failures preserve availability semantics without mapper diagnostics', async () => {
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    verifier(async () => verifiedIdentity),
+    mapper(async () => {
+      throw new DependencyUnavailableError('mapping database unavailable: secret diagnostic');
+    }),
+  );
+
+  await assert.rejects(
+    resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+    (error: unknown) => {
+      assert.ok(error instanceof DependencyUnavailableError);
+      assert.equal(error.message, 'required dependency is unavailable');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error).includes('secret diagnostic'), false);
+      return true;
+    },
+  );
+});
