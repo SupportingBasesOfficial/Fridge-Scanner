@@ -5,7 +5,6 @@ import {
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
-  verifiedExternalIdentity,
   type HouseholdId as HouseholdIdType,
   type PrincipalId as PrincipalIdType,
 } from '@fridge/application';
@@ -70,8 +69,9 @@ test('verified external identity resolves exactly one active platform principal'
   });
 
   try {
-    const principal = await database.resolvePrincipal(
-      verifiedExternalIdentity('https://issuer-a.example.test', 'shared-subject'),
+    const principal = await database.resolvePrincipalForExternalIdentity(
+      'https://issuer-a.example.test',
+      'shared-subject',
     );
     assert.equal(principal, PRINCIPAL_A);
   } finally {
@@ -86,8 +86,9 @@ test('external identity authority scopes equal provider subject strings', async 
   });
 
   try {
-    const principal = await database.resolvePrincipal(
-      verifiedExternalIdentity('https://issuer-b.example.test', 'shared-subject'),
+    const principal = await database.resolvePrincipalForExternalIdentity(
+      'https://issuer-b.example.test',
+      'shared-subject',
     );
     assert.equal(principal, PRINCIPAL_B);
   } finally {
@@ -103,16 +104,52 @@ test('unknown or revoked external identity fails closed without guessing a princ
 
   try {
     assert.equal(
-      await database.resolvePrincipal(
-        verifiedExternalIdentity('https://issuer-a.example.test', 'unknown-subject'),
+      await database.resolvePrincipalForExternalIdentity(
+        'https://issuer-a.example.test',
+        'unknown-subject',
       ),
       null,
     );
     assert.equal(
-      await database.resolvePrincipal(
-        verifiedExternalIdentity('https://issuer-a.example.test', 'revoked-subject'),
+      await database.resolvePrincipalForExternalIdentity(
+        'https://issuer-a.example.test',
+        'revoked-subject',
       ),
       null,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('external identity lookup rejects whitespace confusion and unbounded values', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity(
+        ' https://issuer-a.example.test',
+        'shared-subject',
+      ),
+      /surrounding whitespace/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity(
+        'https://issuer-a.example.test',
+        'shared-subject ',
+      ),
+      /surrounding whitespace/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity('a'.repeat(513), 'subject'),
+      /maximum length/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity('authority', 's'.repeat(1025)),
+      /maximum length/,
     );
   } finally {
     await database.close();
