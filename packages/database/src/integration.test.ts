@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
 import {
+  DependencyUnavailableError,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -163,6 +164,29 @@ test('external identity lookup rejects whitespace confusion and unbounded values
   } finally {
     await database.close();
   }
+});
+
+test('external identity mapping preserves dependency-unavailable semantics', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+
+  await database.close();
+
+  await assert.rejects(
+    mapper.resolve({
+      authority: 'https://issuer-a.example.test',
+      subject: 'shared-subject',
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof DependencyUnavailableError);
+      assert.equal(error.message, 'required dependency is unavailable');
+      assert.equal(error.cause, undefined);
+      return true;
+    },
+  );
 });
 
 test('authenticated principal still requires current Household authorization', async () => {
