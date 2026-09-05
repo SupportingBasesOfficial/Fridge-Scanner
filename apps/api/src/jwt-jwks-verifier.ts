@@ -15,6 +15,7 @@ const MAX_JWKS_BYTES = 262_144;
 const DEFAULT_JWKS_CACHE_MS = 60_000;
 const DEFAULT_JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MIN_FORCED_REFRESH_INTERVAL_MS = 1_000;
+const MIN_RSA_MODULUS_BITS = 2_048;
 
 type JsonObject = Record<string, unknown>;
 
@@ -130,6 +131,19 @@ function verifyCompactSignature(
   try {
     key = createPublicKey({ key: jwk as never, format: 'jwk' });
   } catch {
+    throw new UnauthenticatedError();
+  }
+
+  if (algorithm === 'RS256') {
+    const modulusLength = key.asymmetricKeyDetails?.modulusLength;
+    if (
+      key.asymmetricKeyType !== 'rsa'
+      || typeof modulusLength !== 'number'
+      || modulusLength < MIN_RSA_MODULUS_BITS
+    ) {
+      throw new UnauthenticatedError();
+    }
+  } else if (key.asymmetricKeyType !== 'ec') {
     throw new UnauthenticatedError();
   }
 
