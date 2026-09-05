@@ -10,7 +10,7 @@ const trust: JwtAuthenticationConfig = Object.freeze({
   issuer: 'https://issuer.example.test/auth/v1',
   audience: 'fridge-api',
   jwksUrl: 'https://issuer.example.test/.well-known/jwks.json',
-  algorithms: Object.freeze(['ES256', 'RS256']),
+  algorithms: Object.freeze(['ES256', 'RS256'] as const),
 });
 
 function encodeJson(value: unknown): string {
