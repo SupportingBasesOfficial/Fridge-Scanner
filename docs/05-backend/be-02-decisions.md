@@ -118,11 +118,11 @@ This register defines the initial normative decisions for BE-02 — Identity Bou
 
 **Rule:** adapters may not choose the first row, newest row or otherwise guess authority.
 
-## B2-020 — Trust metadata is not business authority
+## B2-020 — Trust metadata is never Household authority
 
-**Decision:** provider claims such as roles, groups, organizations, tenant hints or custom metadata are not Household authority unless a later explicitly accepted contract defines a provider-neutral use for them.
+**Decision:** provider claims such as roles, groups, organizations, tenant hints or custom metadata are authentication-side metadata only and do not constitute Household authority.
 
-**Rule:** BE-02 initially derives only verified platform principal identity; Household membership and role continue to come from platform truth.
+**Rule:** Household membership and role authority come exclusively from current platform truth through the accepted authorization boundary. A future contract may define provider-neutral uses for external metadata, but it cannot turn that metadata into Household authority unless the canonical Household-authority contract itself is explicitly superseded through governance.
 
 ## B2-021 — Credential-bearing failures preserve nondisclosure
 
