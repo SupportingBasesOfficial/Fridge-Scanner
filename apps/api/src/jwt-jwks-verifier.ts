@@ -14,6 +14,7 @@ const MAX_TOKEN_LENGTH = 32_768;
 const MAX_JWKS_BYTES = 262_144;
 const DEFAULT_JWKS_CACHE_MS = 60_000;
 const DEFAULT_JWKS_FETCH_TIMEOUT_MS = 5_000;
+const MIN_FORCED_REFRESH_INTERVAL_MS = 1_000;
 
 type JsonObject = Record<string, unknown>;
 
@@ -183,6 +184,7 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
   readonly #jwksCacheMs: number;
   readonly #jwksFetchTimeoutMs: number;
   #cache: CachedJwks | null = null;
+  #lastForcedRefreshAt: number | null = null;
 
   constructor(options: JwtJwksVerifierOptions) {
     this.#trust = options.trust;
@@ -261,40 +263,52 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
       return this.#cache.keys;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.#jwksFetchTimeoutMs);
-    timeout.unref();
+    const forcedRefreshInterval = Math.max(this.#jwksCacheMs, MIN_FORCED_REFRESH_INTERVAL_MS);
+    if (
+      forceRefresh
+      && this.#lastForcedRefreshAt !== null
+      && now - this.#lastForcedRefreshAt < forcedRefreshInterval
+    ) {
+      return this.#cache?.keys ?? [];
+    }
+    if (forceRefresh) {
+      this.#lastForcedRefreshAt = now;
+    }
 
-    let response: Response;
+    const controller = new AbortController();
+    let timeout: NodeJS.Timeout | undefined;
+
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort();
+        reject(new DependencyUnavailableError());
+      }, this.#jwksFetchTimeoutMs);
+      timeout.unref();
+    });
+
+    let body: string;
     try {
-      response = await Promise.race([
-        this.#fetch(this.#trust.jwksUrl, {
-          method: 'GET',
-          headers: { accept: 'application/json' },
-          redirect: 'error',
-          signal: controller.signal,
-        }),
-        new Promise<never>((_, reject) => {
-          const deadline = setTimeout(
-            () => reject(new DependencyUnavailableError()),
-            this.#jwksFetchTimeoutMs,
-          );
-          deadline.unref();
-          controller.signal.addEventListener('abort', () => clearTimeout(deadline), { once: true });
-        }),
+      body = await Promise.race([
+        (async () => {
+          const response = await this.#fetch(this.#trust.jwksUrl, {
+            method: 'GET',
+            headers: { accept: 'application/json' },
+            redirect: 'error',
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new DependencyUnavailableError();
+          }
+          return readBoundedResponseBody(response);
+        })(),
+        deadline,
       ]);
     } catch (error) {
       if (error instanceof DependencyUnavailableError) throw error;
       throw new DependencyUnavailableError();
     } finally {
-      clearTimeout(timeout);
+      if (timeout !== undefined) clearTimeout(timeout);
     }
-
-    if (!response.ok) {
-      throw new DependencyUnavailableError();
-    }
-
-    const body = await readBoundedResponseBody(response);
 
     let parsed: unknown;
     try {
