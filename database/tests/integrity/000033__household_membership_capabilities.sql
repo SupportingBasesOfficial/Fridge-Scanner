@@ -18,10 +18,12 @@ begin
     raise exception 'BE-03 must not guess concrete Household role-to-capability mappings';
   end if;
 
-  if has_table_privilege('fridge_app', 'fridge.household_role_capability', 'INSERT')
+  if has_table_privilege('fridge_app', 'fridge.household_capability', 'SELECT')
+     or has_table_privilege('fridge_app', 'fridge.household_role_capability', 'SELECT')
+     or has_table_privilege('fridge_app', 'fridge.household_role_capability', 'INSERT')
      or has_table_privilege('fridge_app', 'fridge.household_role_capability', 'UPDATE')
      or has_table_privilege('fridge_app', 'fridge.household_role_capability', 'DELETE') then
-    raise exception 'fridge_app must not receive direct role-capability mutation privilege';
+    raise exception 'fridge_app must not receive direct Household capability table access';
   end if;
 
   if not has_function_privilege(
@@ -30,6 +32,18 @@ begin
     'EXECUTE'
   ) then
     raise exception 'fridge_app must be able to evaluate governed Household capabilities';
+  end if;
+
+  if has_function_privilege(
+    'fridge_worker',
+    'fridge_internal.household_role_has_capability(text,text)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'fridge_readonly',
+    'fridge_internal.household_role_has_capability(text,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'worker/readonly capabilities must not materialize membership administration authority';
   end if;
 
   if fridge_internal.household_role_has_capability(
