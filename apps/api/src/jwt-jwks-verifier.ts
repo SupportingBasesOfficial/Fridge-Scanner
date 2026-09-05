@@ -200,6 +200,7 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
   #cache: CachedJwks | null = null;
   #lastForcedRefreshAt: number | null = null;
   #lastForcedRefreshFailed = false;
+  #jwksLoadInFlight: Promise<readonly Jwk[]> | null = null;
 
   constructor(options: JwtJwksVerifierOptions) {
     this.#trust = options.trust;
@@ -278,6 +279,10 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
       return this.#cache.keys;
     }
 
+    if (this.#jwksLoadInFlight !== null) {
+      return this.#jwksLoadInFlight;
+    }
+
     const forcedRefreshInterval = Math.max(this.#jwksCacheMs, MIN_FORCED_REFRESH_INTERVAL_MS);
     if (
       forceRefresh
@@ -293,6 +298,18 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
       this.#lastForcedRefreshAt = now;
     }
 
+    const load = this.#fetchAndCacheKeys(forceRefresh, now);
+    this.#jwksLoadInFlight = load;
+    try {
+      return await load;
+    } finally {
+      if (this.#jwksLoadInFlight === load) {
+        this.#jwksLoadInFlight = null;
+      }
+    }
+  }
+
+  async #fetchAndCacheKeys(forceRefresh: boolean, now: number): Promise<readonly Jwk[]> {
     try {
       const controller = new AbortController();
       let timeout: NodeJS.Timeout | undefined;
