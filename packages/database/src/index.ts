@@ -16,11 +16,38 @@ const RUNTIME_CAPABILITY_ROLES = new Set([
   'fridge_worker',
   'fridge_readonly',
 ] as const);
+const EXTERNAL_AUTHORITY_MAX_LENGTH = 512;
+const EXTERNAL_SUBJECT_MAX_LENGTH = 1024;
 
 export type RuntimeDatabaseCapabilityRole =
   | 'fridge_app'
   | 'fridge_worker'
   | 'fridge_readonly';
+
+export interface ExternalIdentityKey {
+  readonly authority: string;
+  readonly subject: string;
+}
+
+function requireExactExternalIdentityComponent(
+  value: string,
+  label: string,
+  maxLength: number,
+): string {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${label} must be a string`);
+  }
+  if (value.length === 0 || value.trim().length === 0) {
+    throw new TypeError(`${label} must not be blank`);
+  }
+  if (value !== value.trim()) {
+    throw new TypeError(`${label} must not contain surrounding whitespace`);
+  }
+  if (value.length > maxLength) {
+    throw new TypeError(`${label} exceeds maximum length`);
+  }
+  return value;
+}
 
 class PgTransactionHandle {
   readonly kind = 'fridge-transaction' as const;
@@ -38,6 +65,13 @@ export class HouseholdAuthorizationError extends HouseholdUnauthorizedError {
   constructor() {
     super();
     this.name = 'HouseholdAuthorizationError';
+  }
+}
+
+export class ExternalIdentityMappingError extends Error {
+  constructor() {
+    super('external identity mapping failed');
+    this.name = 'ExternalIdentityMappingError';
   }
 }
 
@@ -62,6 +96,65 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
       max: options.maxConnections ?? 10,
       allowExitOnIdle: false,
     });
+  }
+
+  async resolvePrincipalForExternalIdentity(
+    authority: string,
+    subject: string,
+  ): Promise<PrincipalId | null> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('external identity resolution requires fridge_app capability');
+    }
+
+    const exactAuthority = requireExactExternalIdentityComponent(
+      authority,
+      'external identity authority',
+      EXTERNAL_AUTHORITY_MAX_LENGTH,
+    );
+    const exactSubject = requireExactExternalIdentityComponent(
+      subject,
+      'external identity subject',
+      EXTERNAL_SUBJECT_MAX_LENGTH,
+    );
+    const client = await this.#pool.connect();
+    let transactionStarted = false;
+
+    try {
+      await client.query('begin');
+      transactionStarted = true;
+      await client.query('set local role fridge_app');
+
+      const result = await client.query<{ user_id: string }>(
+        `select user_id::text
+           from fridge.external_identity_link
+          where authority = $1
+            and subject = $2
+            and revoked_at is null
+          order by external_identity_link_id
+          limit 2`,
+        [exactAuthority, exactSubject],
+      );
+
+      await client.query('commit');
+      transactionStarted = false;
+
+      if (result.rows.length !== 1) {
+        return null;
+      }
+
+      return PrincipalId(result.rows[0]!.user_id);
+    } catch (error) {
+      if (transactionStarted) {
+        try {
+          await client.query('rollback');
+        } catch {
+          // Preserve the original failure. A broken connection is discarded by pg.
+        }
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async withAuthorizedHouseholdTransaction<T>(
@@ -158,6 +251,21 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
 
   async close(): Promise<void> {
     await this.#pool.end();
+  }
+}
+
+export class PgExternalIdentityPrincipalMapper {
+  constructor(private readonly database: PgDatabase) {}
+
+  async resolve(identity: ExternalIdentityKey): Promise<PrincipalId> {
+    const principal = await this.database.resolvePrincipalForExternalIdentity(
+      identity.authority,
+      identity.subject,
+    );
+    if (principal === null) {
+      throw new ExternalIdentityMappingError();
+    }
+    return principal;
   }
 }
 
