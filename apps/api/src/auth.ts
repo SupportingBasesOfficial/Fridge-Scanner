@@ -52,8 +52,17 @@ function extractBearerEvidence(request: FastifyRequest): BearerAuthenticationEvi
   };
 }
 
-function assertVerifiedIdentity(identity: VerifiedExternalIdentity): void {
-  if (identity.authority.length === 0 || identity.subject.length === 0) {
+function assertVerifiedIdentity(identity: unknown): asserts identity is VerifiedExternalIdentity {
+  if (
+    typeof identity !== 'object'
+    || identity === null
+    || !('authority' in identity)
+    || !('subject' in identity)
+    || typeof identity.authority !== 'string'
+    || typeof identity.subject !== 'string'
+    || identity.authority.length === 0
+    || identity.subject.length === 0
+  ) {
     throw new UnauthenticatedError();
   }
 }
@@ -62,14 +71,18 @@ async function verifyEvidence(
   verifier: AuthenticationEvidenceVerifier,
   evidence: BearerAuthenticationEvidence,
 ): Promise<VerifiedExternalIdentity> {
+  let identity: unknown;
   try {
-    return await verifier.verify(evidence);
+    identity = await verifier.verify(evidence);
   } catch (error) {
     if (error instanceof DependencyUnavailableError) {
       throw new DependencyUnavailableError();
     }
     throw new UnauthenticatedError();
   }
+
+  assertVerifiedIdentity(identity);
+  return identity;
 }
 
 async function mapPrincipal(
@@ -95,7 +108,6 @@ export class BearerAuthenticatedPrincipalResolver implements AuthenticatedPrinci
   async resolve(request: FastifyRequest): Promise<PrincipalId> {
     const evidence = extractBearerEvidence(request);
     const externalIdentity = await verifyEvidence(this.verifier, evidence);
-    assertVerifiedIdentity(externalIdentity);
     return mapPrincipal(this.principalMapper, externalIdentity);
   }
 }
