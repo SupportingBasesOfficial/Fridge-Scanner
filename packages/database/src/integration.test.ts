@@ -5,6 +5,7 @@ import {
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
+  verifiedExternalIdentity,
   type HouseholdId as HouseholdIdType,
   type PrincipalId as PrincipalIdType,
 } from '@fridge/application';
@@ -59,6 +60,62 @@ test('runtime capability without Household context fails closed', async () => {
   } finally {
     client.release();
     await pool.end();
+  }
+});
+
+test('verified external identity resolves exactly one active platform principal', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    const principal = await database.resolvePrincipal(
+      verifiedExternalIdentity('https://issuer-a.example.test', 'shared-subject'),
+    );
+    assert.equal(principal, PRINCIPAL_A);
+  } finally {
+    await database.close();
+  }
+});
+
+test('external identity authority scopes equal provider subject strings', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    const principal = await database.resolvePrincipal(
+      verifiedExternalIdentity('https://issuer-b.example.test', 'shared-subject'),
+    );
+    assert.equal(principal, PRINCIPAL_B);
+  } finally {
+    await database.close();
+  }
+});
+
+test('unknown or revoked external identity fails closed without guessing a principal', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    assert.equal(
+      await database.resolvePrincipal(
+        verifiedExternalIdentity('https://issuer-a.example.test', 'unknown-subject'),
+      ),
+      null,
+    );
+    assert.equal(
+      await database.resolvePrincipal(
+        verifiedExternalIdentity('https://issuer-a.example.test', 'revoked-subject'),
+      ),
+      null,
+    );
+  } finally {
+    await database.close();
   }
 });
 
