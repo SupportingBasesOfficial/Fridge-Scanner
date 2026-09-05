@@ -84,6 +84,19 @@ test('RS256 token verifies when explicitly allowed', async () => {
   assert.equal(result.subject, 'provider-subject-123');
 });
 
+test('RS256 rejects RSA keys below the 2048-bit security floor', async () => {
+  const pair = generateKeyPairSync('rsa', { modulusLength: 1024 });
+  const kid = 'weak-rsa-kid';
+  const publicJwk = pair.publicKey.export({ format: 'jwk' });
+  const weakJwk = { ...publicJwk, kid, alg: 'RS256', use: 'sig', key_ops: ['verify'] };
+  const token = buildJwt('RS256', pair.privateKey, kid);
+
+  await assert.rejects(
+    verifier([weakJwk]).verify({ kind: 'bearer', token }),
+    UnauthenticatedError,
+  );
+});
+
 test('forged signature, wrong issuer, wrong audience, expiry and future nbf fail closed', async () => {
   const fixture = createFixture('ES256');
   const attacker = createFixture('ES256', fixture.kid);
