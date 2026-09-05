@@ -2,7 +2,7 @@
 
 ## Status
 
-BE-02 is the active backend phase after formally accepted BE-01.
+BE-02 — **Identity Boundary** is accepted as CLEAN once `be-02-acceptance.md` is reviewed and merged.
 
 Accepted upstream foundation:
 
@@ -12,7 +12,7 @@ Accepted upstream foundation:
 - BE-00 — Backend Foundation & Runtime Contracts
 - BE-01 — Application Contracts & Domain Kernel
 
-The canonical post-BE-01 `main` baseline is `d03efd118020f1d8579a20133c2bd593fe48f082`.
+The final executable BE-02 baseline before acceptance is `aeb7c7ae07df0504e9850b714a0d6ccf6d75ce4d`.
 
 BE-02 consumes those contracts. It may not reinterpret Household authorization, tenant isolation, platform identity, application errors, exact-value semantics or runtime composition for identity-provider convenience.
 
