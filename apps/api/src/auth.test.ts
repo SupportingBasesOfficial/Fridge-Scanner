@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { FastifyRequest } from 'fastify';
 import {
+  DependencyUnavailableError,
   PrincipalId,
   UnauthenticatedError,
 } from '@fridge/application';
@@ -133,4 +134,45 @@ test('invalid verifier output fails closed before platform mapping', async () =>
     UnauthenticatedError,
   );
   assert.equal(mappings, 0);
+});
+
+test('verifier exceptions are translated without leaking credential-bearing diagnostics', async () => {
+  const token = 'secret-token-material';
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    verifier(async () => {
+      throw new Error(`provider rejected ${token} with decoded claims`);
+    }),
+    mapper(async () => principalId),
+  );
+
+  await assert.rejects(
+    resolver.resolve(request({ authorization: `Bearer ${token}` })),
+    (error: unknown) => {
+      assert.ok(error instanceof UnauthenticatedError);
+      assert.equal(error.message, 'authentication is required');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error).includes(token), false);
+      return true;
+    },
+  );
+});
+
+test('verifier dependency failures preserve availability semantics without provider diagnostics', async () => {
+  const resolver = new BearerAuthenticatedPrincipalResolver(
+    verifier(async () => {
+      throw new DependencyUnavailableError('identity provider unavailable: secret diagnostic');
+    }),
+    mapper(async () => principalId),
+  );
+
+  await assert.rejects(
+    resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+    (error: unknown) => {
+      assert.ok(error instanceof DependencyUnavailableError);
+      assert.equal(error.message, 'required dependency is unavailable');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error).includes('secret diagnostic'), false);
+      return true;
+    },
+  );
 });
