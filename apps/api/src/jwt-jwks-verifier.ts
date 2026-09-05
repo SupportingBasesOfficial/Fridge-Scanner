@@ -199,6 +199,7 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
   readonly #jwksFetchTimeoutMs: number;
   #cache: CachedJwks | null = null;
   #lastForcedRefreshAt: number | null = null;
+  #lastForcedRefreshFailed = false;
 
   constructor(options: JwtJwksVerifierOptions) {
     this.#trust = options.trust;
@@ -283,68 +284,82 @@ export class JwtJwksAuthenticationEvidenceVerifier implements AuthenticationEvid
       && this.#lastForcedRefreshAt !== null
       && now - this.#lastForcedRefreshAt < forcedRefreshInterval
     ) {
+      if (this.#lastForcedRefreshFailed) {
+        throw new DependencyUnavailableError();
+      }
       return this.#cache?.keys ?? [];
     }
     if (forceRefresh) {
       this.#lastForcedRefreshAt = now;
     }
 
-    const controller = new AbortController();
-    let timeout: NodeJS.Timeout | undefined;
-
-    const deadline = new Promise<never>((_, reject) => {
-      timeout = setTimeout(() => {
-        controller.abort();
-        reject(new DependencyUnavailableError());
-      }, this.#jwksFetchTimeoutMs);
-      timeout.unref();
-    });
-
-    let body: string;
     try {
-      body = await Promise.race([
-        (async () => {
-          const response = await this.#fetch(this.#trust.jwksUrl, {
-            method: 'GET',
-            headers: { accept: 'application/json' },
-            redirect: 'error',
-            signal: controller.signal,
-          });
-          if (!response.ok) {
-            throw new DependencyUnavailableError();
-          }
-          return readBoundedResponseBody(response);
-        })(),
-        deadline,
-      ]);
+      const controller = new AbortController();
+      let timeout: NodeJS.Timeout | undefined;
+
+      const deadline = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new DependencyUnavailableError());
+        }, this.#jwksFetchTimeoutMs);
+        timeout.unref();
+      });
+
+      let body: string;
+      try {
+        body = await Promise.race([
+          (async () => {
+            const response = await this.#fetch(this.#trust.jwksUrl, {
+              method: 'GET',
+              headers: { accept: 'application/json' },
+              redirect: 'error',
+              signal: controller.signal,
+            });
+            if (!response.ok) {
+              throw new DependencyUnavailableError();
+            }
+            return readBoundedResponseBody(response);
+          })(),
+          deadline,
+        ]);
+      } catch (error) {
+        if (error instanceof DependencyUnavailableError) throw error;
+        throw new DependencyUnavailableError();
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        throw new DependencyUnavailableError();
+      }
+      if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as JsonObject).keys)) {
+        throw new DependencyUnavailableError();
+      }
+
+      const keys = (parsed as { keys: unknown[] }).keys.filter(
+        (entry): entry is Jwk => typeof entry === 'object' && entry !== null && !Array.isArray(entry),
+      );
+      if (keys.length === 0 || keys.length > 100) {
+        throw new DependencyUnavailableError();
+      }
+
+      this.#cache = {
+        keys: Object.freeze([...keys]),
+        expiresAt: now + this.#jwksCacheMs,
+      };
+      if (forceRefresh) {
+        this.#lastForcedRefreshFailed = false;
+      }
+      return this.#cache.keys;
     } catch (error) {
+      if (forceRefresh) {
+        this.#lastForcedRefreshFailed = true;
+      }
       if (error instanceof DependencyUnavailableError) throw error;
       throw new DependencyUnavailableError();
-    } finally {
-      if (timeout !== undefined) clearTimeout(timeout);
     }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      throw new DependencyUnavailableError();
-    }
-    if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as JsonObject).keys)) {
-      throw new DependencyUnavailableError();
-    }
-
-    const keys = (parsed as { keys: unknown[] }).keys.filter(
-      (entry): entry is Jwk => typeof entry === 'object' && entry !== null && !Array.isArray(entry),
-    );
-    if (keys.length === 0 || keys.length > 100) {
-      throw new DependencyUnavailableError();
-    }
-
-    this.#cache = {
-      keys: Object.freeze([...keys]),
-      expiresAt: now + this.#jwksCacheMs,
-    };
-    return this.#cache.keys;
   }
 }
