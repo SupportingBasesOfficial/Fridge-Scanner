@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { DependencyUnavailableError, UnauthenticatedError } from '@fridge/application';
 import type { JwtAuthenticationConfig } from '@fridge/config';
 import { JwtJwksAuthenticationEvidenceVerifier } from './jwt-jwks-verifier.js';
@@ -19,7 +19,7 @@ function encodeJson(value: unknown): string {
 
 function buildJwt(
   algorithm: 'ES256' | 'RS256',
-  privateKey: ReturnType<typeof generateKeyPairSync>['privateKey'],
+  privateKey: KeyObject,
   kid: string,
   payloadOverrides: Record<string, unknown> = {},
 ): string {
@@ -99,7 +99,7 @@ test('forged signature, wrong issuer, wrong audience, expiry and future nbf fail
   }
 });
 
-test('missing subject, unknown kid and embedded key hints fail closed', async () => {
+test('missing subject and unknown kid fail closed', async () => {
   const fixture = createFixture('ES256');
   await assert.rejects(
     verifier([fixture.jwk]).verify({
