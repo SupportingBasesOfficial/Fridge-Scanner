@@ -250,8 +250,17 @@ export class PgDatabase
            ) as role_code`,
           [transaction.householdId, transaction.principalId, transaction.membershipId],
         );
+        const authorityRoleCode = authority.rows[0]?.role_code;
 
-        if (authority.rows[0]?.role_code === null || authority.rows[0] === undefined) {
+        // The stronger handle must describe the exact authority facts that were
+        // locked. If the actor role changed between the initial current-membership
+        // read and privileged acquisition, fail closed rather than expose stale
+        // role provenance on an otherwise valid administrative handle.
+        if (
+          authorityRoleCode === null ||
+          authorityRoleCode === undefined ||
+          authorityRoleCode !== transaction.householdRoleCode
+        ) {
           throw new HouseholdAuthorizationError();
         }
 
