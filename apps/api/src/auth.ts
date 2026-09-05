@@ -52,17 +52,29 @@ function extractBearerEvidence(request: FastifyRequest): BearerAuthenticationEvi
   };
 }
 
-function assertVerifiedIdentity(identity: unknown): asserts identity is VerifiedExternalIdentity {
-  if (
-    typeof identity !== 'object'
-    || identity === null
-    || !('authority' in identity)
-    || !('subject' in identity)
-    || typeof identity.authority !== 'string'
-    || typeof identity.subject !== 'string'
-    || identity.authority.length === 0
-    || identity.subject.length === 0
-  ) {
+function snapshotVerifiedIdentity(identity: unknown): VerifiedExternalIdentity {
+  try {
+    if (typeof identity !== 'object' || identity === null) {
+      throw new UnauthenticatedError();
+    }
+
+    const authority = Reflect.get(identity, 'authority');
+    const subject = Reflect.get(identity, 'subject');
+
+    if (
+      typeof authority !== 'string'
+      || typeof subject !== 'string'
+      || authority.length === 0
+      || subject.length === 0
+    ) {
+      throw new UnauthenticatedError();
+    }
+
+    return { authority, subject };
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
     throw new UnauthenticatedError();
   }
 }
@@ -71,18 +83,15 @@ async function verifyEvidence(
   verifier: AuthenticationEvidenceVerifier,
   evidence: BearerAuthenticationEvidence,
 ): Promise<VerifiedExternalIdentity> {
-  let identity: unknown;
   try {
-    identity = await verifier.verify(evidence);
+    const identity: unknown = await verifier.verify(evidence);
+    return snapshotVerifiedIdentity(identity);
   } catch (error) {
     if (error instanceof DependencyUnavailableError) {
       throw new DependencyUnavailableError();
     }
     throw new UnauthenticatedError();
   }
-
-  assertVerifiedIdentity(identity);
-  return identity;
 }
 
 async function mapPrincipal(
