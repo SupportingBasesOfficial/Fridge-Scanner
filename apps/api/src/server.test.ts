@@ -25,6 +25,7 @@ const config: RuntimeConfig = {
   httpPort: 3000,
   logLevel: 'fatal',
   shutdownTimeoutMs: 1_000,
+  authentication: null,
 };
 
 const principalId = PrincipalId('11111111-1111-4111-8111-111111111111');
