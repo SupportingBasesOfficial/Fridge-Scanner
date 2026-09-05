@@ -128,7 +128,7 @@ test('configured runtime authenticates through JWT, mapping and current Househol
   }
 });
 
-test('valid provider identity does not grant a different Household', async () => {
+test('valid token cannot revive an ended Household membership', async () => {
   const database = new PgDatabase({
     connectionString: databaseUrl,
     capabilityRole: 'fridge_app',
