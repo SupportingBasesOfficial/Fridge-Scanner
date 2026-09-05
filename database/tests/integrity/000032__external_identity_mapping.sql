@@ -102,21 +102,64 @@ begin
 end;
 $$;
 
--- Mapping is least-privilege global auth data: app may read, not mutate;
--- worker/readonly capabilities do not receive it by implication.
+-- Function semantics are exact and provider namespace aware.
+do $$
+declare
+  v_a uuid;
+  v_b uuid;
+  v_missing uuid;
+begin
+  select fridge_internal.resolve_external_identity_principal(
+    'https://issuer-a.example.test', 'shared-subject'
+  ) into v_a;
+  select fridge_internal.resolve_external_identity_principal(
+    'https://issuer-b.example.test', 'shared-subject'
+  ) into v_b;
+  select fridge_internal.resolve_external_identity_principal(
+    'https://issuer-a.example.test', 'missing-subject'
+  ) into v_missing;
+
+  if v_a <> 'f8000000-0000-4000-8000-000000000001'::uuid then
+    raise exception 'issuer A resolved the wrong principal';
+  end if;
+  if v_b <> 'f8000000-0000-4000-8000-000000000002'::uuid then
+    raise exception 'issuer B resolved the wrong principal';
+  end if;
+  if v_missing is not null then
+    raise exception 'unknown external identity unexpectedly resolved';
+  end if;
+end;
+$$;
+
+-- Runtime receives an intent-specific EXECUTE capability, not global table read.
 do $$
 begin
-  if not has_table_privilege('fridge_app', 'fridge.external_identity_link', 'SELECT') then
-    raise exception 'fridge_app lacks required external identity mapping SELECT';
-  end if;
-  if has_table_privilege('fridge_app', 'fridge.external_identity_link', 'INSERT')
+  if has_table_privilege('fridge_app', 'fridge.external_identity_link', 'SELECT')
+     or has_table_privilege('fridge_app', 'fridge.external_identity_link', 'INSERT')
      or has_table_privilege('fridge_app', 'fridge.external_identity_link', 'UPDATE')
      or has_table_privilege('fridge_app', 'fridge.external_identity_link', 'DELETE') then
-    raise exception 'fridge_app received forbidden direct mapping mutation privilege';
+    raise exception 'fridge_app received forbidden direct external identity table privilege';
   end if;
-  if has_table_privilege('fridge_worker', 'fridge.external_identity_link', 'SELECT')
-     or has_table_privilege('fridge_readonly', 'fridge.external_identity_link', 'SELECT') then
-    raise exception 'external identity mapping leaked to unrelated runtime capabilities';
+
+  if not has_function_privilege(
+    'fridge_app',
+    'fridge_internal.resolve_external_identity_principal(text,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'fridge_app lacks required exact identity resolution EXECUTE';
+  end if;
+
+  if has_function_privilege(
+       'fridge_worker',
+       'fridge_internal.resolve_external_identity_principal(text,text)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'fridge_readonly',
+       'fridge_internal.resolve_external_identity_principal(text,text)',
+       'EXECUTE'
+     ) then
+    raise exception 'external identity resolution leaked to unrelated runtime capabilities';
   end if;
 end;
 $$;
