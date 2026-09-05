@@ -4,6 +4,15 @@ import { parseRuntimeConfig, RuntimeConfigError } from './index.js';
 
 const DATABASE_URL = 'postgresql://app:secret@localhost:5432/fridge';
 
+function completeAuthEnv() {
+  return {
+    AUTH_JWT_ISSUER: 'https://issuer.example.test/auth/v1',
+    AUTH_JWT_AUDIENCE: 'fridge-api',
+    AUTH_JWT_JWKS_URL: 'https://issuer.example.test/auth/v1/.well-known/jwks.json',
+    AUTH_JWT_ALGORITHMS: 'ES256,RS256',
+  };
+}
+
 test('parseRuntimeConfig applies safe non-secret defaults', () => {
   const config = parseRuntimeConfig({ DATABASE_URL });
 
@@ -19,10 +28,7 @@ test('parseRuntimeConfig applies safe non-secret defaults', () => {
 test('parseRuntimeConfig accepts complete asymmetric JWT trust configuration', () => {
   const config = parseRuntimeConfig({
     DATABASE_URL,
-    AUTH_JWT_ISSUER: 'https://issuer.example.test/auth/v1',
-    AUTH_JWT_AUDIENCE: 'fridge-api',
-    AUTH_JWT_JWKS_URL: 'https://issuer.example.test/auth/v1/.well-known/jwks.json',
-    AUTH_JWT_ALGORITHMS: 'ES256,RS256',
+    ...completeAuthEnv(),
   });
 
   assert.deepEqual(config.authentication, {
@@ -31,6 +37,24 @@ test('parseRuntimeConfig accepts complete asymmetric JWT trust configuration', (
     jwksUrl: 'https://issuer.example.test/auth/v1/.well-known/jwks.json',
     algorithms: ['ES256', 'RS256'],
   });
+});
+
+test('configured authentication requires fridge_app database capability', () => {
+  for (const role of ['fridge_worker', 'fridge_readonly']) {
+    assert.throws(
+      () => parseRuntimeConfig({
+        DATABASE_URL,
+        DATABASE_CAPABILITY_ROLE: role,
+        ...completeAuthEnv(),
+      }),
+      (error: unknown) => {
+        if (!(error instanceof RuntimeConfigError)) return false;
+        assert.match(error.message, /DATABASE_CAPABILITY_ROLE/);
+        assert.match(error.message, /fridge_app/);
+        return true;
+      },
+    );
+  }
 });
 
 test('partial JWT trust configuration fails closed', () => {
