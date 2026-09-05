@@ -1,7 +1,9 @@
 import {
+  HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
+  type HouseholdMembershipAdministrationTransaction,
   type TransactionHandle,
 } from './index.js';
 
@@ -20,4 +22,18 @@ const forgedTransaction: TransactionHandle = {
   householdRoleCode: 'MEMBER',
 };
 
+// BE-03 administration authority is a stronger opaque capability. Possessing the
+// public capability code or a plausible role string is not enough to manufacture it.
+// @ts-expect-error HouseholdMembershipAdministrationTransaction requires trusted adapter materialization.
+const forgedAdministrationTransaction: HouseholdMembershipAdministrationTransaction = {
+  kind: 'fridge-transaction',
+  principalId,
+  householdId,
+  membershipId,
+  householdRoleCode: 'BE03_ADMIN',
+  membershipAdministrationCapability:
+    HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+};
+
 void forgedTransaction;
+void forgedAdministrationTransaction;

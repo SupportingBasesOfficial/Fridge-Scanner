@@ -1,10 +1,13 @@
 import { Pool, type PoolClient } from 'pg';
 import {
   DependencyUnavailableError,
+  HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
+  type HouseholdMembershipAdministrationTransaction,
+  type HouseholdMembershipAdministrationTransactionManager,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
@@ -82,7 +85,12 @@ export interface PgDatabaseOptions {
   readonly maxConnections?: number;
 }
 
-export class PgDatabase implements TransactionManager, ReadinessProbe {
+export class PgDatabase
+  implements
+    TransactionManager,
+    HouseholdMembershipAdministrationTransactionManager,
+    ReadinessProbe
+{
   readonly #pool: Pool;
   readonly #capabilityRole: RuntimeDatabaseCapabilityRole;
 
@@ -216,6 +224,58 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     } finally {
       client.release();
     }
+  }
+
+  async withHouseholdMembershipAdministrationTransaction<T>(
+    principalId: PrincipalId,
+    householdId: HouseholdId,
+    operation: (
+      transaction: HouseholdMembershipAdministrationTransaction,
+    ) => Promise<T>,
+  ): Promise<T> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household membership administration requires fridge_app capability');
+    }
+
+    return this.withAuthorizedHouseholdTransaction(
+      principalId,
+      householdId,
+      async (transaction) => {
+        const client = requirePgClient(transaction);
+        const authority = await client.query<{ role_code: string | null }>(
+          `select fridge_internal.acquire_household_membership_admin_authority(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid
+           ) as role_code`,
+          [transaction.householdId, transaction.principalId, transaction.membershipId],
+        );
+        const authorityRoleCode = authority.rows[0]?.role_code;
+
+        // The stronger handle must describe the exact authority facts that were
+        // locked. If the actor role changed between the initial current-membership
+        // read and privileged acquisition, fail closed rather than expose stale
+        // role provenance on an otherwise valid administrative handle.
+        if (
+          authorityRoleCode === null ||
+          authorityRoleCode === undefined ||
+          authorityRoleCode !== transaction.householdRoleCode
+        ) {
+          throw new HouseholdAuthorizationError();
+        }
+
+        Object.defineProperty(transaction, 'membershipAdministrationCapability', {
+          value: HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+          enumerable: false,
+          configurable: false,
+          writable: false,
+        });
+
+        return operation(
+          transaction as unknown as HouseholdMembershipAdministrationTransaction,
+        );
+      },
+    );
   }
 
   async check(): Promise<ReadinessResult> {
