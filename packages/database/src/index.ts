@@ -1,10 +1,13 @@
 import { Pool, type PoolClient } from 'pg';
 import {
   DependencyUnavailableError,
+  HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   PrincipalId,
+  type HouseholdMembershipAdministrationTransaction,
+  type HouseholdMembershipAdministrationTransactionManager,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
@@ -82,7 +85,12 @@ export interface PgDatabaseOptions {
   readonly maxConnections?: number;
 }
 
-export class PgDatabase implements TransactionManager, ReadinessProbe {
+export class PgDatabase
+  implements
+    TransactionManager,
+    HouseholdMembershipAdministrationTransactionManager,
+    ReadinessProbe
+{
   readonly #pool: Pool;
   readonly #capabilityRole: RuntimeDatabaseCapabilityRole;
 
@@ -216,6 +224,44 @@ export class PgDatabase implements TransactionManager, ReadinessProbe {
     } finally {
       client.release();
     }
+  }
+
+  async withHouseholdMembershipAdministrationTransaction<T>(
+    principalId: PrincipalId,
+    householdId: HouseholdId,
+    operation: (
+      transaction: HouseholdMembershipAdministrationTransaction,
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.withAuthorizedHouseholdTransaction(
+      principalId,
+      householdId,
+      async (transaction) => {
+        const client = requirePgClient(transaction);
+        const capability = await client.query<{ allowed: boolean }>(
+          `select fridge_internal.household_role_has_capability($1, $2) as allowed`,
+          [
+            transaction.householdRoleCode,
+            HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+          ],
+        );
+
+        if (capability.rows[0]?.allowed !== true) {
+          throw new HouseholdAuthorizationError();
+        }
+
+        Object.defineProperty(transaction, 'membershipAdministrationCapability', {
+          value: HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+          enumerable: true,
+          configurable: false,
+          writable: false,
+        });
+
+        return operation(
+          transaction as unknown as HouseholdMembershipAdministrationTransaction,
+        );
+      },
+    );
   }
 
   async check(): Promise<ReadinessResult> {
