@@ -39,40 +39,62 @@ create table fridge.household_role_capability (
 comment on table fridge.household_role_capability is
   'Governed mapping from Household role reference data to provider-neutral capabilities. BE-03 does not seed concrete role mappings by convention.';
 
-create or replace function fridge_internal.household_role_has_capability(
-  p_role_code text,
-  p_capability_code text
+create or replace function fridge_internal.acquire_household_membership_admin_authority(
+  p_household_id uuid,
+  p_user_id uuid,
+  p_membership_id uuid
 )
-returns boolean
-language sql
-stable
+returns text
+language plpgsql
+volatile
 security definer
 set search_path = pg_catalog
 as $$
-  select exists (
-    select 1
-      from fridge.household_role r
-      join fridge.household_role_capability rc
-        on rc.role_code = r.role_code
-      join fridge.household_capability c
-        on c.capability_code = rc.capability_code
-     where r.role_code = p_role_code
-       and r.lifecycle_status = 'ACTIVE'
-       and c.capability_code = p_capability_code
-       and c.lifecycle_status = 'ACTIVE'
-  );
+declare
+  v_role_code text;
+begin
+  -- The server-set Household context remains mandatory defense in depth. A
+  -- caller cannot use this privileged function as a cross-Household oracle.
+  if fridge_internal.current_household_id() is distinct from p_household_id then
+    return null;
+  end if;
+
+  select hm.role_code
+    into v_role_code
+    from fridge.household_membership hm
+    join fridge.household_role r
+      on r.role_code = hm.role_code
+    join fridge.household_role_capability rc
+      on rc.role_code = r.role_code
+    join fridge.household_capability c
+      on c.capability_code = rc.capability_code
+   where hm.household_id = p_household_id
+     and hm.user_id = p_user_id
+     and hm.membership_id = p_membership_id
+     and hm.lifecycle_status = 'ACTIVE'
+     and hm.effective_from <= statement_timestamp()
+     and (hm.effective_to is null or hm.effective_to > statement_timestamp())
+     and r.lifecycle_status = 'ACTIVE'
+     and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
+     and c.lifecycle_status = 'ACTIVE'
+   for update of hm
+   for share of r, rc, c;
+
+  return v_role_code;
+end;
 $$;
 
-comment on function fridge_internal.household_role_has_capability(text, text) is
-  'Evaluates governed role capability without exposing role-string conventions to application code.';
+comment on function fridge_internal.acquire_household_membership_admin_authority(uuid, uuid, uuid) is
+  'Atomically revalidates and locks current actor membership plus governed membership-administration role/capability facts for the caller transaction. Returns the current role code only when authority is valid.';
 
 revoke all on table fridge.household_capability from public;
 revoke all on table fridge.household_role_capability from public;
-revoke all on function fridge_internal.household_role_has_capability(text, text) from public;
+revoke all on function fridge_internal.acquire_household_membership_admin_authority(uuid, uuid, uuid) from public;
 
--- Runtime receives only the narrow evaluator required to materialize the
--- stronger membership-administration authority. No direct table access is needed.
-grant execute on function fridge_internal.household_role_has_capability(text, text)
+-- Runtime receives only the narrow authority-acquisition capability. The
+-- SECURITY DEFINER function owns the required row locks; fridge_app retains no
+-- direct UPDATE privilege on membership or capability reference tables.
+grant execute on function fridge_internal.acquire_household_membership_admin_authority(uuid, uuid, uuid)
   to fridge_app;
 
 commit;
