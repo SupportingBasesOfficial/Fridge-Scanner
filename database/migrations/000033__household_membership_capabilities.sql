@@ -70,13 +70,9 @@ revoke all on table fridge.household_capability from public;
 revoke all on table fridge.household_role_capability from public;
 revoke all on function fridge_internal.household_role_has_capability(text, text) from public;
 
--- Reference data is readable by runtime capabilities; direct mutation remains absent.
-grant select on table fridge.household_capability
-  to fridge_app, fridge_worker, fridge_readonly;
-grant select on table fridge.household_role_capability
-  to fridge_app, fridge_worker, fridge_readonly;
-
+-- Runtime receives only the narrow evaluator required to materialize the
+-- stronger membership-administration authority. No direct table access is needed.
 grant execute on function fridge_internal.household_role_has_capability(text, text)
-  to fridge_app, fridge_worker, fridge_readonly;
+  to fridge_app;
 
 commit;
