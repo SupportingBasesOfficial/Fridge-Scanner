@@ -29,6 +29,16 @@ function verifier(
   return { verify };
 }
 
+function unsafeVerifier(
+  value: unknown,
+): AuthenticationEvidenceVerifier {
+  return {
+    async verify() {
+      return value as VerifiedExternalIdentity;
+    },
+  };
+}
+
 function mapper(
   resolve: PlatformPrincipalMapper['resolve'],
 ): PlatformPrincipalMapper {
@@ -134,6 +144,41 @@ test('invalid verifier output fails closed before platform mapping', async () =>
     UnauthenticatedError,
   );
   assert.equal(mappings, 0);
+});
+
+test('untyped verifier output is validated before dereferencing or platform mapping', async () => {
+  const invalidOutputs: unknown[] = [
+    null,
+    undefined,
+    {},
+    { subject: 'subject' },
+    { authority: 'authority' },
+    { authority: null, subject: 'subject' },
+    { authority: 'authority', subject: null },
+    { authority: 42, subject: 'subject' },
+    { authority: 'authority', subject: 42 },
+  ];
+
+  for (const output of invalidOutputs) {
+    let mappings = 0;
+    const resolver = new BearerAuthenticatedPrincipalResolver(
+      unsafeVerifier(output),
+      mapper(async () => {
+        mappings += 1;
+        return principalId;
+      }),
+    );
+
+    await assert.rejects(
+      resolver.resolve(request({ authorization: 'Bearer opaque-token' })),
+      (error: unknown) => {
+        assert.ok(error instanceof UnauthenticatedError);
+        assert.equal(error.cause, undefined);
+        return true;
+      },
+    );
+    assert.equal(mappings, 0);
+  }
 });
 
 test('verifier exceptions are translated without leaking credential-bearing diagnostics', async () => {
