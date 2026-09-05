@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
 import {
+  DependencyUnavailableError,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -9,8 +10,10 @@ import {
   type PrincipalId as PrincipalIdType,
 } from '@fridge/application';
 import {
+  ExternalIdentityMappingError,
   HouseholdAuthorizationError,
   PgDatabase,
+  PgExternalIdentityPrincipalMapper,
   PgHouseholdProfileReader,
   requirePgClient,
 } from './index.js';
@@ -59,6 +62,161 @@ test('runtime capability without Household context fails closed', async () => {
   } finally {
     client.release();
     await pool.end();
+  }
+});
+
+test('verified external identity maps to exactly one platform PrincipalId', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+
+  try {
+    assert.equal(
+      await mapper.resolve({
+        authority: 'https://issuer-a.example.test',
+        subject: 'shared-subject',
+      }),
+      PRINCIPAL_A,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('external identity authority scopes equal provider subject strings', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+
+  try {
+    assert.equal(
+      await mapper.resolve({
+        authority: 'https://issuer-b.example.test',
+        subject: 'shared-subject',
+      }),
+      PRINCIPAL_B,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('unknown or revoked external identity fails closed without guessing a principal', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+
+  try {
+    await assert.rejects(
+      mapper.resolve({
+        authority: 'https://issuer-a.example.test',
+        subject: 'unknown-subject',
+      }),
+      ExternalIdentityMappingError,
+    );
+    await assert.rejects(
+      mapper.resolve({
+        authority: 'https://issuer-a.example.test',
+        subject: 'revoked-subject',
+      }),
+      ExternalIdentityMappingError,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('external identity lookup rejects whitespace confusion and unbounded values', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity(
+        ' https://issuer-a.example.test',
+        'shared-subject',
+      ),
+      /surrounding whitespace/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity(
+        'https://issuer-a.example.test',
+        'shared-subject ',
+      ),
+      /surrounding whitespace/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity('a'.repeat(513), 'subject'),
+      /maximum length/,
+    );
+    await assert.rejects(
+      database.resolvePrincipalForExternalIdentity('authority', 's'.repeat(1025)),
+      /maximum length/,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('external identity mapping preserves dependency-unavailable semantics', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+
+  await database.close();
+
+  await assert.rejects(
+    mapper.resolve({
+      authority: 'https://issuer-a.example.test',
+      subject: 'shared-subject',
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof DependencyUnavailableError);
+      assert.equal(error.message, 'required dependency is unavailable');
+      assert.equal(error.cause, undefined);
+      return true;
+    },
+  );
+});
+
+test('authenticated principal still requires current Household authorization', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const mapper = new PgExternalIdentityPrincipalMapper(database);
+  let callbackRan = false;
+
+  try {
+    const principal = await mapper.resolve({
+      authority: 'https://issuer-a.example.test',
+      subject: 'shared-subject',
+    });
+    assert.equal(principal, PRINCIPAL_A);
+
+    await assert.rejects(
+      database.withAuthorizedHouseholdTransaction(
+        principal,
+        HOUSEHOLD_B,
+        async () => {
+          callbackRan = true;
+        },
+      ),
+      HouseholdAuthorizationError,
+    );
+    assert.equal(callbackRan, false);
+  } finally {
+    await database.close();
   }
 });
 
