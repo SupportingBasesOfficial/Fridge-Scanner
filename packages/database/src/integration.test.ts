@@ -20,15 +20,20 @@ import {
 } from './index.js';
 
 const DATABASE_URL = process.env.BE00_TEST_DATABASE_URL;
+const ADMIN_DATABASE_URL = process.env.DATABASE_URL;
 const HOUSEHOLD_A = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 const HOUSEHOLD_B = HouseholdId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 const PRINCIPAL_A = PrincipalId('11111111-1111-4111-8111-111111111111');
 const PRINCIPAL_B = PrincipalId('22222222-2222-4222-8222-222222222222');
 const PRINCIPAL_BE03_ADMIN = PrincipalId('33333333-3333-4333-8333-333333333333');
 const MEMBERSHIP_A = HouseholdMembershipId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa');
+const MEMBERSHIP_BE03_ADMIN = HouseholdMembershipId('33333333-aaaa-4333-8333-333333333333');
 
 if (!DATABASE_URL) {
   throw new Error('BE00_TEST_DATABASE_URL is required for database integration tests');
+}
+if (!ADMIN_DATABASE_URL) {
+  throw new Error('DATABASE_URL is required for database concurrency integration tests');
 }
 
 async function visibleHouseholds(
@@ -317,6 +322,59 @@ test('governed role capability upgrades current authority to membership administ
       capability: HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
     });
   } finally {
+    await database.close();
+  }
+});
+
+test('membership administration authority locks the actor membership against concurrent revocation', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+    maxConnections: 1,
+  });
+  const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
+  let markAuthorityReady!: () => void;
+  let releaseAuthority!: () => void;
+  const authorityReady = new Promise<void>((resolve) => {
+    markAuthorityReady = resolve;
+  });
+  const authorityRelease = new Promise<void>((resolve) => {
+    releaseAuthority = resolve;
+  });
+
+  const authorityOperation = database.withHouseholdMembershipAdministrationTransaction(
+    PRINCIPAL_BE03_ADMIN,
+    HOUSEHOLD_A,
+    async () => {
+      markAuthorityReady();
+      await authorityRelease;
+    },
+  );
+
+  await authorityReady;
+  const adminClient = await adminPool.connect();
+
+  try {
+    await adminClient.query('begin');
+    await adminClient.query("set local lock_timeout = '200ms'");
+    await assert.rejects(
+      adminClient.query(
+        `update fridge.household_membership
+            set effective_to = clock_timestamp()
+          where membership_id = $1::uuid`,
+        [MEMBERSHIP_BE03_ADMIN],
+      ),
+      (error: unknown) => {
+        assert.equal((error as { code?: string }).code, '55P03');
+        return true;
+      },
+    );
+    await adminClient.query('rollback');
+  } finally {
+    releaseAuthority();
+    await authorityOperation;
+    adminClient.release();
+    await adminPool.end();
     await database.close();
   }
 });
