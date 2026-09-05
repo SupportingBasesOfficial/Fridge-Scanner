@@ -1,29 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import {
   ApplicationError,
   HouseholdId,
   InvalidInputError,
-  PrincipalId,
-  UnauthenticatedError,
   type AuthorizedHouseholdContext,
   type ReadAuthorizedHouseholdContextInput,
   type ReadinessProbe,
   type UseCase,
 } from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
+import type { AuthenticatedPrincipalResolver } from './auth.js';
+
+export {
+  rejectUnauthenticatedPrincipal,
+  type AuthenticatedPrincipalResolver,
+} from './auth.js';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
-
-export interface AuthenticatedPrincipalResolver {
-  resolve(request: FastifyRequest): Promise<PrincipalId>;
-}
-
-export const rejectUnauthenticatedPrincipal: AuthenticatedPrincipalResolver = {
-  async resolve() {
-    throw new UnauthenticatedError();
-  },
-};
 
 export interface ApiServerDependencies {
   readonly config: RuntimeConfig;
