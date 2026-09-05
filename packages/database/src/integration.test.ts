@@ -3,6 +3,7 @@ import test from 'node:test';
 import { Pool } from 'pg';
 import {
   DependencyUnavailableError,
+  HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -23,6 +24,7 @@ const HOUSEHOLD_A = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 const HOUSEHOLD_B = HouseholdId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 const PRINCIPAL_A = PrincipalId('11111111-1111-4111-8111-111111111111');
 const PRINCIPAL_B = PrincipalId('22222222-2222-4222-8222-222222222222');
+const PRINCIPAL_BE03_ADMIN = PrincipalId('33333333-3333-4333-8333-333333333333');
 const MEMBERSHIP_A = HouseholdMembershipId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa');
 
 if (!DATABASE_URL) {
@@ -285,6 +287,83 @@ test('authorization context exposes verified principal Household membership and 
       membershipId: MEMBERSHIP_A,
       householdRoleCode: 'MEMBER',
     });
+  } finally {
+    await database.close();
+  }
+});
+
+test('governed role capability upgrades current authority to membership administration', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+
+  try {
+    const authority = await database.withHouseholdMembershipAdministrationTransaction(
+      PRINCIPAL_BE03_ADMIN,
+      HOUSEHOLD_A,
+      async (transaction) => ({
+        principalId: transaction.principalId,
+        householdId: transaction.householdId,
+        householdRoleCode: transaction.householdRoleCode,
+        capability: transaction.membershipAdministrationCapability,
+      }),
+    );
+
+    assert.deepEqual(authority, {
+      principalId: PRINCIPAL_BE03_ADMIN,
+      householdId: HOUSEHOLD_A,
+      householdRoleCode: 'BE03_ADMIN',
+      capability: HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+    });
+  } finally {
+    await database.close();
+  }
+});
+
+test('current Household membership without governed capability cannot administer members', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  let callbackRan = false;
+
+  try {
+    await assert.rejects(
+      database.withHouseholdMembershipAdministrationTransaction(
+        PRINCIPAL_A,
+        HOUSEHOLD_A,
+        async () => {
+          callbackRan = true;
+        },
+      ),
+      HouseholdAuthorizationError,
+    );
+    assert.equal(callbackRan, false);
+  } finally {
+    await database.close();
+  }
+});
+
+test('membership administration still requires current membership in the requested Household', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  let callbackRan = false;
+
+  try {
+    await assert.rejects(
+      database.withHouseholdMembershipAdministrationTransaction(
+        PRINCIPAL_BE03_ADMIN,
+        HOUSEHOLD_B,
+        async () => {
+          callbackRan = true;
+        },
+      ),
+      HouseholdAuthorizationError,
+    );
+    assert.equal(callbackRan, false);
   } finally {
     await database.close();
   }
