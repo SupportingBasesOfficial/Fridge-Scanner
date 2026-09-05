@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import {
+  DependencyUnavailableError,
   PrincipalId,
   UnauthenticatedError,
 } from '@fridge/application';
@@ -57,6 +58,20 @@ function assertVerifiedIdentity(identity: VerifiedExternalIdentity): void {
   }
 }
 
+async function verifyEvidence(
+  verifier: AuthenticationEvidenceVerifier,
+  evidence: BearerAuthenticationEvidence,
+): Promise<VerifiedExternalIdentity> {
+  try {
+    return await verifier.verify(evidence);
+  } catch (error) {
+    if (error instanceof DependencyUnavailableError) {
+      throw new DependencyUnavailableError();
+    }
+    throw new UnauthenticatedError();
+  }
+}
+
 export class BearerAuthenticatedPrincipalResolver implements AuthenticatedPrincipalResolver {
   constructor(
     private readonly verifier: AuthenticationEvidenceVerifier,
@@ -65,7 +80,7 @@ export class BearerAuthenticatedPrincipalResolver implements AuthenticatedPrinci
 
   async resolve(request: FastifyRequest): Promise<PrincipalId> {
     const evidence = extractBearerEvidence(request);
-    const externalIdentity = await this.verifier.verify(evidence);
+    const externalIdentity = await verifyEvidence(this.verifier, evidence);
     assertVerifiedIdentity(externalIdentity);
     return this.principalMapper.resolve(externalIdentity);
   }
