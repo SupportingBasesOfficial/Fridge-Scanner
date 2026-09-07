@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { ReadAuthorizedHouseholdContext } from '@fridge/application';
+import {
+  AddHouseholdMemberUseCase,
+  HouseholdMembershipId,
+  ReadAuthorizedHouseholdContext,
+  ReadCurrentHouseholdMembersUseCase,
+} from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
+import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
 import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
 import { buildApiServer } from './server.js';
 
@@ -84,12 +90,25 @@ function buildIntegrationServer(database: PgDatabase) {
     database,
     new PgHouseholdProfileReader(),
   );
+  const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(
+    database,
+    new PgCurrentHouseholdMembershipReader(),
+  );
+  const addHouseholdMember = new AddHouseholdMemberUseCase(
+    database,
+    database,
+    {
+      generate: () => HouseholdMembershipId('ffffffff-ffff-4fff-8fff-ffffffffffff'),
+    },
+  );
 
   return buildApiServer({
     config,
     readiness: database,
     authenticatedPrincipal,
     readAuthorizedHouseholdContext,
+    readCurrentHouseholdMembers,
+    addHouseholdMember,
   });
 }
 
