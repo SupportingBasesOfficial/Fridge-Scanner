@@ -6,6 +6,7 @@ import {
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
+  InternalApplicationError,
   InvalidInputError,
   PrincipalId,
   type AddHouseholdMemberPersistenceInput,
@@ -26,6 +27,12 @@ const RUNTIME_CAPABILITY_ROLES = new Set([
 ] as const);
 const EXTERNAL_AUTHORITY_MAX_LENGTH = 512;
 const EXTERNAL_SUBJECT_MAX_LENGTH = 1024;
+const DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES = new Set([
+  '53300',
+  '57P01',
+  '57P02',
+  '57P03',
+]);
 
 export type RuntimeDatabaseCapabilityRole =
   | 'fridge_app'
@@ -55,6 +62,22 @@ function requireExactExternalIdentityComponent(
     throw new TypeError(`${label} exceeds maximum length`);
   }
   return value;
+}
+
+function providerNeutralDatabaseFailure(error: unknown): Error {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { readonly code?: unknown }).code ?? '')
+      : '';
+
+  if (
+    code.startsWith('08') ||
+    DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)
+  ) {
+    return new DependencyUnavailableError('required dependency is unavailable', error);
+  }
+
+  return new InternalApplicationError(error);
 }
 
 class PgTransactionHandle {
@@ -257,6 +280,10 @@ export class PgDatabase
         );
         const authorityRoleCode = authority.rows[0]?.role_code;
 
+        // The stronger handle must describe the exact authority facts that were
+        // locked. If the actor role changed between the initial current-membership
+        // read and privileged acquisition, fail closed rather than expose stale
+        // role provenance on an otherwise valid administrative handle.
         if (
           authorityRoleCode === null ||
           authorityRoleCode === undefined ||
@@ -288,24 +315,30 @@ export class PgDatabase
     }
 
     const client = requirePgClient(transaction);
-    const result = await client.query<{ outcome: string }>(
-      `select fridge_internal.add_household_member(
-         $1::uuid,
-         $2::uuid,
-         $3::uuid,
-         $4::uuid,
-         $5::uuid,
-         $6::text
-       ) as outcome`,
-      [
-        transaction.householdId,
-        transaction.principalId,
-        transaction.membershipId,
-        input.membershipId,
-        input.targetPrincipalId,
-        input.roleCode,
-      ],
-    );
+    let result: { readonly rows: { readonly outcome: string }[] };
+
+    try {
+      result = await client.query<{ outcome: string }>(
+        `select fridge_internal.add_household_member(
+           $1::uuid,
+           $2::uuid,
+           $3::uuid,
+           $4::uuid,
+           $5::uuid,
+           $6::text
+         ) as outcome`,
+        [
+          transaction.householdId,
+          transaction.principalId,
+          transaction.membershipId,
+          input.membershipId,
+          input.targetPrincipalId,
+          input.roleCode,
+        ],
+      );
+    } catch (error) {
+      throw providerNeutralDatabaseFailure(error);
+    }
 
     switch (result.rows[0]?.outcome) {
       case 'ADDED':
@@ -315,8 +348,11 @@ export class PgDatabase
       case 'TARGET_OR_ROLE_INVALID':
         throw new InvalidInputError('target principal or Household role is not eligible');
       case 'UNAUTHORIZED':
-      default:
         throw new HouseholdAuthorizationError();
+      default:
+        throw new InternalApplicationError(
+          new Error('unexpected add Household member outcome'),
+        );
     }
   }
 
