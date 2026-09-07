@@ -21,6 +21,14 @@ begin
     raise exception 'fridge_app must execute governed self-leave';
   end if;
 
+  if not has_function_privilege(
+    'fridge_app',
+    'fridge_internal.replay_household_self_leave(uuid,uuid,uuid)',
+    'EXECUTE'
+  ) then
+    raise exception 'fridge_app must execute narrow committed self-leave replay';
+  end if;
+
   if has_function_privilege(
        'fridge_app',
        'fridge_internal.end_household_membership_core(uuid,uuid,uuid,uuid,text)',
@@ -37,6 +45,11 @@ begin
        'EXECUTE'
      )
      or has_function_privilege(
+       'fridge_worker',
+       'fridge_internal.replay_household_self_leave(uuid,uuid,uuid)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
        'fridge_readonly',
        'fridge_internal.end_household_membership(uuid,uuid,uuid,uuid,uuid)',
        'EXECUTE'
@@ -44,6 +57,11 @@ begin
      or has_function_privilege(
        'fridge_readonly',
        'fridge_internal.leave_household(uuid,uuid,uuid,uuid)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'fridge_readonly',
+       'fridge_internal.replay_household_self_leave(uuid,uuid,uuid)',
        'EXECUTE'
      ) then
     raise exception 'membership-end authority must remain intent-specific and least-privileged';
