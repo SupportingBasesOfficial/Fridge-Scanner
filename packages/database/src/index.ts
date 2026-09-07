@@ -1,13 +1,17 @@
 import { Pool, type PoolClient } from 'pg';
 import {
+  ConflictError,
   DependencyUnavailableError,
   HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
+  InvalidInputError,
   PrincipalId,
+  type AddHouseholdMemberPersistenceInput,
   type HouseholdMembershipAdministrationTransaction,
   type HouseholdMembershipAdministrationTransactionManager,
+  type HouseholdMembershipWriter,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
@@ -89,6 +93,7 @@ export class PgDatabase
   implements
     TransactionManager,
     HouseholdMembershipAdministrationTransactionManager,
+    HouseholdMembershipWriter,
     ReadinessProbe
 {
   readonly #pool: Pool;
@@ -252,10 +257,6 @@ export class PgDatabase
         );
         const authorityRoleCode = authority.rows[0]?.role_code;
 
-        // The stronger handle must describe the exact authority facts that were
-        // locked. If the actor role changed between the initial current-membership
-        // read and privileged acquisition, fail closed rather than expose stale
-        // role provenance on an otherwise valid administrative handle.
         if (
           authorityRoleCode === null ||
           authorityRoleCode === undefined ||
@@ -276,6 +277,47 @@ export class PgDatabase
         );
       },
     );
+  }
+
+  async addHouseholdMember(
+    transaction: HouseholdMembershipAdministrationTransaction,
+    input: AddHouseholdMemberPersistenceInput,
+  ): Promise<void> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household membership mutation requires fridge_app capability');
+    }
+
+    const client = requirePgClient(transaction);
+    const result = await client.query<{ outcome: string }>(
+      `select fridge_internal.add_household_member(
+         $1::uuid,
+         $2::uuid,
+         $3::uuid,
+         $4::uuid,
+         $5::uuid,
+         $6::text
+       ) as outcome`,
+      [
+        transaction.householdId,
+        transaction.principalId,
+        transaction.membershipId,
+        input.membershipId,
+        input.targetPrincipalId,
+        input.roleCode,
+      ],
+    );
+
+    switch (result.rows[0]?.outcome) {
+      case 'ADDED':
+        return;
+      case 'CURRENT_MEMBERSHIP_EXISTS':
+        throw new ConflictError('Household membership already exists');
+      case 'TARGET_OR_ROLE_INVALID':
+        throw new InvalidInputError('target principal or Household role is not eligible');
+      case 'UNAUTHORIZED':
+      default:
+        throw new HouseholdAuthorizationError();
+    }
   }
 
   async check(): Promise<ReadinessResult> {
