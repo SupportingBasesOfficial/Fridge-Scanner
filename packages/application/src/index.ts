@@ -6,6 +6,7 @@ import type {
 } from '@fridge/domain';
 
 export {
+  CommandId,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
