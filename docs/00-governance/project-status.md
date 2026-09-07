@@ -25,9 +25,12 @@
 - Accepted BE-03 mutation slice: **Governed Add / Rejoin Household Member**, squash-merged at `e4558a605ef31ace98e7dcf599784e413eb7dc8a`
 - BE-03 add-member exact reviewed HEAD: `1200a73e0cedd35b148f0522d795bcccfb91b5d6`
 - BE-03 add-member gate: **accepted** — durable `CommandId` retry identity, non-restoring replay, governed role/target locking, current-effective overlap protection, concurrent-add convergence, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
+- Accepted BE-03 survivability kernel: **Last-administrator Survivability + Canonical Lock Order**, squash-merged at `f9e7b2a9b8749a3c36530a3ba8d758856f55b64c`
+- BE-03 survivability exact reviewed HEAD: `7ec622558f711408e36e0d44545f85f7ca59594f`
+- BE-03 survivability gate: **accepted** — Household-first serialization, actor/target/governance lock order, write-skew/deadlock prevention, least privilege, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
 - Active phase: **BE-03 — Household Access Management**
-- Active implementation slice: **Last-administrator survivability kernel**
-- Backend implementation: **runtime, application/domain kernel, identity boundary, BE-03 authority kernel and governed add/rejoin mutation accepted; atomic survivability enforcement in progress before role-change/end**
+- Active implementation slice: **Governed Household membership role change**
+- Backend implementation: **runtime, application/domain kernel, identity boundary, BE-03 authority kernel, governed add/rejoin and atomic survivability accepted; history-preserving role-change mutation in progress**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -41,7 +44,7 @@ BE-01 establishes the accepted provider-neutral domain/application kernel above 
 
 BE-02 establishes the accepted provider-neutral identity boundary: provider-authenticated evidence is verified and mapped explicitly to a platform-owned principal; provider tokens/claims never become Household authority; current Household membership is still re-evaluated inside the accepted transaction boundary; stale or ended membership cannot be revived by a still-valid authentication credential.
 
-BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. The accepted add/rejoin slice adds the first history-preserving membership mutation with stable command identity and retry safety. Current work establishes the atomic last-administrator survivability kernel required before any role-change or membership-end mutation can safely reduce current administrative authority.
+BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. The accepted add/rejoin slice adds the first history-preserving membership mutation with stable command identity and retry safety. The accepted survivability kernel establishes the Household-first serialization and atomic last-administrator invariant required before authority-reducing mutations. Current work implements governed role change by closing the authoritative prior interval and creating a new role interval rather than rewriting historical authority.
 
 DB-00, DB-01, DB-02, BE-00, BE-01 and BE-02 are normative for BE-03 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
 
