@@ -14,8 +14,16 @@
 - Accepted BE-01 baseline: **Application Contracts & Domain Kernel**, final implementation lineage incorporated through squash commit `73d4345e42a958cd966fea012ce4ae8d360c8531`
 - BE-01 final exact reviewed HEAD: `11dbf0313cf882385ae05f302a0d0a5ca09b97c0`
 - BE-01 final execution/review gate: **accepted** — dependency boundaries, strict TypeScript/build/tests, DB-02/RLS regression, container regression, exact-value round trips and final review all CLEAN on the exact reviewed HEAD
-- Active phase: **BE-02 — Identity Boundary**
-- Backend implementation: **runtime foundation and provider-neutral application/domain kernel accepted; identity boundary in progress**
+- Accepted BE-02 baseline: **Identity Boundary**, formally accepted at squash commit `5f7cba8a1693a5df4cc7d61ad0c3452414b97d3c`
+- BE-02 final exact reviewed HEAD: `061b9b4557787f309a3bbbf789d1ea0e47c7e592`
+- BE-02 final execution/review gate: **accepted** — provider-neutral verification/mapping, current Household authorization, stale-membership regression and end-to-end authenticated proof all CLEAN on the exact reviewed HEAD
+- Accepted BE-03 normative baseline: **Household Access Management**, squash-merged at `75db7717761e791c04bbe43a5762fb3381b91e3f`
+- BE-03 normative exact reviewed HEAD: `b826f12cfc1307962740b3774d2f3deb01bf84af`
+- Accepted BE-03 authority kernel: **Household Membership Administration Capability**, squash-merged at `9d9323122a86fbe572b7fd5bc5ea8d96a4cad65f`
+- BE-03 authority-kernel exact reviewed HEAD: `5c7feb9940b5e66d857780e5eb585e36a1ddb81e`
+- BE-03 authority-kernel gate: **accepted** — governed provider-neutral capability, least-privileged SECURITY DEFINER acquisition, opaque application capability, concurrency locking proof, DB-02 regression and BE-00 gate all CLEAN
+- Active phase: **BE-03 — Household Access Management**
+- Backend implementation: **runtime, application/domain kernel and identity boundary accepted; BE-03 governed membership mutations in progress**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -27,7 +35,11 @@ BE-00 establishes the accepted executable backend runtime foundation: npm worksp
 
 BE-01 establishes the accepted provider-neutral domain/application kernel above BE-00: opaque business identifiers; canonical UUID parsing; exact rational, decimal and money semantics without JavaScript binary floating point; explicit canonical wire serialization; strict UTC instant semantics; provider-neutral application errors; verified Household transaction authority; explicit use-case contracts; intent-specific ports; machine-enforced dependency direction; semantic contract tests; and one deliberately narrow proving slice demonstrating HTTP → application → authorized persistence wiring without uncontrolled feature CRUD.
 
-DB-00, DB-01, DB-02, BE-00 and BE-01 are normative for BE-02 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
+BE-02 establishes the accepted provider-neutral identity boundary: provider-authenticated evidence is verified and mapped explicitly to a platform-owned principal; provider tokens/claims never become Household authority; current Household membership is still re-evaluated inside the accepted transaction boundary; stale or ended membership cannot be revived by a still-valid authentication credential.
+
+BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. Current work adds history-preserving, intent-specific membership mutations without granting delivery/runtime broad table mutation privileges.
+
+DB-00, DB-01, DB-02, BE-00, BE-01 and BE-02 are normative for BE-03 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
 
 Earlier DDL/design notes remain historical input only. They are not production-ready or canonical unless explicitly reconciled with the accepted baselines.
 
@@ -50,20 +62,33 @@ Domain <- Application <- Adapters / Delivery / Runtime
 
 Later phases may extend the system with new domain/application contracts, but may not bypass the accepted dependency, exactness, authority or serialization boundaries.
 
-## Purpose of BE-02
+## BE-02 acceptance
 
-BE-02 establishes the real identity boundary that converts provider-authenticated evidence into a verified platform principal without allowing provider tokens, raw request data or requested Household identifiers to become application authority.
+The canonical BE-02 evidence chain is recorded in `docs/05-backend/be-02-acceptance.md`.
 
-BE-02 must consume BE-01 rather than replace it. In particular:
+BE-02 was formally accepted by PR #18 at `5f7cba8a1693a5df4cc7d61ad0c3452414b97d3c`. Provider authentication proves platform principal identity only; it does not freeze or replace Household authorization. External identity mapping, current-membership authorization and nondisclosure remain separate governed boundaries.
 
-- provider identity is not platform authority;
-- authenticated principal resolution remains a delivery/runtime boundary responsibility;
-- Household authorization remains current-membership verified inside the accepted transaction boundary;
-- provider-specific claims and SDK models may not leak into domain/application contracts;
-- application use cases continue receiving provider-neutral semantic inputs and verified authority only.
+## Purpose of BE-03
+
+BE-03 governs who may administer Household membership and how membership authority changes safely over time.
+
+BE-03 must consume BE-02 rather than replace it. In particular:
+
+- current Household membership remains execution-time truth;
+- membership administration requires the explicit provider-neutral `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability;
+- concrete role meaning comes from governed role/capability reference data, never arbitrary strings or provider metadata;
+- adding/rejoining creates a new current membership interval without rewriting historical authority;
+- role change and membership end must preserve historical semantics;
+- self-mutation follows explicit policy rather than accidental actor/target equality behavior;
+- last-administrator survivability must be checked atomically with any mutation that could reduce administration authority;
+- target identities are platform-owned principals, not provider subjects, emails or JWT claims;
+- mutation persistence remains least-privileged and intent-specific;
+- provider-neutral application errors and tenant nondisclosure remain authoritative.
+
+BE-03 is not complete until a real authenticated request crosses BE-02 verification → current Household authorization → membership-administration capability → durable governed mutation while adversarial and concurrency tests preserve one-current-membership, history and survivability invariants.
 
 ## Governance rule
 
-The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization. A passing implementation does not override a violated domain, relational, physical, runtime or application-kernel invariant.
+The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization. A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary or Household-access invariant.
 
-BE-02 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
+BE-03 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
