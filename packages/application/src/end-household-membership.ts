@@ -47,6 +47,16 @@ export interface LeaveHouseholdPersistenceInput {
   readonly commandId: CommandId;
 }
 
+export interface LeaveHouseholdReplayInput {
+  readonly commandId: CommandId;
+  readonly actorPrincipalId: PrincipalId;
+  readonly householdId: HouseholdId;
+}
+
+export interface HouseholdSelfLeaveReplayReader {
+  replayLeaveHousehold(input: LeaveHouseholdReplayInput): Promise<HouseholdMembershipId | null>;
+}
+
 export interface HouseholdSelfLeaver {
   leaveHousehold(
     transaction: TransactionHandle,
@@ -88,11 +98,21 @@ export class LeaveHouseholdUseCase
   implements UseCase<LeaveHouseholdInput, LeaveHouseholdOutput>
 {
   constructor(
+    private readonly replays: HouseholdSelfLeaveReplayReader,
     private readonly transactions: TransactionManager,
     private readonly memberships: HouseholdSelfLeaver,
   ) {}
 
   async execute(input: LeaveHouseholdInput): Promise<LeaveHouseholdOutput> {
+    const replayedMembershipId = await this.replays.replayLeaveHousehold({
+      commandId: input.commandId,
+      actorPrincipalId: input.actorPrincipalId,
+      householdId: input.householdId,
+    });
+    if (replayedMembershipId !== null) {
+      return { endedMembershipId: replayedMembershipId };
+    }
+
     let endedMembershipId: HouseholdMembershipId | undefined;
 
     await this.transactions.withAuthorizedHouseholdTransaction(
