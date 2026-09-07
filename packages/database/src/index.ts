@@ -17,6 +17,8 @@ import {
   type HouseholdMembershipRoleChanger,
   type HouseholdMembershipWriter,
   type HouseholdProfileReader,
+  type HouseholdSelfLeaveReplayReader,
+  type LeaveHouseholdReplayInput,
   type ReadinessProbe,
   type ReadinessResult,
   type TransactionHandle,
@@ -121,6 +123,7 @@ export class PgDatabase
     HouseholdMembershipAdministrationTransactionManager,
     HouseholdMembershipWriter,
     HouseholdMembershipRoleChanger,
+    HouseholdSelfLeaveReplayReader,
     ReadinessProbe
 {
   readonly #pool: Pool;
@@ -188,6 +191,83 @@ export class PgDatabase
       throw new DependencyUnavailableError();
     } finally {
       client?.release();
+    }
+  }
+
+  async replayLeaveHousehold(
+    input: LeaveHouseholdReplayInput,
+  ): Promise<HouseholdMembershipId | null> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household self-leave replay requires fridge_app capability');
+    }
+
+    const verifiedPrincipalId = PrincipalId(input.actorPrincipalId);
+    const verifiedHouseholdId = HouseholdId(input.householdId);
+
+    const client = await this.#pool.connect();
+    let transactionStarted = false;
+
+    try {
+      await client.query('begin');
+      transactionStarted = true;
+      await client.query('set local role fridge_app');
+      await client.query(
+        "select set_config('fridge.household_id', $1, true)",
+        [verifiedHouseholdId],
+      );
+
+      const result = await client.query<{
+        outcome_code: string;
+        ended_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                ended_membership_id::text
+           from fridge_internal.replay_household_self_leave(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid
+           )`,
+        [verifiedHouseholdId, verifiedPrincipalId, input.commandId],
+      );
+
+      await client.query('commit');
+      transactionStarted = false;
+
+      const outcome = result.rows[0];
+      switch (outcome?.outcome_code) {
+        case 'ENDED':
+          if (outcome.ended_membership_id === null) {
+            throw new InternalApplicationError(
+              new Error('self-leave replay succeeded without membership identity'),
+            );
+          }
+          return HouseholdMembershipId(outcome.ended_membership_id);
+        case 'NOT_REPLAYED':
+          return null;
+        case 'UNAUTHORIZED':
+          throw new HouseholdAuthorizationError();
+        default:
+          throw new InternalApplicationError(
+            new Error('unexpected self-leave replay outcome'),
+          );
+      }
+    } catch (error) {
+      if (transactionStarted) {
+        try {
+          await client.query('rollback');
+        } catch {
+          // Preserve the original provider-neutral failure.
+        }
+      }
+      if (
+        error instanceof HouseholdAuthorizationError ||
+        error instanceof InternalApplicationError
+      ) {
+        throw error;
+      }
+      throw providerNeutralDatabaseFailure(error);
+    } finally {
+      client.release();
     }
   }
 
