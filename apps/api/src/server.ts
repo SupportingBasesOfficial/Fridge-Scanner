@@ -124,6 +124,24 @@ function externalApplicationErrorCode(error: ApplicationError): string {
   return error.code;
 }
 
+function frameworkClientStatusCode(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('statusCode' in error)) {
+    return null;
+  }
+
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  if (
+    typeof statusCode === 'number'
+    && Number.isInteger(statusCode)
+    && statusCode >= 400
+    && statusCode < 500
+  ) {
+    return statusCode;
+  }
+
+  return null;
+}
+
 export function buildApiServer(dependencies: ApiServerDependencies): FastifyInstance {
   const {
     config,
@@ -240,6 +258,17 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
       void reply.code(statusCode).send({
         error: {
           code: externalApplicationErrorCode(error),
+          requestId: request.id,
+        },
+      });
+      return;
+    }
+
+    const clientStatusCode = frameworkClientStatusCode(error);
+    if (clientStatusCode !== null) {
+      void reply.code(clientStatusCode).send({
+        error: {
+          code: 'INVALID_REQUEST',
           requestId: request.id,
         },
       });
