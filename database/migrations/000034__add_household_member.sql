@@ -22,6 +22,7 @@ declare
   v_actor_role_code text;
   v_target_exists boolean;
   v_role_assignable boolean;
+  v_current_membership_id uuid;
 begin
   -- Household context is server-set inside the accepted transaction boundary.
   if fridge_internal.current_household_id() is distinct from p_household_id then
@@ -62,6 +63,26 @@ begin
     return 'TARGET_OR_ROLE_INVALID';
   end if;
 
+  -- The partial unique index protects one open interval, but current authority is
+  -- the effective interval. Explicitly lock and reject any membership that is
+  -- still effective now, including a row whose effective_to is non-null but in
+  -- the future, so immediate add cannot create overlapping current authority.
+  select hm.membership_id
+    into v_current_membership_id
+    from fridge.household_membership hm
+   where hm.household_id = p_household_id
+     and hm.user_id = p_target_user_id
+     and hm.lifecycle_status = 'ACTIVE'
+     and hm.effective_from <= statement_timestamp()
+     and (hm.effective_to is null or hm.effective_to > statement_timestamp())
+   order by hm.effective_from desc, hm.membership_id
+   limit 1
+   for update;
+
+  if v_current_membership_id is not null then
+    return 'CURRENT_MEMBERSHIP_EXISTS';
+  end if;
+
   begin
     insert into fridge.household_membership (
       membership_id,
@@ -85,10 +106,11 @@ begin
     );
   exception
     when unique_violation then
-      -- The accepted partial unique index remains the final concurrency barrier.
-      -- Concurrent duplicate add/rejoin attempts therefore collapse to one
-      -- current membership and one deterministic conflict outcome.
-      return 'CURRENT_MEMBERSHIP_EXISTS';
+      -- When no current row existed at the locked read, the accepted uniqueness
+      -- constraints remain the final barrier against a concurrent add or an
+      -- identifier collision. Both are provider-neutral conflicts, never retries
+      -- that may silently duplicate membership history.
+      return 'MEMBERSHIP_CONFLICT';
   end;
 
   return 'ADDED';
@@ -96,7 +118,7 @@ end;
 $$;
 
 comment on function fridge_internal.add_household_member(uuid, uuid, uuid, uuid, uuid, text) is
-  'BE-03 intent-specific add/rejoin mutation. Revalidates Household membership-administration authority, validates an active existing target principal and active assignable governed role, preserves prior history by inserting a new interval, and returns a provider-neutral outcome code.';
+  'BE-03 intent-specific add/rejoin mutation. Revalidates Household membership-administration authority, validates an active existing target principal and active assignable governed role, rejects overlapping current effective authority, preserves prior history by inserting a new interval, and returns a provider-neutral outcome code.';
 
 revoke all on function fridge_internal.add_household_member(uuid, uuid, uuid, uuid, uuid, text) from public;
 grant execute on function fridge_internal.add_household_member(uuid, uuid, uuid, uuid, uuid, text)
