@@ -1,13 +1,19 @@
 import { Pool, type PoolClient } from 'pg';
 import {
+  ConflictError,
   DependencyUnavailableError,
   HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
+  IdempotencyConflictError,
+  InternalApplicationError,
+  InvalidInputError,
   PrincipalId,
+  type AddHouseholdMemberPersistenceInput,
   type HouseholdMembershipAdministrationTransaction,
   type HouseholdMembershipAdministrationTransactionManager,
+  type HouseholdMembershipWriter,
   type HouseholdProfileReader,
   type ReadinessProbe,
   type ReadinessResult,
@@ -22,6 +28,12 @@ const RUNTIME_CAPABILITY_ROLES = new Set([
 ] as const);
 const EXTERNAL_AUTHORITY_MAX_LENGTH = 512;
 const EXTERNAL_SUBJECT_MAX_LENGTH = 1024;
+const DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES = new Set([
+  '53300',
+  '57P01',
+  '57P02',
+  '57P03',
+]);
 
 export type RuntimeDatabaseCapabilityRole =
   | 'fridge_app'
@@ -51,6 +63,22 @@ function requireExactExternalIdentityComponent(
     throw new TypeError(`${label} exceeds maximum length`);
   }
   return value;
+}
+
+function providerNeutralDatabaseFailure(error: unknown): Error {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { readonly code?: unknown }).code ?? '')
+      : '';
+
+  if (
+    code.startsWith('08') ||
+    DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)
+  ) {
+    return new DependencyUnavailableError('required dependency is unavailable', error);
+  }
+
+  return new InternalApplicationError(error);
 }
 
 class PgTransactionHandle {
@@ -89,6 +117,7 @@ export class PgDatabase
   implements
     TransactionManager,
     HouseholdMembershipAdministrationTransactionManager,
+    HouseholdMembershipWriter,
     ReadinessProbe
 {
   readonly #pool: Pool;
@@ -276,6 +305,76 @@ export class PgDatabase
         );
       },
     );
+  }
+
+  async addHouseholdMember(
+    transaction: HouseholdMembershipAdministrationTransaction,
+    input: AddHouseholdMemberPersistenceInput,
+  ): Promise<HouseholdMembershipId> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household membership mutation requires fridge_app capability');
+    }
+
+    const client = requirePgClient(transaction);
+    let result: {
+      readonly rows: {
+        readonly outcome_code: string;
+        readonly result_membership_id: string | null;
+      }[];
+    };
+
+    try {
+      result = await client.query<{
+        outcome_code: string;
+        result_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                result_membership_id::text
+           from fridge_internal.add_household_member(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid,
+             $4::uuid,
+             $5::uuid,
+             $6::uuid,
+             $7::text
+           )`,
+        [
+          transaction.householdId,
+          transaction.principalId,
+          transaction.membershipId,
+          input.commandId,
+          input.candidateMembershipId,
+          input.targetPrincipalId,
+          input.roleCode,
+        ],
+      );
+    } catch (error) {
+      throw providerNeutralDatabaseFailure(error);
+    }
+
+    const outcome = result.rows[0];
+    switch (outcome?.outcome_code) {
+      case 'ADDED':
+        if (outcome.result_membership_id === null) {
+          throw new InternalApplicationError(
+            new Error('add Household member succeeded without membership identity'),
+          );
+        }
+        return HouseholdMembershipId(outcome.result_membership_id);
+      case 'CURRENT_MEMBERSHIP_EXISTS':
+        throw new ConflictError('Household membership already exists');
+      case 'IDEMPOTENCY_CONFLICT':
+        throw new IdempotencyConflictError();
+      case 'TARGET_OR_ROLE_INVALID':
+        throw new InvalidInputError('target principal or Household role is not eligible');
+      case 'UNAUTHORIZED':
+        throw new HouseholdAuthorizationError();
+      default:
+        throw new InternalApplicationError(
+          new Error('unexpected add Household member outcome'),
+        );
+    }
   }
 
   async check(): Promise<ReadinessResult> {
