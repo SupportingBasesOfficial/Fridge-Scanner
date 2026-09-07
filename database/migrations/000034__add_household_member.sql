@@ -106,11 +106,10 @@ begin
     );
   exception
     when unique_violation then
-      -- When no current row existed at the locked read, the accepted uniqueness
-      -- constraints remain the final barrier against a concurrent add or an
-      -- identifier collision. Both are provider-neutral conflicts, never retries
-      -- that may silently duplicate membership history.
-      return 'MEMBERSHIP_CONFLICT';
+      -- The accepted uniqueness constraints remain the final barrier against a
+      -- concurrent add. Return the same provider-neutral duplicate-current-state
+      -- outcome so racing callers converge on one stable conflict contract.
+      return 'CURRENT_MEMBERSHIP_EXISTS';
   end;
 
   return 'ADDED';
