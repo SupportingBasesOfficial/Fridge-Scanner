@@ -1,5 +1,6 @@
 import {
   ConflictError,
+  DependencyUnavailableError,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
   IdempotencyConflictError,
@@ -12,6 +13,26 @@ import {
   type TransactionHandle,
 } from '@fridge/application';
 import { requirePgClient } from './index.js';
+
+const DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES = new Set([
+  '53300',
+  '57P01',
+  '57P02',
+  '57P03',
+]);
+
+function providerNeutralDatabaseFailure(error: unknown): Error {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { readonly code?: unknown }).code ?? '')
+      : '';
+
+  if (code.startsWith('08') || DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)) {
+    return new DependencyUnavailableError('required dependency is unavailable', error);
+  }
+
+  return new InternalApplicationError(error);
+}
 
 export class HouseholdMembershipEndAuthorizationError extends HouseholdUnauthorizedError {
   constructor() {
@@ -54,27 +75,35 @@ export class PgHouseholdMembershipEndWriter
     input: EndHouseholdMembershipPersistenceInput,
   ): Promise<HouseholdMembershipId> {
     const client = requirePgClient(transaction);
-    const result = await client.query<{
-      outcome_code: string;
-      ended_membership_id: string | null;
-    }>(
-      `select outcome_code,
-              ended_membership_id::text
-         from fridge_internal.end_household_membership(
-           $1::uuid,
-           $2::uuid,
-           $3::uuid,
-           $4::uuid,
-           $5::uuid
-         )`,
-      [
-        transaction.householdId,
-        transaction.principalId,
-        transaction.membershipId,
-        input.commandId,
-        input.targetPrincipalId,
-      ],
-    );
+    let result: {
+      readonly rows: { readonly outcome_code: string; readonly ended_membership_id: string | null }[];
+    };
+
+    try {
+      result = await client.query<{
+        outcome_code: string;
+        ended_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                ended_membership_id::text
+           from fridge_internal.end_household_membership(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid,
+             $4::uuid,
+             $5::uuid
+           )`,
+        [
+          transaction.householdId,
+          transaction.principalId,
+          transaction.membershipId,
+          input.commandId,
+          input.targetPrincipalId,
+        ],
+      );
+    } catch (error) {
+      throw providerNeutralDatabaseFailure(error);
+    }
 
     return mapEndOutcome(result.rows[0]);
   }
@@ -84,25 +113,33 @@ export class PgHouseholdMembershipEndWriter
     input: LeaveHouseholdPersistenceInput,
   ): Promise<HouseholdMembershipId> {
     const client = requirePgClient(transaction);
-    const result = await client.query<{
-      outcome_code: string;
-      ended_membership_id: string | null;
-    }>(
-      `select outcome_code,
-              ended_membership_id::text
-         from fridge_internal.leave_household(
-           $1::uuid,
-           $2::uuid,
-           $3::uuid,
-           $4::uuid
-         )`,
-      [
-        transaction.householdId,
-        transaction.principalId,
-        transaction.membershipId,
-        input.commandId,
-      ],
-    );
+    let result: {
+      readonly rows: { readonly outcome_code: string; readonly ended_membership_id: string | null }[];
+    };
+
+    try {
+      result = await client.query<{
+        outcome_code: string;
+        ended_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                ended_membership_id::text
+           from fridge_internal.leave_household(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid,
+             $4::uuid
+           )`,
+        [
+          transaction.householdId,
+          transaction.principalId,
+          transaction.membershipId,
+          input.commandId,
+        ],
+      );
+    } catch (error) {
+      throw providerNeutralDatabaseFailure(error);
+    }
 
     return mapEndOutcome(result.rows[0]);
   }
