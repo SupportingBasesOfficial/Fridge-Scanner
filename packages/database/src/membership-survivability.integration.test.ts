@@ -21,6 +21,22 @@ async function beginHouseholdTransaction(client: PoolClient): Promise<void> {
   await client.query("select set_config('fridge.household_id', $1, true)", [HOUSEHOLD]);
 }
 
+async function acquireAdministrationAuthority(
+  client: PoolClient,
+  userId: string,
+  membershipId: string,
+): Promise<string | null> {
+  const result = await client.query<{ role_code: string | null }>(
+    `select fridge_internal.acquire_household_membership_admin_authority(
+       $1::uuid,
+       $2::uuid,
+       $3::uuid
+     ) as role_code`,
+    [HOUSEHOLD, userId, membershipId],
+  );
+  return result.rows[0]?.role_code ?? null;
+}
+
 async function survivabilityAllows(
   client: PoolClient,
   membershipId: string,
@@ -117,6 +133,11 @@ test('last-administrator survivability is semantic and serialized on the Househo
     try {
       await beginHouseholdTransaction(first);
       assert.equal(
+        await acquireAdministrationAuthority(first, ADMIN_A, ADMIN_A_MEMBERSHIP),
+        'BE03_ADMIN',
+        'administration authority must remain valid after the Household-first lock-order upgrade',
+      );
+      assert.equal(
         await survivabilityAllows(first, ADMIN_A_MEMBERSHIP, null),
         true,
         'one administrator may be removed while another current administrator remains',
@@ -126,12 +147,12 @@ test('last-administrator survivability is semantic and serialized on the Househo
       await second.query("set local lock_timeout = '200ms'");
 
       await assert.rejects(
-        survivabilityAllows(second, ADMIN_B_MEMBERSHIP, null),
+        acquireAdministrationAuthority(second, ADMIN_B, ADMIN_B_MEMBERSHIP),
         (error: unknown) => {
           assert.equal((error as { code?: string }).code, '55P03');
           return true;
         },
-        'a competing authority-reducing mutation must wait on the Household serialization anchor',
+        'a competing administrator must block at Household-first authority acquisition before locking its actor membership',
       );
       await second.query('rollback');
 
