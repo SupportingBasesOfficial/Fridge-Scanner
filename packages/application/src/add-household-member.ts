@@ -1,12 +1,10 @@
 import type {
   HouseholdId,
   HouseholdMembershipId,
-  Instant,
   PrincipalId,
 } from '@fridge/domain';
 import { InvalidInputError } from './errors.js';
 import type {
-  Clock,
   IdentifierGenerator,
   UseCase,
 } from './index.js';
@@ -30,7 +28,6 @@ export interface AddHouseholdMemberPersistenceInput {
   readonly membershipId: HouseholdMembershipId;
   readonly targetPrincipalId: PrincipalId;
   readonly roleCode: string;
-  readonly effectiveAt: Instant;
 }
 
 export interface HouseholdMembershipWriter {
@@ -60,13 +57,11 @@ export class AddHouseholdMemberUseCase
     private readonly transactions: HouseholdMembershipAdministrationTransactionManager,
     private readonly memberships: HouseholdMembershipWriter,
     private readonly membershipIds: IdentifierGenerator<HouseholdMembershipId>,
-    private readonly clock: Clock,
   ) {}
 
   async execute(input: AddHouseholdMemberInput): Promise<AddHouseholdMemberOutput> {
     const roleCode = requireGovernedRoleCode(input.roleCode);
     const membershipId = this.membershipIds.generate();
-    const effectiveAt = this.clock.now();
 
     await this.transactions.withHouseholdMembershipAdministrationTransaction(
       input.actorPrincipalId,
@@ -76,7 +71,6 @@ export class AddHouseholdMemberUseCase
           membershipId,
           targetPrincipalId: input.targetPrincipalId,
           roleCode,
-          effectiveAt,
         });
       },
     );
