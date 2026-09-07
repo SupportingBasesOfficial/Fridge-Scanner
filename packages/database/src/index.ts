@@ -6,6 +6,7 @@ import {
   HouseholdId,
   HouseholdMembershipId,
   HouseholdUnauthorizedError,
+  IdempotencyConflictError,
   InternalApplicationError,
   InvalidInputError,
   PrincipalId,
@@ -309,29 +310,41 @@ export class PgDatabase
   async addHouseholdMember(
     transaction: HouseholdMembershipAdministrationTransaction,
     input: AddHouseholdMemberPersistenceInput,
-  ): Promise<void> {
+  ): Promise<HouseholdMembershipId> {
     if (this.#capabilityRole !== 'fridge_app') {
       throw new TypeError('Household membership mutation requires fridge_app capability');
     }
 
     const client = requirePgClient(transaction);
-    let result: { readonly rows: { readonly outcome: string }[] };
+    let result: {
+      readonly rows: {
+        readonly outcome_code: string;
+        readonly result_membership_id: string | null;
+      }[];
+    };
 
     try {
-      result = await client.query<{ outcome: string }>(
-        `select fridge_internal.add_household_member(
-           $1::uuid,
-           $2::uuid,
-           $3::uuid,
-           $4::uuid,
-           $5::uuid,
-           $6::text
-         ) as outcome`,
+      result = await client.query<{
+        outcome_code: string;
+        result_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                result_membership_id::text
+           from fridge_internal.add_household_member(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid,
+             $4::uuid,
+             $5::uuid,
+             $6::uuid,
+             $7::text
+           )`,
         [
           transaction.householdId,
           transaction.principalId,
           transaction.membershipId,
-          input.membershipId,
+          input.commandId,
+          input.candidateMembershipId,
           input.targetPrincipalId,
           input.roleCode,
         ],
@@ -340,11 +353,19 @@ export class PgDatabase
       throw providerNeutralDatabaseFailure(error);
     }
 
-    switch (result.rows[0]?.outcome) {
+    const outcome = result.rows[0];
+    switch (outcome?.outcome_code) {
       case 'ADDED':
-        return;
+        if (outcome.result_membership_id === null) {
+          throw new InternalApplicationError(
+            new Error('add Household member succeeded without membership identity'),
+          );
+        }
+        return HouseholdMembershipId(outcome.result_membership_id);
       case 'CURRENT_MEMBERSHIP_EXISTS':
         throw new ConflictError('Household membership already exists');
+      case 'IDEMPOTENCY_CONFLICT':
+        throw new IdempotencyConflictError();
       case 'TARGET_OR_ROLE_INVALID':
         throw new InvalidInputError('target principal or Household role is not eligible');
       case 'UNAUTHORIZED':
