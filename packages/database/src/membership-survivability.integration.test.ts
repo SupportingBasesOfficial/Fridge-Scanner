@@ -64,9 +64,9 @@ test('last-administrator survivability is semantic and serialized on the Househo
          effective_from,
          effective_to
        ) values
-         ($1::uuid, $4::uuid, $5::uuid, 'BE03_ADMIN', 'ACTIVE', clock_timestamp() - interval '1 hour', null),
-         ($2::uuid, $4::uuid, $6::uuid, 'MEMBER', 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [ADMIN_A_MEMBERSHIP, MEMBER_MEMBERSHIP, ADMIN_B_MEMBERSHIP, HOUSEHOLD, ADMIN_A, MEMBER],
+         ($1::uuid, $3::uuid, $4::uuid, 'BE03_ADMIN', 'ACTIVE', clock_timestamp() - interval '1 hour', null),
+         ($2::uuid, $3::uuid, $5::uuid, 'MEMBER', 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
+      [ADMIN_A_MEMBERSHIP, MEMBER_MEMBERSHIP, HOUSEHOLD, ADMIN_A, MEMBER],
     );
 
     const semanticClient = await pool.connect();
