@@ -96,7 +96,7 @@ The proving JWT deliberately contains provider role and Household claims inconsi
 
 The proving target is an existing platform principal with prior ended Household history and no current Household authority when the HTTP test begins. Success therefore proves a new rejoin interval rather than historical-row resurrection.
 
-### Candidate execution evidence before final documentation HEAD
+### Candidate execution evidence before temporal hardening
 
 On implementation HEAD `64369e229f5363ea1769253afe731eab5cde3a91`:
 
@@ -105,22 +105,58 @@ On implementation HEAD `64369e229f5363ea1769253afe731eab5cde3a91`:
 - Container Smoke / Non-root / Health Semantics: SUCCESS.
 - PostgreSQL 17 Contract + Backend RLS Integration: SUCCESS.
 - Accepted DB-02 contract replay inside that lane: SUCCESS.
-- Database integration suite: 38/38 PASS, including authority, history, retry, survivability and concurrency regressions.
+- Database integration suite passed, including authority, history, retry, survivability and concurrency regressions.
 - Configured authentication runtime end-to-end step: SUCCESS, including the B3-030 authenticated HTTP governed rejoin proof.
 
-This evidence is intentionally not the final acceptance evidence because this document itself changes the PR HEAD. The final HEAD must pass the gate again.
+This was candidate evidence only. Later exact-HEAD reruns exposed two additional closure findings that were corrected before acceptance.
+
+### PR #26 closure findings and hardening
+
+#### Delivery parser 4xx normalization
+
+Codex review found that Fastify-generated client errors such as malformed JSON or unsupported media type bypassed `ApplicationError` and fell into the generic 500 handler. The delivery error boundary now preserves framework 4xx status while returning only the provider-neutral public code `INVALID_REQUEST` plus request correlation. Regression tests prove malformed JSON remains 400 and unsupported media type remains 415, and neither reaches the application use case.
+
+#### Post-lock temporal authority
+
+A later BE-00 rerun exposed an intermittent failure in the accepted two-administrator concurrent self-leave regression: both operations could occasionally succeed. The Household row lock itself serialized correctly. The defect was temporal: `statement_timestamp()` is fixed at statement start, so a statement that began before waiting for the Household lock could evaluate current membership after the wait using a timestamp from before the serialized predecessor closed its interval.
+
+Migration `000039__be03_post_lock_temporal_authority.sql` hardens the serialized BE-03 kernels without changing their public signatures or widening privileges:
+
+- administration-authority acquisition samples current authority after the Household lock is held;
+- survivability samples target and surviving-admin authority at one fresh post-lock database time;
+- add/rejoin binds overlap detection and new `effective_from` to post-lock time;
+- role change binds current target interpretation and history boundary to post-lock time;
+- membership end binds current target interpretation and interval closure to post-lock time;
+- self-leave revalidates the exact actor membership at post-lock time.
+
+The integrity gate rejects reintroduction of `statement_timestamp()` into these serialized kernels and confirms internal helpers remain unavailable to `fridge_app`.
+
+A deterministic integration proof deliberately locks the Household first, starts both administrator self-leave statements while they are blocked, verifies both reached the lock wait, and only then releases the blocker. This makes both statement-start timestamps pre-serialization by construction. The required result is one successful self-leave, one provider-neutral conflict and exactly one current administrator. This directly proves that post-lock temporal observation, not scheduler luck, protects survivability.
+
+On hardening HEAD `af68449bcc11f87fcb31beaa889a3437cea93c77`:
+
+- DB-02 PostgreSQL Gate #73: SUCCESS on PostgreSQL 17 and PostgreSQL 18.
+- BE-00 Backend Gate #157: SUCCESS.
+- Runtime / TypeScript / Unit: SUCCESS, including parser 400/415 regressions.
+- Container Smoke / Non-root / Health Semantics: SUCCESS.
+- PostgreSQL 17 Contract + Backend RLS Integration: SUCCESS.
+- Configured authentication runtime end-to-end/B3-030: SUCCESS.
+- The deterministic post-lock self-leave serialization proof: SUCCESS.
+
+This evidence is still not the final acceptance evidence because documenting it changes the PR HEAD. The final exact HEAD must pass the gates again.
 
 ## Final acceptance gate
 
 BE-03 may be marked accepted only when all of the following are simultaneously true on one stable final PR #26 HEAD:
 
-1. BE-00 exact-HEAD gate is SUCCESS, including replay of the accepted DB-02 contract and PostgreSQL/RLS integration.
-2. The authenticated B3-030 request succeeds through the complete authority chain and the resulting current membership is observable after commit.
-3. Existing adversarial/concurrency tests remain green.
-4. Delivery exposes only provider-neutral contracts and preserves tenant nondisclosure.
-5. No unresolved material review finding remains.
-6. Final panoramic review is CLEAN.
-7. The owner explicitly authorizes squash merge.
-8. The PR is squash-merged with the reviewed expected HEAD and its branch is preserved.
+1. DB-02 exact-HEAD gate is SUCCESS on PostgreSQL 17 and PostgreSQL 18 when the final HEAD contains a database delta.
+2. BE-00 exact-HEAD gate is SUCCESS, including replay of the accepted DB-02 contract and PostgreSQL/RLS integration.
+3. The authenticated B3-030 request succeeds through the complete authority chain and the resulting current membership is observable after commit.
+4. Existing adversarial/concurrency tests and the deterministic post-lock temporal-serialization proof remain green.
+5. Delivery exposes only provider-neutral contracts, preserves parser 4xx classification and preserves tenant nondisclosure.
+6. No unresolved material review finding remains.
+7. Final panoramic reviews are CLEAN.
+8. The owner explicitly authorizes squash merge.
+9. The PR is squash-merged with the reviewed expected HEAD and its branch is preserved.
 
 Until those conditions are satisfied, PR #26 is a closure candidate and BE-03 remains active.
