@@ -1,4 +1,5 @@
 import type {
+  CommandId,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -14,6 +15,7 @@ import type {
 } from './household-membership-administration.js';
 
 export interface AddHouseholdMemberInput {
+  readonly commandId: CommandId;
   readonly actorPrincipalId: PrincipalId;
   readonly householdId: HouseholdId;
   readonly targetPrincipalId: PrincipalId;
@@ -25,7 +27,8 @@ export interface AddHouseholdMemberOutput {
 }
 
 export interface AddHouseholdMemberPersistenceInput {
-  readonly membershipId: HouseholdMembershipId;
+  readonly commandId: CommandId;
+  readonly candidateMembershipId: HouseholdMembershipId;
   readonly targetPrincipalId: PrincipalId;
   readonly roleCode: string;
 }
@@ -34,7 +37,7 @@ export interface HouseholdMembershipWriter {
   addHouseholdMember(
     transaction: HouseholdMembershipAdministrationTransaction,
     input: AddHouseholdMemberPersistenceInput,
-  ): Promise<void>;
+  ): Promise<HouseholdMembershipId>;
 }
 
 function requireGovernedRoleCode(roleCode: string): string {
@@ -61,19 +64,25 @@ export class AddHouseholdMemberUseCase
 
   async execute(input: AddHouseholdMemberInput): Promise<AddHouseholdMemberOutput> {
     const roleCode = requireGovernedRoleCode(input.roleCode);
-    const membershipId = this.membershipIds.generate();
+    const candidateMembershipId = this.membershipIds.generate();
+    let membershipId: HouseholdMembershipId | undefined;
 
     await this.transactions.withHouseholdMembershipAdministrationTransaction(
       input.actorPrincipalId,
       input.householdId,
       async (transaction) => {
-        await this.memberships.addHouseholdMember(transaction, {
-          membershipId,
+        membershipId = await this.memberships.addHouseholdMember(transaction, {
+          commandId: input.commandId,
+          candidateMembershipId,
           targetPrincipalId: input.targetPrincipalId,
           roleCode,
         });
       },
     );
+
+    if (membershipId === undefined) {
+      throw new TypeError('Household membership writer did not return a membership identity');
+    }
 
     return { membershipId };
   }
