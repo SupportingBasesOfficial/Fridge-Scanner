@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
-    "./membership-end": "./dist/membership-end.js"
+    "./membership-end": "./dist/membership-end.js",
+    "./membership-read": "./dist/membership-read.js"
   },
   "types": "./dist/index.d.ts",
   "scripts": {
