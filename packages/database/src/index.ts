@@ -11,8 +11,10 @@ import {
   InvalidInputError,
   PrincipalId,
   type AddHouseholdMemberPersistenceInput,
+  type ChangeHouseholdMemberRolePersistenceInput,
   type HouseholdMembershipAdministrationTransaction,
   type HouseholdMembershipAdministrationTransactionManager,
+  type HouseholdMembershipRoleChanger,
   type HouseholdMembershipWriter,
   type HouseholdProfileReader,
   type ReadinessProbe,
@@ -118,6 +120,7 @@ export class PgDatabase
     TransactionManager,
     HouseholdMembershipAdministrationTransactionManager,
     HouseholdMembershipWriter,
+    HouseholdMembershipRoleChanger,
     ReadinessProbe
 {
   readonly #pool: Pool;
@@ -281,10 +284,6 @@ export class PgDatabase
         );
         const authorityRoleCode = authority.rows[0]?.role_code;
 
-        // The stronger handle must describe the exact authority facts that were
-        // locked. If the actor role changed between the initial current-membership
-        // read and privileged acquisition, fail closed rather than expose stale
-        // role provenance on an otherwise valid administrative handle.
         if (
           authorityRoleCode === null ||
           authorityRoleCode === undefined ||
@@ -373,6 +372,80 @@ export class PgDatabase
       default:
         throw new InternalApplicationError(
           new Error('unexpected add Household member outcome'),
+        );
+    }
+  }
+
+  async changeHouseholdMemberRole(
+    transaction: HouseholdMembershipAdministrationTransaction,
+    input: ChangeHouseholdMemberRolePersistenceInput,
+  ): Promise<HouseholdMembershipId> {
+    if (this.#capabilityRole !== 'fridge_app') {
+      throw new TypeError('Household membership mutation requires fridge_app capability');
+    }
+
+    const client = requirePgClient(transaction);
+    let result: {
+      readonly rows: {
+        readonly outcome_code: string;
+        readonly result_membership_id: string | null;
+      }[];
+    };
+
+    try {
+      result = await client.query<{
+        outcome_code: string;
+        result_membership_id: string | null;
+      }>(
+        `select outcome_code,
+                result_membership_id::text
+           from fridge_internal.change_household_member_role(
+             $1::uuid,
+             $2::uuid,
+             $3::uuid,
+             $4::uuid,
+             $5::uuid,
+             $6::uuid,
+             $7::text
+           )`,
+        [
+          transaction.householdId,
+          transaction.principalId,
+          transaction.membershipId,
+          input.commandId,
+          input.candidateMembershipId,
+          input.targetPrincipalId,
+          input.roleCode,
+        ],
+      );
+    } catch (error) {
+      throw providerNeutralDatabaseFailure(error);
+    }
+
+    const outcome = result.rows[0];
+    switch (outcome?.outcome_code) {
+      case 'ROLE_CHANGED':
+        if (outcome.result_membership_id === null) {
+          throw new InternalApplicationError(
+            new Error('Household member role change succeeded without membership identity'),
+          );
+        }
+        return HouseholdMembershipId(outcome.result_membership_id);
+      case 'ROLE_UNCHANGED':
+        throw new ConflictError('Household membership already has the requested role');
+      case 'CURRENT_MEMBERSHIP_NOT_FOUND':
+        throw new ConflictError('current Household membership does not exist');
+      case 'SURVIVABILITY_CONFLICT':
+        throw new ConflictError('Household membership administration survivability would be violated');
+      case 'IDEMPOTENCY_CONFLICT':
+        throw new IdempotencyConflictError();
+      case 'TARGET_OR_ROLE_INVALID':
+        throw new InvalidInputError('target principal or Household role is not eligible');
+      case 'UNAUTHORIZED':
+        throw new HouseholdAuthorizationError();
+      default:
+        throw new InternalApplicationError(
+          new Error('unexpected Household member role change outcome'),
         );
     }
   }
