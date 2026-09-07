@@ -1,6 +1,13 @@
-import { ReadAuthorizedHouseholdContext } from '@fridge/application';
+import { randomUUID } from 'node:crypto';
+import {
+  AddHouseholdMemberUseCase,
+  HouseholdMembershipId,
+  ReadAuthorizedHouseholdContext,
+  ReadCurrentHouseholdMembersUseCase,
+} from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
+import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
 import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
 import { buildApiServer } from './server.js';
 
@@ -14,6 +21,17 @@ const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(
   database,
   householdProfiles,
 );
+const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(
+  database,
+  new PgCurrentHouseholdMembershipReader(),
+);
+const addHouseholdMember = new AddHouseholdMemberUseCase(
+  database,
+  database,
+  {
+    generate: () => HouseholdMembershipId(randomUUID()),
+  },
+);
 const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
   config,
   database,
@@ -23,6 +41,8 @@ const server = buildApiServer({
   readiness: database,
   authenticatedPrincipal,
   readAuthorizedHouseholdContext,
+  readCurrentHouseholdMembers,
+  addHouseholdMember,
 });
 
 let shuttingDown = false;
