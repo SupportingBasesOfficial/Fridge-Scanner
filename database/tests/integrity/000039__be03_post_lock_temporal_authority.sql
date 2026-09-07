@@ -1,5 +1,10 @@
 -- FridgeScanner BE-03 integrity proof
 -- 000039__be03_post_lock_temporal_authority.sql
+--
+-- This static guard complements the deterministic integration race that starts
+-- competing self-leave statements before releasing the Household lock. Together
+-- they prove both implementation shape (no pre-lock statement time) and behavior
+-- after an actual serialization wait.
 
 begin;
 
