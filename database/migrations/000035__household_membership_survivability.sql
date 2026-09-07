@@ -1,8 +1,74 @@
 -- FridgeScanner BE-03
 -- 000035__household_membership_survivability.sql
--- Atomic last-administrator survivability guard for authority-reducing membership mutations.
+-- Atomic last-administrator survivability guard and canonical BE-03 lock ordering.
 
 begin;
+
+-- Upgrade the accepted administration-authority acquisition boundary so every
+-- membership-administration transaction serializes on the Household row before
+-- locking actor membership or capability facts. This establishes the canonical
+-- BE-03 lock order:
+--
+--   Household -> actor membership/governance -> target membership/governance
+--
+-- and prevents reciprocal administrator mutations from forming actor/target
+-- deadlock cycles around the survivability guard.
+create or replace function fridge_internal.acquire_household_membership_admin_authority(
+  p_household_id uuid,
+  p_user_id uuid,
+  p_membership_id uuid
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_household_locked uuid;
+  v_role_code text;
+begin
+  if fridge_internal.current_household_id() is distinct from p_household_id then
+    return null;
+  end if;
+
+  select h.household_id
+    into v_household_locked
+    from fridge.household h
+   where h.household_id = p_household_id
+   for update;
+
+  if v_household_locked is null then
+    return null;
+  end if;
+
+  select hm.role_code
+    into v_role_code
+    from fridge.household_membership hm
+    join fridge.household_role r
+      on r.role_code = hm.role_code
+    join fridge.household_role_capability rc
+      on rc.role_code = r.role_code
+    join fridge.household_capability c
+      on c.capability_code = rc.capability_code
+   where hm.household_id = p_household_id
+     and hm.user_id = p_user_id
+     and hm.membership_id = p_membership_id
+     and hm.lifecycle_status = 'ACTIVE'
+     and hm.effective_from <= statement_timestamp()
+     and (hm.effective_to is null or hm.effective_to > statement_timestamp())
+     and r.lifecycle_status = 'ACTIVE'
+     and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
+     and c.lifecycle_status = 'ACTIVE'
+   for update of hm
+   for share of r, rc, c;
+
+  return v_role_code;
+end;
+$$;
+
+comment on function fridge_internal.acquire_household_membership_admin_authority(uuid, uuid, uuid) is
+  'Atomically revalidates current membership-administration authority using canonical BE-03 lock order: Household row first, then actor membership and governed role/capability facts. The Household lock is retained for the transaction.';
 
 create or replace function fridge_internal.household_membership_survivability_allows(
   p_household_id uuid,
@@ -29,10 +95,10 @@ begin
     return false;
   end if;
 
-  -- The Household row is the canonical serialization anchor for every BE-03
-  -- mutation that can reduce membership-administration authority. Two competing
-  -- demotions/ends therefore cannot both observe the other administrator before
-  -- either write and produce write skew.
+  -- Reacquiring a row lock already held by authority acquisition is harmless and
+  -- keeps this helper safe when exercised internally in isolation by privileged
+  -- database code/tests. Future runtime mutations reach this only after the same
+  -- Household-first authority acquisition boundary above.
   select h.household_id
     into v_household_locked
     from fridge.household h
@@ -109,8 +175,8 @@ begin
   -- At this point the target currently administers membership and the requested
   -- result would remove that capability. Because the Household serialization
   -- anchor is held, any other authority-reducing mutation for this Household must
-  -- wait. Lock one surviving current administrator plus its governance facts as
-  -- durable transaction provenance and return true only if such authority exists.
+  -- wait. Lock one surviving current administrator plus its governance facts and
+  -- return true only if such authority exists.
   select hm.membership_id
     into v_other_admin_membership_id
     from fridge.household_membership hm
@@ -137,12 +203,17 @@ end;
 $$;
 
 comment on function fridge_internal.household_membership_survivability_allows(uuid, uuid, text) is
-  'BE-03 internal survivability guard for authority-reducing membership mutations. Serializes on the Household row, locks the current target membership and governed capability facts, and permits loss of HOUSEHOLD_MEMBERSHIP_ADMINISTER only when another current administrator remains.';
+  'BE-03 internal survivability guard for authority-reducing membership mutations. Under the canonical Household-first lock order, locks the current target membership and governed capability facts and permits loss of HOUSEHOLD_MEMBERSHIP_ADMINISTER only when another current administrator remains.';
 
 revoke all on function fridge_internal.household_membership_survivability_allows(uuid, uuid, text) from public;
 
--- Deliberately no fridge_app EXECUTE grant. Runtime must reach this guard only
--- through a future intent-specific SECURITY DEFINER role-change/end mutation,
--- never as a standalone authorization oracle.
+-- Preserve the already-accepted runtime privilege on the authority acquisition
+-- boundary; the survivability helper itself remains internal-only.
+grant execute on function fridge_internal.acquire_household_membership_admin_authority(uuid, uuid, uuid)
+  to fridge_app;
+
+-- Deliberately no fridge_app EXECUTE grant on survivability. Runtime must reach
+-- it only through a future intent-specific SECURITY DEFINER role-change/end
+-- mutation, never as a standalone authorization oracle.
 
 commit;
