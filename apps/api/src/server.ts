@@ -2,10 +2,16 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   ApplicationError,
+  CommandId,
   HouseholdId,
   InvalidInputError,
+  PrincipalId,
+  type AddHouseholdMemberInput,
+  type AddHouseholdMemberOutput,
   type AuthorizedHouseholdContext,
   type ReadAuthorizedHouseholdContextInput,
+  type ReadCurrentHouseholdMembersInput,
+  type ReadCurrentHouseholdMembersOutput,
   type ReadinessProbe,
   type UseCase,
 } from '@fridge/application';
@@ -27,6 +33,14 @@ export interface ApiServerDependencies {
     ReadAuthorizedHouseholdContextInput,
     AuthorizedHouseholdContext
   >;
+  readonly readCurrentHouseholdMembers: UseCase<
+    ReadCurrentHouseholdMembersInput,
+    ReadCurrentHouseholdMembersOutput
+  >;
+  readonly addHouseholdMember: UseCase<
+    AddHouseholdMemberInput,
+    AddHouseholdMemberOutput
+  >;
 }
 
 function parseHouseholdId(value: string) {
@@ -37,6 +51,35 @@ function parseHouseholdId(value: string) {
   }
 }
 
+function parsePrincipalId(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new InvalidInputError('Principal identifier is invalid');
+  }
+  try {
+    return PrincipalId(value);
+  } catch (error) {
+    throw new InvalidInputError('Principal identifier is invalid', error);
+  }
+}
+
+function parseCommandId(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new InvalidInputError('Command identifier is invalid');
+  }
+  try {
+    return CommandId(value);
+  } catch (error) {
+    throw new InvalidInputError('Command identifier is invalid', error);
+  }
+}
+
+function requireRoleCode(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new InvalidInputError('Household role code is invalid');
+  }
+  return value;
+}
+
 function serializeAuthorizedHouseholdContext(context: AuthorizedHouseholdContext) {
   return {
     principalId: String(context.principalId),
@@ -44,6 +87,19 @@ function serializeAuthorizedHouseholdContext(context: AuthorizedHouseholdContext
     householdDisplayName: context.householdDisplayName,
     membershipId: String(context.membershipId),
     householdRoleCode: context.householdRoleCode,
+  };
+}
+
+function serializeCurrentHouseholdMembers(output: ReadCurrentHouseholdMembersOutput) {
+  return {
+    members: output.members.map((member) => ({
+      membershipId: String(member.membershipId),
+      principalId: String(member.principalId),
+      displayName: member.displayName,
+      roleCode: member.roleCode,
+      effectiveFrom: String(member.effectiveFrom),
+      effectiveTo: member.effectiveTo === null ? null : String(member.effectiveTo),
+    })),
   };
 }
 
@@ -74,6 +130,8 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
     readiness,
     authenticatedPrincipal,
     readAuthorizedHouseholdContext,
+    readCurrentHouseholdMembers,
+    addHouseholdMember,
   } = dependencies;
 
   const server = Fastify({
@@ -127,6 +185,49 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
       const householdId = parseHouseholdId(request.params.householdId);
       const context = await readAuthorizedHouseholdContext.execute({ principalId, householdId });
       return serializeAuthorizedHouseholdContext(context);
+    },
+  );
+
+  server.get<{ Params: { householdId: string } }>(
+    '/households/:householdId/members',
+    async (request) => {
+      const actorPrincipalId = await authenticatedPrincipal.resolve(request);
+      const householdId = parseHouseholdId(request.params.householdId);
+      const output = await readCurrentHouseholdMembers.execute({
+        actorPrincipalId,
+        householdId,
+      });
+      return serializeCurrentHouseholdMembers(output);
+    },
+  );
+
+  server.post<{
+    Params: { householdId: string };
+    Body: {
+      commandId?: unknown;
+      targetPrincipalId?: unknown;
+      roleCode?: unknown;
+    };
+  }>(
+    '/households/:householdId/members',
+    async (request, reply) => {
+      const actorPrincipalId = await authenticatedPrincipal.resolve(request);
+      const householdId = parseHouseholdId(request.params.householdId);
+      const commandId = parseCommandId(request.body?.commandId);
+      const targetPrincipalId = parsePrincipalId(request.body?.targetPrincipalId);
+      const roleCode = requireRoleCode(request.body?.roleCode);
+
+      const output = await addHouseholdMember.execute({
+        commandId,
+        actorPrincipalId,
+        householdId,
+        targetPrincipalId,
+        roleCode,
+      });
+
+      return reply.code(201).send({
+        membershipId: String(output.membershipId),
+      });
     },
   );
 
