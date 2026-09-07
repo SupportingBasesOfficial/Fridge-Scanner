@@ -10,6 +10,7 @@ export {
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
+  instant,
 } from '@fridge/domain';
 export type { Instant } from '@fridge/domain';
 export * from './add-household-member.js';
