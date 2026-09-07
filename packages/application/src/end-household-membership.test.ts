@@ -12,6 +12,7 @@ import {
   type HouseholdMembershipAdministrationTransactionManager,
   type HouseholdMembershipEnder,
   type HouseholdSelfLeaver,
+  type HouseholdSelfLeaveReplayReader,
   type LeaveHouseholdPersistenceInput,
   type TransactionHandle,
   type TransactionManager,
@@ -77,11 +78,16 @@ test('EndHouseholdMembershipUseCase uses the stronger administration transaction
   assert.deepEqual(output, { endedMembershipId: ENDED_MEMBERSHIP });
 });
 
-test('LeaveHouseholdUseCase requires only current Household authorization and never requests administration capability', async () => {
+test('LeaveHouseholdUseCase requires current Household authorization for a new command and never requests administration capability', async () => {
   let persisted: LeaveHouseholdPersistenceInput | undefined;
   let actor: unknown;
   let household: unknown;
 
+  const replays: HouseholdSelfLeaveReplayReader = {
+    async replayLeaveHousehold() {
+      return null;
+    },
+  };
   const transactions: TransactionManager = {
     async withAuthorizedHouseholdTransaction(principalId, householdId, operation) {
       actor = principalId;
@@ -96,7 +102,7 @@ test('LeaveHouseholdUseCase requires only current Household authorization and ne
     },
   };
 
-  const output = await new LeaveHouseholdUseCase(transactions, memberships).execute({
+  const output = await new LeaveHouseholdUseCase(replays, transactions, memberships).execute({
     commandId: COMMAND,
     actorPrincipalId: ACTOR,
     householdId: HOUSEHOLD,
@@ -106,4 +112,42 @@ test('LeaveHouseholdUseCase requires only current Household authorization and ne
   assert.equal(household, HOUSEHOLD);
   assert.deepEqual(persisted, { commandId: COMMAND });
   assert.deepEqual(output, { endedMembershipId: ACTOR_MEMBERSHIP });
+});
+
+test('LeaveHouseholdUseCase replays a committed self-leave before current membership authorization', async () => {
+  let transactionAttempted = false;
+  let mutationAttempted = false;
+
+  const replays: HouseholdSelfLeaveReplayReader = {
+    async replayLeaveHousehold(input) {
+      assert.deepEqual(input, {
+        commandId: COMMAND,
+        actorPrincipalId: ACTOR,
+        householdId: HOUSEHOLD,
+      });
+      return ENDED_MEMBERSHIP;
+    },
+  };
+  const transactions: TransactionManager = {
+    async withAuthorizedHouseholdTransaction() {
+      transactionAttempted = true;
+      throw new Error('current membership authorization must not run for committed replay');
+    },
+  };
+  const memberships: HouseholdSelfLeaver = {
+    async leaveHousehold() {
+      mutationAttempted = true;
+      throw new Error('mutation must not run for committed replay');
+    },
+  };
+
+  const output = await new LeaveHouseholdUseCase(replays, transactions, memberships).execute({
+    commandId: COMMAND,
+    actorPrincipalId: ACTOR,
+    householdId: HOUSEHOLD,
+  });
+
+  assert.equal(transactionAttempted, false);
+  assert.equal(mutationAttempted, false);
+  assert.deepEqual(output, { endedMembershipId: ENDED_MEMBERSHIP });
 });
