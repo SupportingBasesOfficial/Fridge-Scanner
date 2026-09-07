@@ -37,7 +37,11 @@ const publicJwk = {
 
 const household = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const actor = PrincipalId('33333333-3333-4333-8333-333333333333');
-const target = '22222222-2222-4222-8222-222222222222';
+// The database integration suite deliberately leaves this existing principal
+// with ended Household-A history and no current authority. The HTTP proof therefore
+// exercises the accepted rejoin path rather than colliding with the suite's
+// already-added current member fixture.
+const target = 'bbbbbbbb-7777-4777-8777-aaaaaaaaaaaa';
 const candidateMembership = 'f3000000-0000-4000-8000-000000000022';
 const commandId = 'f3000000-0000-4000-8000-000000000041';
 const subject = 'be03-admin-subject';
@@ -124,7 +128,7 @@ function buildIntegrationServer(database: PgDatabase) {
   });
 }
 
-test('B3-030 authenticated HTTP request crosses BE-02 verification into governed durable membership mutation', async () => {
+test('B3-030 authenticated HTTP request crosses BE-02 verification into governed durable membership rejoin', async () => {
   const database = new PgDatabase({ connectionString: databaseUrl, capabilityRole: 'fridge_app' });
   const server = buildIntegrationServer(database);
 
@@ -167,7 +171,7 @@ test('B3-030 authenticated HTTP request crosses BE-02 verification into governed
     const created = body.members.find((member) => member.principalId === target);
     assert.ok(created);
     assert.equal(created.membershipId, candidateMembership);
-    assert.equal(created.displayName, 'BE00 Principal B');
+    assert.equal(created.displayName, 'BE03 Replay Target');
     assert.equal(created.roleCode, 'MEMBER');
     assert.equal(created.effectiveTo, null);
     assert.match(created.effectiveFrom, /Z$/);
