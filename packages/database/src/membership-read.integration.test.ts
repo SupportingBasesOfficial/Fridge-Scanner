@@ -135,12 +135,20 @@ test('read boundary rejects a stale exact actor membership handle', async () => 
   try {
     await seedRole(adminPool);
     await adminPool.query(
-      `insert into fridge.user_profile (user_id, display_name) values ($1::uuid, 'Stale Actor');
-       insert into fridge.household (household_id, display_name) values ($2::uuid, 'Stale Household');
-       insert into fridge.household_membership (
+      `insert into fridge.user_profile (user_id, display_name)
+       values ($1::uuid, 'Stale Actor')`,
+      [actor],
+    );
+    await adminPool.query(
+      `insert into fridge.household (household_id, display_name)
+       values ($1::uuid, 'Stale Household')`,
+      [household],
+    );
+    await adminPool.query(
+      `insert into fridge.household_membership (
          membership_id, household_id, user_id, role_code, lifecycle_status, effective_from, effective_to
-       ) values ($3::uuid, $2::uuid, $1::uuid, $4::text, 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [actor, household, membership, ROLE],
+       ) values ($1::uuid, $2::uuid, $3::uuid, $4::text, 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
+      [membership, household, actor, ROLE],
     );
 
     await database.withAuthorizedHouseholdTransaction(
