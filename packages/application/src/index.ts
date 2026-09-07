@@ -11,6 +11,7 @@ export {
   PrincipalId,
 } from '@fridge/domain';
 export type { Instant } from '@fridge/domain';
+export * from './add-household-member.js';
 export * from './errors.js';
 export * from './household-context.js';
 export * from './household-membership-administration.js';
