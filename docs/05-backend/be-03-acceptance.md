@@ -2,7 +2,21 @@
 
 ## Status
 
-This document consolidates the BE-03 — Household Access Management evidence chain. The normative and previously merged slices listed below are accepted. The final HTTP delivery slice in PR #26 remains a closure candidate until its exact final HEAD passes execution/review gates and is squash-merged with explicit owner authorization.
+BE-03 — Household Access Management is **formally accepted and closed**.
+
+Final closure:
+
+- PR #26: `backend: close BE-03 with authenticated membership HTTP delivery`
+- Exact final reviewed HEAD: `5a1e05185d6be8d30b5ecb2c6729ccceaeddce44`
+- Squash merge on `main`: `546cb70ab6f752912d44f2140bcb3b474066dc07`
+- Parent: `7cd840c1a169ed09a15e4045be2772ef002a14a5`
+- Branch `backend/be-03-http-delivery-proof`: preserved
+- DB-02 PostgreSQL Gate #75: SUCCESS on PostgreSQL 17 and PostgreSQL 18
+- BE-00 Backend Gate #159: SUCCESS across runtime/unit, container, DB-02 replay, PostgreSQL/RLS/identity and authenticated runtime/B3-030
+- final panoramic reviews: CLEAN
+- unresolved material review threads at merge: 0
+
+BE-03 is no longer an active closure candidate. All downstream backend phases consume BE-03 as accepted upstream authority.
 
 ## Normative authority
 
@@ -66,18 +80,25 @@ BE-03 is governed by `be-03-decisions.md`, including:
 - BE-00 Backend Gate #147: SUCCESS.
 - Established B3-026/B3-027 current-only Household-scoped observation with exact actor-membership revalidation, no provider metadata and no widening of direct `user_profile` privilege.
 
-## PR #26 — Closure candidate: authenticated HTTP delivery
+### PR #26 — Authenticated HTTP delivery and BE-03 closure
 
-PR #26 adds the first public BE-03 membership delivery routes:
+- Squash: `546cb70ab6f752912d44f2140bcb3b474066dc07`
+- Exact reviewed HEAD: `5a1e05185d6be8d30b5ecb2c6729ccceaeddce44`
+- DB-02 PostgreSQL Gate #75: SUCCESS on PostgreSQL 17/18.
+- BE-00 Backend Gate #159: SUCCESS.
+- Final panoramic reviews: CLEAN.
+- One Codex P2 delivery-parser finding was fixed and its thread resolved before merge.
+
+PR #26 introduced the first public BE-03 membership delivery routes:
 
 - `GET /households/:householdId/members`
 - `POST /households/:householdId/members`
 
 Delivery remains an adapter. It does not perform SQL, infer role meaning or implement capability policy. The POST preserves caller-supplied `CommandId`; actor identity is supplied only by the accepted authentication boundary.
 
-### B3-030 proving chain
+## B3-030 accepted proving chain
 
-The closure proof is designed to execute this exact chain:
+The final accepted runtime proof executes:
 
 ```text
 signed Bearer JWT
@@ -96,31 +117,21 @@ The proving JWT deliberately contains provider role and Household claims inconsi
 
 The proving target is an existing platform principal with prior ended Household history and no current Household authority when the HTTP test begins. Success therefore proves a new rejoin interval rather than historical-row resurrection.
 
-### Candidate execution evidence before temporal hardening
+## Closure findings and hardening accepted before merge
 
-On implementation HEAD `64369e229f5363ea1769253afe731eab5cde3a91`:
+### Delivery parser 4xx normalization
 
-- BE-00 Backend Gate #150: SUCCESS.
-- Runtime / TypeScript / Unit: SUCCESS.
-- Container Smoke / Non-root / Health Semantics: SUCCESS.
-- PostgreSQL 17 Contract + Backend RLS Integration: SUCCESS.
-- Accepted DB-02 contract replay inside that lane: SUCCESS.
-- Database integration suite passed, including authority, history, retry, survivability and concurrency regressions.
-- Configured authentication runtime end-to-end step: SUCCESS, including the B3-030 authenticated HTTP governed rejoin proof.
+Codex review found that Fastify-generated client errors such as malformed JSON or unsupported media type bypassed `ApplicationError` and fell into the generic 500 handler.
 
-This was candidate evidence only. Later exact-HEAD reruns exposed two additional closure findings that were corrected before acceptance.
+The accepted delivery error boundary now preserves recognized framework 4xx status while returning only provider-neutral `INVALID_REQUEST` plus request correlation. Regression tests prove malformed JSON remains 400 and unsupported media type remains 415, and neither reaches the application use case.
 
-### PR #26 closure findings and hardening
+### Post-lock temporal authority
 
-#### Delivery parser 4xx normalization
+A later BE-00 rerun exposed an intermittent failure in the two-administrator concurrent self-leave regression: both operations could occasionally succeed.
 
-Codex review found that Fastify-generated client errors such as malformed JSON or unsupported media type bypassed `ApplicationError` and fell into the generic 500 handler. The delivery error boundary now preserves framework 4xx status while returning only the provider-neutral public code `INVALID_REQUEST` plus request correlation. Regression tests prove malformed JSON remains 400 and unsupported media type remains 415, and neither reaches the application use case.
+The Household row lock itself serialized correctly. The defect was temporal: `statement_timestamp()` is fixed at statement start, so a statement that began before waiting for the Household lock could evaluate current membership after the wait using a timestamp from before the serialized predecessor closed its interval.
 
-#### Post-lock temporal authority
-
-A later BE-00 rerun exposed an intermittent failure in the accepted two-administrator concurrent self-leave regression: both operations could occasionally succeed. The Household row lock itself serialized correctly. The defect was temporal: `statement_timestamp()` is fixed at statement start, so a statement that began before waiting for the Household lock could evaluate current membership after the wait using a timestamp from before the serialized predecessor closed its interval.
-
-Migration `000039__be03_post_lock_temporal_authority.sql` hardens the serialized BE-03 kernels without changing their public signatures or widening privileges:
+Migration `000039__be03_post_lock_temporal_authority.sql` hardens the serialized BE-03 kernels without changing public signatures or widening privileges:
 
 - administration-authority acquisition samples current authority after the Household lock is held;
 - survivability samples target and surviving-admin authority at one fresh post-lock database time;
@@ -131,32 +142,41 @@ Migration `000039__be03_post_lock_temporal_authority.sql` hardens the serialized
 
 The integrity gate rejects reintroduction of `statement_timestamp()` into these serialized kernels and confirms internal helpers remain unavailable to `fridge_app`.
 
-A deterministic integration proof deliberately locks the Household first, starts both administrator self-leave statements while they are blocked, verifies both reached the lock wait, and only then releases the blocker. This makes both statement-start timestamps pre-serialization by construction. The required result is one successful self-leave, one provider-neutral conflict and exactly one current administrator. This directly proves that post-lock temporal observation, not scheduler luck, protects survivability.
+A deterministic integration proof deliberately locks the Household first, starts both administrator self-leave statements while blocked, verifies both reached the lock wait, and then releases the blocker. The accepted result is exactly one successful self-leave, one provider-neutral conflict and exactly one current administrator.
 
-On hardening HEAD `af68449bcc11f87fcb31beaa889a3437cea93c77`:
+## Final accepted execution evidence
 
-- DB-02 PostgreSQL Gate #73: SUCCESS on PostgreSQL 17 and PostgreSQL 18.
-- BE-00 Backend Gate #157: SUCCESS.
-- Runtime / TypeScript / Unit: SUCCESS, including parser 400/415 regressions.
+On exact final HEAD `5a1e05185d6be8d30b5ecb2c6729ccceaeddce44`:
+
+- DB-02 PostgreSQL Gate #75: SUCCESS.
+- PostgreSQL 17: SUCCESS.
+- PostgreSQL 18: SUCCESS.
+- BE-00 Backend Gate #159: SUCCESS.
+- Runtime / TypeScript / Unit: SUCCESS.
 - Container Smoke / Non-root / Health Semantics: SUCCESS.
-- PostgreSQL 17 Contract + Backend RLS Integration: SUCCESS.
-- Configured authentication runtime end-to-end/B3-030: SUCCESS.
-- The deterministic post-lock self-leave serialization proof: SUCCESS.
+- accepted DB-02 contract replay inside backend PostgreSQL lane: SUCCESS.
+- PostgreSQL/RLS/identity integration: SUCCESS.
+- configured authentication runtime end-to-end/B3-030: SUCCESS.
+- parser 400/415 regressions: SUCCESS.
+- deterministic post-lock self-leave serialization proof: SUCCESS.
+- final authority/B3-030/temporal-serialization panoramic review: CLEAN.
+- final delivery/least-privilege/provider-neutrality panoramic review: CLEAN.
+- unresolved material review threads: 0.
 
-This evidence is still not the final acceptance evidence because documenting it changes the PR HEAD. The final exact HEAD must pass the gates again.
+The owner explicitly authorized squash merge, and GitHub merged PR #26 with expected reviewed HEAD. `main` was then verified at `546cb70ab6f752912d44f2140bcb3b474066dc07`.
 
-## Final acceptance gate
+## Accepted BE-03 outcome
 
-BE-03 may be marked accepted only when all of the following are simultaneously true on one stable final PR #26 HEAD:
+BE-03 now provides the canonical Household access-management substrate:
 
-1. DB-02 exact-HEAD gate is SUCCESS on PostgreSQL 17 and PostgreSQL 18 when the final HEAD contains a database delta.
-2. BE-00 exact-HEAD gate is SUCCESS, including replay of the accepted DB-02 contract and PostgreSQL/RLS integration.
-3. The authenticated B3-030 request succeeds through the complete authority chain and the resulting current membership is observable after commit.
-4. Existing adversarial/concurrency tests and the deterministic post-lock temporal-serialization proof remain green.
-5. Delivery exposes only provider-neutral contracts, preserves parser 4xx classification and preserves tenant nondisclosure.
-6. No unresolved material review finding remains.
-7. Final panoramic reviews are CLEAN.
-8. The owner explicitly authorizes squash merge.
-9. The PR is squash-merged with the reviewed expected HEAD and its branch is preserved.
+```text
+BE-02 verified identity
+  -> current Household authority
+  -> governed membership-administration capability
+  -> add/rejoin / role-change / end / self-leave
+  -> history + provenance + retry safety + survivability
+  -> current-member observation
+  -> authenticated HTTP delivery
+```
 
-Until those conditions are satisfied, PR #26 is a closure candidate and BE-03 remains active.
+All later phases must preserve these authority, nondisclosure, concurrency, temporal, least-privilege and history guarantees. They may consume BE-03; they may not bypass or reinterpret it.

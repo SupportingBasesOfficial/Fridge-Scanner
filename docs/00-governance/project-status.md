@@ -8,104 +8,149 @@
 - DB-02 exact reviewed HEAD: `8952856e48807d9a50e7adb0b5d16dee5911e90c`
 - Canonical SQL migrations: **accepted**
 - PostgreSQL execution gate: **accepted on PostgreSQL 17 and PostgreSQL 18**
+
 - Accepted BE-00 baseline: **Backend Foundation & Runtime Contracts**, squash-merged at `0ad61f38da15ebb237d9e6feda01bf1f8489f5d5`
 - BE-00 exact reviewed HEAD: `7901afe9e78e5ab2e1d24732790396b0aedaccc4`
-- BE-00 final execution gate: **accepted** — runtime/build/test, PostgreSQL/RLS integration and container non-root/health all CLEAN on the exact reviewed HEAD
+- BE-00 execution/review gate: **accepted**
+
 - Accepted BE-01 baseline: **Application Contracts & Domain Kernel**, final implementation lineage incorporated through squash commit `73d4345e42a958cd966fea012ce4ae8d360c8531`
 - BE-01 final exact reviewed HEAD: `11dbf0313cf882385ae05f302a0d0a5ca09b97c0`
-- BE-01 final execution/review gate: **accepted** — dependency boundaries, strict TypeScript/build/tests, DB-02/RLS regression, container regression, exact-value round trips and final review all CLEAN on the exact reviewed HEAD
+- BE-01 execution/review gate: **accepted**
+
 - Accepted BE-02 baseline: **Identity Boundary**, formally accepted at squash commit `5f7cba8a1693a5df4cc7d61ad0c3452414b97d3c`
 - BE-02 final exact reviewed HEAD: `061b9b4557787f309a3bbbf789d1ea0e47c7e592`
-- BE-02 final execution/review gate: **accepted** — provider-neutral verification/mapping, current Household authorization, stale-membership regression and end-to-end authenticated proof all CLEAN on the exact reviewed HEAD
+- BE-02 execution/review gate: **accepted**
+
 - Accepted BE-03 normative baseline: **Household Access Management**, squash-merged at `75db7717761e791c04bbe43a5762fb3381b91e3f`
 - BE-03 normative exact reviewed HEAD: `b826f12cfc1307962740b3774d2f3deb01bf84af`
-- Accepted BE-03 authority kernel: **Household Membership Administration Capability**, squash-merged at `9d9323122a86fbe572b7fd5bc5ea8d96a4cad65f`
-- BE-03 authority-kernel exact reviewed HEAD: `5c7feb9940b5e66d857780e5eb585e36a1ddb81e`
-- BE-03 authority-kernel gate: **accepted** — governed provider-neutral capability, least-privileged SECURITY DEFINER acquisition, opaque application capability, concurrency locking proof, DB-02 regression and BE-00 gate all CLEAN
-- Accepted BE-03 mutation slice: **Governed Add / Rejoin Household Member**, squash-merged at `e4558a605ef31ace98e7dcf599784e413eb7dc8a`
-- BE-03 add-member exact reviewed HEAD: `1200a73e0cedd35b148f0522d795bcccfb91b5d6`
-- BE-03 add-member gate: **accepted** — durable `CommandId` retry identity, non-restoring replay, governed role/target locking, current-effective overlap protection, concurrent-add convergence, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
-- Accepted BE-03 survivability kernel: **Last-administrator Survivability + Canonical Lock Order**, squash-merged at `f9e7b2a9b8749a3c36530a3ba8d758856f55b64c`
-- BE-03 survivability exact reviewed HEAD: `7ec622558f711408e36e0d44545f85f7ca59594f`
-- BE-03 survivability gate: **accepted** — Household-first serialization, actor/target/governance lock order, write-skew/deadlock prevention, least privilege, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
-- Accepted BE-03 mutation slice: **Governed Household Membership Role Change**, squash-merged at `23bc0306c1f25df510b654b94f6ebb80b0a7491b`
-- BE-03 role-change exact reviewed HEAD: `67d8f4a2823830519b8e469fbfde8e37336ea527`
-- BE-03 role-change gate: **accepted** — interval-preserving role history, stable `CommandId`, non-reapplying replay, self-demotion policy, atomic survivability, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
-- Accepted BE-03 mutation slice: **Governed Membership End + Self-leave**, squash-merged at `5af9f92fd38466d7b9429465d59e9f0f7f2498f3`
-- BE-03 membership-end/self-leave exact reviewed HEAD: `1a57cc01844d3f12bbab7ddeaaf0b9a69118d692`
-- BE-03 membership-end/self-leave gate: **accepted** — interval closure without history rewrite, stable command identity, committed self-leave replay after authority loss, unknown-target nondisclosure normalization, atomic survivability, PostgreSQL 17/18, backend/RLS/container gates, two Codex findings fixed/resolved and final panoramic reviews CLEAN
-- Accepted BE-03 read slice: **Governed Current Household Membership Read Model**, squash-merged at `7cd840c1a169ed09a15e4045be2772ef002a14a5`
-- BE-03 current-member read exact reviewed HEAD: `10d7203189d12514ab0fbeb95d9d31427e47f1d5`
-- BE-03 current-member read gate: **accepted** — B3-026/B3-027 Household-scoped current-only observation, exact actor-membership revalidation, no provider metadata, narrow SECURITY DEFINER read surface, no direct `user_profile` privilege widening, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
-- Active phase: **BE-03 — Household Access Management**
-- Active implementation slice: **Authenticated HTTP delivery + B3-030 closure proof**
-- Backend implementation: **runtime, application/domain kernel, identity boundary and BE-03 authority/mutation/read substrates accepted; final authenticated HTTP delivery closure is under exact-HEAD validation and review**
+- Accepted BE-03 authority kernel: squash `9d9323122a86fbe572b7fd5bc5ea8d96a4cad65f`, exact reviewed HEAD `5c7feb9940b5e66d857780e5eb585e36a1ddb81e`
+- Accepted BE-03 add/rejoin: squash `e4558a605ef31ace98e7dcf599784e413eb7dc8a`, exact reviewed HEAD `1200a73e0cedd35b148f0522d795bcccfb91b5d6`
+- Accepted BE-03 survivability: squash `f9e7b2a9b8749a3c36530a3ba8d758856f55b64c`, exact reviewed HEAD `7ec622558f711408e36e0d44545f85f7ca59594f`
+- Accepted BE-03 role change: squash `23bc0306c1f25df510b654b94f6ebb80b0a7491b`, exact reviewed HEAD `67d8f4a2823830519b8e469fbfde8e37336ea527`
+- Accepted BE-03 membership end/self-leave: squash `5af9f92fd38466d7b9429465d59e9f0f7f2498f3`, exact reviewed HEAD `1a57cc01844d3f12bbab7ddeaaf0b9a69118d692`
+- Accepted BE-03 current-member read model: squash `7cd840c1a169ed09a15e4045be2772ef002a14a5`, exact reviewed HEAD `10d7203189d12514ab0fbeb95d9d31427e47f1d5`
+- Accepted BE-03 final delivery/closure: PR #26 squash `546cb70ab6f752912d44f2140bcb3b474066dc07`, exact reviewed HEAD `5a1e05185d6be8d30b5ecb2c6729ccceaeddce44`
+- BE-03 final exact-head gates: **DB-02 #75 SUCCESS on PostgreSQL 17/18; BE-00 #159 SUCCESS**
+- BE-03 final B3-030 authenticated governed mutation proof: **accepted**
+- BE-03 post-lock temporal serialization hardening (`000039`): **accepted**
+- BE-03 final panoramic reviews: **CLEAN**
+- BE-03 unresolved material threads at merge: **0**
+- Canonical post-BE-03 `main`: **`546cb70ab6f752912d44f2140bcb3b474066dc07`**
+
+- Active phase: **BE-04 — Storage Topology Management**
+- Active implementation slice: **Normative authority/lifecycle/concurrency baseline**
+- Active branch: **`backend/be-04-storage-topology-normative`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline in progress**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
 ## Accepted foundation
 
-DB-00 defines domain truth and invariants. DB-01 translates those contracts into the accepted technology-neutral logical relational model. DB-02 translates them into the accepted PostgreSQL physical schema, canonical ordered migration lineage, database privileges/RLS, append-only protections, transaction-safe mutation boundaries and adversarial database tests.
+DB-00 defines domain truth and invariants. DB-01 translates those contracts into the accepted technology-neutral logical relational model. DB-02 translates them into the accepted PostgreSQL physical schema, canonical ordered migration lineage, database privileges/RLS, transaction-safe mutation boundaries and adversarial database tests.
 
-BE-00 establishes the accepted executable backend runtime foundation: npm workspace topology, strict TypeScript baseline, validated immutable runtime configuration, Fastify delivery adapter, structured request correlation/logging, PostgreSQL transaction adapter, least-privileged Household candidate-context authorization bootstrap, liveness/readiness semantics, graceful shutdown, reproducible dependency graph, Docker non-root runtime and CI integration gates.
+BE-00 establishes the executable runtime foundation: strict TypeScript, validated configuration, Fastify delivery, structured correlation/logging, PostgreSQL transactions, Household context, liveness/readiness, graceful shutdown, Docker non-root runtime and CI gates.
 
-BE-01 establishes the accepted provider-neutral domain/application kernel above BE-00: opaque business identifiers; canonical UUID parsing; exact rational, decimal and money semantics without JavaScript binary floating point; explicit canonical wire serialization; strict UTC instant semantics; provider-neutral application errors; verified Household transaction authority; explicit use-case contracts; intent-specific ports; machine-enforced dependency direction; semantic contract tests; and one deliberately narrow proving slice demonstrating HTTP → application → authorized persistence wiring without uncontrolled feature CRUD.
+BE-01 establishes the provider-neutral domain/application kernel: opaque identifiers, canonical UUID parsing, exact rational/decimal/money semantics, canonical wire serialization, strict UTC instant semantics, provider-neutral errors, transaction authority, intent-specific ports and machine-enforced dependency direction.
 
-BE-02 establishes the accepted provider-neutral identity boundary: provider-authenticated evidence is verified and mapped explicitly to a platform-owned principal; provider tokens/claims never become Household authority; current Household membership is still re-evaluated inside the accepted transaction boundary; stale or ended membership cannot be revived by a still-valid authentication credential.
+BE-02 establishes the provider-neutral identity boundary: authenticated provider evidence is verified and mapped to a platform-owned principal; provider claims never become Household authority; current Household membership is re-evaluated inside the accepted transaction boundary.
 
-BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. Add/rejoin, survivability, role change, administrative membership end and self-leave form the accepted mutation substrate, preserving history, durable actor provenance, retry identity and last-administrator survivability. The accepted B3-026/B3-027 read model exposes current Household membership as provider-neutral observation without becoming mutation authority. Current work is the final B3-030 HTTP delivery closure proving that verified authentication reaches a real governed history-preserving membership mutation through all accepted authority boundaries.
+BE-03 establishes Household access governance: `HOUSEHOLD_MEMBERSHIP_ADMINISTER`, governed role/capability mapping, add/rejoin, role change, end/self-leave, durable command identity, actor provenance, atomic last-administrator survivability, post-lock temporal authority, current-member observation and authenticated HTTP delivery. The B3-030 proof demonstrates the complete chain from signed Bearer evidence through current Household authorization and membership-administration capability to durable governed mutation and post-commit observation.
 
-DB-00, DB-01, DB-02, BE-00, BE-01 and BE-02 are normative for BE-03 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
-
-Earlier DDL/design notes remain historical input only. They are not production-ready or canonical unless explicitly reconciled with the accepted baselines.
+DB-00, DB-01, DB-02 and BE-00 through BE-03 are normative for BE-04 and all later implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
-The canonical BE-01 evidence chain is recorded in `docs/05-backend/be-01-acceptance.md`.
+Canonical BE-01 evidence is recorded in `docs/05-backend/be-01-acceptance.md`.
 
-BE-01 was delivered through:
-
-- PR #5 — normative B1-001 through B1-015 baseline;
-- PR #7 — executable domain/application kernel;
-- PR #8 — one narrow authorized proving slice;
-- PR #9 — exact serialization closure.
-
-The accepted architecture direction remains:
+Accepted architecture direction:
 
 ```text
 Domain <- Application <- Adapters / Delivery / Runtime
 ```
 
-Later phases may extend the system with new domain/application contracts, but may not bypass the accepted dependency, exactness, authority or serialization boundaries.
+Later phases may extend domain/application contracts, but may not bypass accepted dependency, exactness, authority or serialization boundaries.
 
 ## BE-02 acceptance
 
-The canonical BE-02 evidence chain is recorded in `docs/05-backend/be-02-acceptance.md`.
+Canonical BE-02 evidence is recorded in `docs/05-backend/be-02-acceptance.md`.
 
-BE-02 was formally accepted by PR #18 at `5f7cba8a1693a5df4cc7d61ad0c3452414b97d3c`. Provider authentication proves platform principal identity only; it does not freeze or replace Household authorization. External identity mapping, current-membership authorization and nondisclosure remain separate governed boundaries.
+Provider authentication proves platform principal identity only. It does not freeze or replace Household authorization. External identity mapping, current-membership authorization and nondisclosure remain separate governed boundaries.
 
-## Purpose of BE-03
+## BE-03 acceptance
 
-BE-03 governs who may administer Household membership and how membership authority changes safely over time.
+Canonical BE-03 evidence is recorded in `docs/05-backend/be-03-acceptance.md`.
 
-BE-03 must consume BE-02 rather than replace it. In particular:
+BE-03 is formally closed at `main @ 546cb70ab6f752912d44f2140bcb3b474066dc07` and is now accepted upstream authority for all later Household-scoped backend phases.
 
-- current Household membership remains execution-time truth;
-- membership administration requires the explicit provider-neutral `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability;
-- concrete role meaning comes from governed role/capability reference data, never arbitrary strings or provider metadata;
-- adding/rejoining creates a new current membership interval without rewriting historical authority;
-- role change and membership end must preserve historical semantics;
-- self-mutation follows explicit policy rather than accidental actor/target equality behavior;
-- last-administrator survivability must be checked atomically with any mutation that could reduce administration authority;
-- target identities are platform-owned principals, not provider subjects, emails or JWT claims;
-- mutation persistence remains least-privileged and intent-specific;
-- current membership reads remain Household-scoped, provider-neutral and observational only;
-- provider-neutral application errors and tenant nondisclosure remain authoritative.
+The accepted authority chain is:
 
-BE-03 is not complete until a real authenticated request crosses BE-02 verification → current Household authorization → membership-administration capability → durable governed mutation while adversarial and concurrency tests preserve one-current-membership, history and survivability invariants.
+```text
+verified provider evidence
+  -> platform PrincipalId
+  -> current Household authority
+  -> governed Household capability
+  -> intent-specific durable mutation/read
+  -> provider-neutral delivery
+```
+
+BE-04 must consume this chain rather than create a parallel storage authorization model.
+
+## Purpose of BE-04
+
+BE-04 governs the Household's physical storage topology before executable inventory placement is introduced.
+
+DB-00 defines:
+
+- every `StorageLocation` belongs to exactly one Household;
+- every `Compartment` belongs to exactly one StorageLocation;
+- every Compartment therefore resolves to exactly one Household through its parent;
+- a stored StockItem eventually has one placement anchor, either a StorageLocation or a Compartment whose parent StorageLocation is authoritative;
+- occupancy labels are projections/observations, not authoritative stock truth.
+
+DB-02 already provides:
+
+- governed `storage_location_kind` and `compartment_kind` reference tables;
+- `storage_location` Household ownership/lifecycle/order/retirement fields;
+- `compartment` Household ownership/parent/lifecycle/order/retirement fields;
+- a composite same-Household FK preventing a Compartment from attaching to another Household's StorageLocation.
+
+BE-04 therefore establishes the application/persistence/delivery rules for current topology reads, create/change/retire lifecycle, explicit `HOUSEHOLD_STORAGE_ADMINISTER` capability, stable command identity, nondisclosure, least privilege and deterministic concurrency.
+
+BE-04 explicitly does **not** implement Product catalog, Purchase/Receipt, StockItem or InventoryMovement workflows. Those remain later phases and must consume the topology contract rather than invent placement semantics themselves.
+
+## Current BE-04 normative direction
+
+The canonical BE-04 baseline is being established in:
+
+- `docs/05-backend/be-04-overview.md`
+- `docs/05-backend/be-04-decisions.md`
+
+Key target rules include:
+
+- execution-time Household authority;
+- dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER` capability;
+- immutable Household ownership of StorageLocation;
+- same-Household immutable Compartment parentage for BE-04;
+- retirement instead of ordinary hard delete;
+- active governed kinds;
+- current observational read models;
+- stable caller-supplied CommandId for retriable mutations;
+- non-restoring committed replay;
+- canonical lock order `Household -> StorageLocation -> Compartment`;
+- post-lock temporal observation;
+- parent retirement blocked while active children remain;
+- topology retirement blocked when it would strand current stock;
+- no automatic business cascades;
+- provider-neutral errors and nondisclosure;
+- least-privileged intent-specific persistence;
+- B4-030 authenticated governed topology-mutation proof as phase exit condition.
+
+No executable BE-04 mutation should be merged until this normative baseline itself passes exact-HEAD review and is explicitly accepted.
 
 ## Governance rule
 
-The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization. A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary or Household-access invariant.
+The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization.
 
-BE-03 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
+A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary, Household-access or storage-topology invariant.
+
+BE-04 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02/BE-03. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
