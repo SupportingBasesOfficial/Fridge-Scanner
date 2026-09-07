@@ -34,9 +34,12 @@
 - Accepted BE-03 mutation slice: **Governed Membership End + Self-leave**, squash-merged at `5af9f92fd38466d7b9429465d59e9f0f7f2498f3`
 - BE-03 membership-end/self-leave exact reviewed HEAD: `1a57cc01844d3f12bbab7ddeaaf0b9a69118d692`
 - BE-03 membership-end/self-leave gate: **accepted** — interval closure without history rewrite, stable command identity, committed self-leave replay after authority loss, unknown-target nondisclosure normalization, atomic survivability, PostgreSQL 17/18, backend/RLS/container gates, two Codex findings fixed/resolved and final panoramic reviews CLEAN
+- Accepted BE-03 read slice: **Governed Current Household Membership Read Model**, squash-merged at `7cd840c1a169ed09a15e4045be2772ef002a14a5`
+- BE-03 current-member read exact reviewed HEAD: `10d7203189d12514ab0fbeb95d9d31427e47f1d5`
+- BE-03 current-member read gate: **accepted** — B3-026/B3-027 Household-scoped current-only observation, exact actor-membership revalidation, no provider metadata, narrow SECURITY DEFINER read surface, no direct `user_profile` privilege widening, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
 - Active phase: **BE-03 — Household Access Management**
-- Active implementation slice: **Governed current Household membership read model**
-- Backend implementation: **runtime, application/domain kernel, identity boundary and all BE-03 mutation kernels accepted; Household-scoped provider-neutral current-member observation in progress before final HTTP delivery/B3-030 proof**
+- Active implementation slice: **Authenticated HTTP delivery + B3-030 closure proof**
+- Backend implementation: **runtime, application/domain kernel, identity boundary and BE-03 authority/mutation/read substrates accepted; final authenticated HTTP delivery closure is under exact-HEAD validation and review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -50,7 +53,7 @@ BE-01 establishes the accepted provider-neutral domain/application kernel above 
 
 BE-02 establishes the accepted provider-neutral identity boundary: provider-authenticated evidence is verified and mapped explicitly to a platform-owned principal; provider tokens/claims never become Household authority; current Household membership is still re-evaluated inside the accepted transaction boundary; stale or ended membership cannot be revived by a still-valid authentication credential.
 
-BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. Add/rejoin, survivability, role change, administrative membership end and self-leave now form the accepted mutation substrate, preserving history, durable actor provenance, retry identity and last-administrator survivability. Current work adds the B3-026/B3-027 observational surface for current members without exposing provider metadata or allowing read models to become mutation authority. The remaining BE-03 closure is HTTP delivery and the exact authenticated B3-030 governed-mutation proof.
+BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. Add/rejoin, survivability, role change, administrative membership end and self-leave form the accepted mutation substrate, preserving history, durable actor provenance, retry identity and last-administrator survivability. The accepted B3-026/B3-027 read model exposes current Household membership as provider-neutral observation without becoming mutation authority. Current work is the final B3-030 HTTP delivery closure proving that verified authentication reaches a real governed history-preserving membership mutation through all accepted authority boundaries.
 
 DB-00, DB-01, DB-02, BE-00, BE-01 and BE-02 are normative for BE-03 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
 
