@@ -19,8 +19,8 @@ declare
   v_household_locked uuid;
   v_target_user_id uuid;
   v_target_role_code text;
-  v_target_current_admin boolean := false;
-  v_result_admin boolean := false;
+  v_target_admin_capability text;
+  v_result_admin_capability text;
   v_other_admin_membership_id uuid;
 begin
   -- The caller transaction must already have installed the accepted server-side
@@ -47,22 +47,9 @@ begin
   -- transaction. Callers remain responsible for their own intent-specific
   -- target-state validation; this helper only determines survivability impact.
   select hm.user_id,
-         hm.role_code,
-         exists (
-           select 1
-             from fridge.household_role r
-             join fridge.household_role_capability rc
-               on rc.role_code = r.role_code
-             join fridge.household_capability c
-               on c.capability_code = rc.capability_code
-            where r.role_code = hm.role_code
-              and r.lifecycle_status = 'ACTIVE'
-              and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
-              and c.lifecycle_status = 'ACTIVE'
-         )
+         hm.role_code
     into v_target_user_id,
-         v_target_role_code,
-         v_target_current_admin
+         v_target_role_code
     from fridge.household_membership hm
    where hm.household_id = p_household_id
      and hm.membership_id = p_target_membership_id
@@ -77,36 +64,53 @@ begin
     return true;
   end if;
 
+  -- Determine whether the current target role carries the governed membership-
+  -- administration capability and lock those exact governance facts through the
+  -- transaction so the survivability decision cannot become stale underneath it.
+  select c.capability_code
+    into v_target_admin_capability
+    from fridge.household_role r
+    join fridge.household_role_capability rc
+      on rc.role_code = r.role_code
+    join fridge.household_capability c
+      on c.capability_code = rc.capability_code
+   where r.role_code = v_target_role_code
+     and r.lifecycle_status = 'ACTIVE'
+     and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
+     and c.lifecycle_status = 'ACTIVE'
+   limit 1
+   for share of r, rc, c;
+
   -- Ending membership passes NULL. Role-change passes the post-state governed
-  -- role and this guard asks only whether it retains the administration
-  -- capability; assignability/current-role validity remain mutation concerns.
+  -- role. If that role retains administration capability, lock those governance
+  -- facts as well. Assignability and other role validity remain mutation concerns.
   if p_result_role_code is not null then
-    select exists (
-      select 1
-        from fridge.household_role r
-        join fridge.household_role_capability rc
-          on rc.role_code = r.role_code
-        join fridge.household_capability c
-          on c.capability_code = rc.capability_code
-       where r.role_code = p_result_role_code
-         and r.lifecycle_status = 'ACTIVE'
-         and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
-         and c.lifecycle_status = 'ACTIVE'
-    )
-      into v_result_admin;
+    select c.capability_code
+      into v_result_admin_capability
+      from fridge.household_role r
+      join fridge.household_role_capability rc
+        on rc.role_code = r.role_code
+      join fridge.household_capability c
+        on c.capability_code = rc.capability_code
+     where r.role_code = p_result_role_code
+       and r.lifecycle_status = 'ACTIVE'
+       and c.capability_code = 'HOUSEHOLD_MEMBERSHIP_ADMINISTER'
+       and c.lifecycle_status = 'ACTIVE'
+     limit 1
+     for share of r, rc, c;
   end if;
 
   -- Mutations that do not reduce administration authority cannot violate the
   -- last-administrator invariant and therefore pass immediately.
-  if not v_target_current_admin or v_result_admin then
+  if v_target_admin_capability is null or v_result_admin_capability is not null then
     return true;
   end if;
 
   -- At this point the target currently administers membership and the requested
   -- result would remove that capability. Because the Household serialization
   -- anchor is held, any other authority-reducing mutation for this Household must
-  -- wait. Lock one surviving current administrator as additional provenance and
-  -- return true only if such a principal exists.
+  -- wait. Lock one surviving current administrator plus its governance facts as
+  -- durable transaction provenance and return true only if such authority exists.
   select hm.membership_id
     into v_other_admin_membership_id
     from fridge.household_membership hm
@@ -133,7 +137,7 @@ end;
 $$;
 
 comment on function fridge_internal.household_membership_survivability_allows(uuid, uuid, text) is
-  'BE-03 internal survivability guard for authority-reducing membership mutations. Serializes on the Household row, locks the current target membership, and permits loss of HOUSEHOLD_MEMBERSHIP_ADMINISTER only when another current administrator remains.';
+  'BE-03 internal survivability guard for authority-reducing membership mutations. Serializes on the Household row, locks the current target membership and governed capability facts, and permits loss of HOUSEHOLD_MEMBERSHIP_ADMINISTER only when another current administrator remains.';
 
 revoke all on function fridge_internal.household_membership_survivability_allows(uuid, uuid, text) from public;
 
