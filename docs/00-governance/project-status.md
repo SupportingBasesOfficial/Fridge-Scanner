@@ -31,9 +31,12 @@
 - Accepted BE-03 mutation slice: **Governed Household Membership Role Change**, squash-merged at `23bc0306c1f25df510b654b94f6ebb80b0a7491b`
 - BE-03 role-change exact reviewed HEAD: `67d8f4a2823830519b8e469fbfde8e37336ea527`
 - BE-03 role-change gate: **accepted** — interval-preserving role history, stable `CommandId`, non-reapplying replay, self-demotion policy, atomic survivability, PostgreSQL 17/18, backend/RLS/container gates and two panoramic reviews CLEAN
+- Accepted BE-03 mutation slice: **Governed Membership End + Self-leave**, squash-merged at `5af9f92fd38466d7b9429465d59e9f0f7f2498f3`
+- BE-03 membership-end/self-leave exact reviewed HEAD: `1a57cc01844d3f12bbab7ddeaaf0b9a69118d692`
+- BE-03 membership-end/self-leave gate: **accepted** — interval closure without history rewrite, stable command identity, committed self-leave replay after authority loss, unknown-target nondisclosure normalization, atomic survivability, PostgreSQL 17/18, backend/RLS/container gates, two Codex findings fixed/resolved and final panoramic reviews CLEAN
 - Active phase: **BE-03 — Household Access Management**
-- Active implementation slice: **Governed membership end + self-leave**
-- Backend implementation: **runtime, application/domain kernel, identity boundary, BE-03 authority kernel, add/rejoin, survivability and role change accepted; history-preserving membership end/self-leave in progress**
+- Active implementation slice: **Governed current Household membership read model**
+- Backend implementation: **runtime, application/domain kernel, identity boundary and all BE-03 mutation kernels accepted; Household-scoped provider-neutral current-member observation in progress before final HTTP delivery/B3-030 proof**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -47,7 +50,7 @@ BE-01 establishes the accepted provider-neutral domain/application kernel above 
 
 BE-02 establishes the accepted provider-neutral identity boundary: provider-authenticated evidence is verified and mapped explicitly to a platform-owned principal; provider tokens/claims never become Household authority; current Household membership is still re-evaluated inside the accepted transaction boundary; stale or ended membership cannot be revived by a still-valid authentication credential.
 
-BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. The accepted add/rejoin slice adds history-preserving membership creation with stable command identity and retry safety. The accepted survivability kernel establishes Household-first serialization and the atomic last-administrator invariant. The accepted role-change slice preserves prior/post authority as separate intervals with non-reapplying retries. Current work closes current membership intervals for administrative end and self-leave while keeping those intents separate, preserving durable actor provenance, and preventing committed replay from ending later rejoined authority.
+BE-03 establishes Household-scoped access governance above that identity boundary. The accepted authority kernel introduces the canonical `HOUSEHOLD_MEMBERSHIP_ADMINISTER` capability and a least-privileged transaction-scoped acquisition boundary. Add/rejoin, survivability, role change, administrative membership end and self-leave now form the accepted mutation substrate, preserving history, durable actor provenance, retry identity and last-administrator survivability. Current work adds the B3-026/B3-027 observational surface for current members without exposing provider metadata or allowing read models to become mutation authority. The remaining BE-03 closure is HTTP delivery and the exact authenticated B3-030 governed-mutation proof.
 
 DB-00, DB-01, DB-02, BE-00, BE-01 and BE-02 are normative for BE-03 and all later implementation. Backend convenience, framework defaults, ORM behavior, identity-provider claims or hosting-provider features may not silently weaken those accepted contracts.
 
@@ -93,6 +96,7 @@ BE-03 must consume BE-02 rather than replace it. In particular:
 - last-administrator survivability must be checked atomically with any mutation that could reduce administration authority;
 - target identities are platform-owned principals, not provider subjects, emails or JWT claims;
 - mutation persistence remains least-privileged and intent-specific;
+- current membership reads remain Household-scoped, provider-neutral and observational only;
 - provider-neutral application errors and tenant nondisclosure remain authoritative.
 
 BE-03 is not complete until a real authenticated request crosses BE-02 verification → current Household authorization → membership-administration capability → durable governed mutation while adversarial and concurrency tests preserve one-current-membership, history and survivability invariants.
