@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CommandId,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -14,11 +15,13 @@ import {
   type HouseholdMembershipWriter,
 } from './index.js';
 
+const COMMAND = CommandId('cccccccc-1111-4111-8111-cccccccccccc');
 const ACTOR = PrincipalId('11111111-1111-4111-8111-111111111111');
 const TARGET = PrincipalId('22222222-2222-4222-8222-222222222222');
 const HOUSEHOLD = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 const ACTOR_MEMBERSHIP = HouseholdMembershipId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa');
-const NEW_MEMBERSHIP = HouseholdMembershipId('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb');
+const CANDIDATE_MEMBERSHIP = HouseholdMembershipId('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb');
+const PERSISTED_MEMBERSHIP = HouseholdMembershipId('dddddddd-1111-4111-8111-dddddddddddd');
 
 function fakeAdministrationTransaction(): HouseholdMembershipAdministrationTransaction {
   return {
@@ -31,7 +34,7 @@ function fakeAdministrationTransaction(): HouseholdMembershipAdministrationTrans
   } as unknown as HouseholdMembershipAdministrationTransaction;
 }
 
-test('AddHouseholdMemberUseCase expresses one governed membership intent', async () => {
+test('AddHouseholdMemberUseCase carries stable command identity and returns persisted membership identity', async () => {
   let requestedActor: unknown;
   let requestedHousehold: unknown;
   let persisted: AddHouseholdMemberPersistenceInput | undefined;
@@ -51,16 +54,18 @@ test('AddHouseholdMemberUseCase expresses one governed membership intent', async
   const memberships: HouseholdMembershipWriter = {
     async addHouseholdMember(_transaction, input) {
       persisted = input;
+      return PERSISTED_MEMBERSHIP;
     },
   };
 
   const useCase = new AddHouseholdMemberUseCase(
     transactions,
     memberships,
-    { generate: () => NEW_MEMBERSHIP },
+    { generate: () => CANDIDATE_MEMBERSHIP },
   );
 
   const output = await useCase.execute({
+    commandId: COMMAND,
     actorPrincipalId: ACTOR,
     householdId: HOUSEHOLD,
     targetPrincipalId: TARGET,
@@ -70,11 +75,12 @@ test('AddHouseholdMemberUseCase expresses one governed membership intent', async
   assert.equal(requestedActor, ACTOR);
   assert.equal(requestedHousehold, HOUSEHOLD);
   assert.deepEqual(persisted, {
-    membershipId: NEW_MEMBERSHIP,
+    commandId: COMMAND,
+    candidateMembershipId: CANDIDATE_MEMBERSHIP,
     targetPrincipalId: TARGET,
     roleCode: 'MEMBER',
   });
-  assert.deepEqual(output, { membershipId: NEW_MEMBERSHIP });
+  assert.deepEqual(output, { membershipId: PERSISTED_MEMBERSHIP });
 });
 
 test('AddHouseholdMemberUseCase rejects non-exact role input before authority acquisition', async () => {
@@ -96,11 +102,12 @@ test('AddHouseholdMemberUseCase rejects non-exact role input before authority ac
   const useCase = new AddHouseholdMemberUseCase(
     transactions,
     memberships,
-    { generate: () => NEW_MEMBERSHIP },
+    { generate: () => CANDIDATE_MEMBERSHIP },
   );
 
   await assert.rejects(
     useCase.execute({
+      commandId: COMMAND,
       actorPrincipalId: ACTOR,
       householdId: HOUSEHOLD,
       targetPrincipalId: TARGET,
