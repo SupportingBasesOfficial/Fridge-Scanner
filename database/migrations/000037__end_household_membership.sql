@@ -54,12 +54,26 @@ set search_path = pg_catalog
 as $$
 declare
   v_command fridge.household_membership_end_command%rowtype;
+  v_target_user_id uuid;
   v_source_membership_id uuid;
   v_effective_at timestamptz;
   v_survivability boolean;
 begin
   if p_intent_code not in ('ADMIN_END', 'SELF_LEAVE') then
     return query select 'INVALID_INTENT'::text, null::uuid;
+    return;
+  end if;
+
+  -- Normalize unknown principals before touching the command ledger so a missing
+  -- target cannot escape as a foreign-key exception or become a principal-existence oracle.
+  select u.user_id
+    into v_target_user_id
+    from fridge.user_profile u
+   where u.user_id = p_target_user_id
+   for share;
+
+  if v_target_user_id is null then
+    return query select 'CURRENT_MEMBERSHIP_NOT_FOUND'::text, null::uuid;
     return;
   end if;
 
@@ -135,6 +149,46 @@ begin
          outcome_code = 'ENDED'
    where household_id = p_household_id
      and command_id = p_command_id;
+
+  return query select 'ENDED'::text, v_source_membership_id;
+end;
+$$;
+
+create or replace function fridge_internal.replay_household_self_leave(
+  p_household_id uuid,
+  p_actor_user_id uuid,
+  p_command_id uuid
+)
+returns table (outcome_code text, ended_membership_id uuid)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_source_membership_id uuid;
+begin
+  if fridge_internal.current_household_id() is distinct from p_household_id then
+    return query select 'UNAUTHORIZED'::text, null::uuid;
+    return;
+  end if;
+
+  -- This is not a general ledger read. It can only recover the caller-bound result
+  -- of an already committed self-leave command; absent/mismatched commands are opaque.
+  select c.source_membership_id
+    into v_source_membership_id
+    from fridge.household_membership_end_command c
+   where c.household_id = p_household_id
+     and c.command_id = p_command_id
+     and c.intent_code = 'SELF_LEAVE'
+     and c.actor_user_id = p_actor_user_id
+     and c.target_user_id = p_actor_user_id
+     and c.outcome_code = 'ENDED';
+
+  if v_source_membership_id is null then
+    return query select 'NOT_REPLAYED'::text, null::uuid;
+    return;
+  end if;
 
   return query select 'ENDED'::text, v_source_membership_id;
 end;
@@ -248,6 +302,9 @@ begin
 end;
 $$;
 
+comment on function fridge_internal.replay_household_self_leave(uuid, uuid, uuid) is
+  'BE-03 narrow committed self-leave replay. Returns only the caller-bound result of an already ENDED SELF_LEAVE command and never authorizes or performs a new mutation.';
+
 comment on function fridge_internal.end_household_membership(uuid, uuid, uuid, uuid, uuid) is
   'BE-03 governed administrative membership end. Revalidates membership-administration authority, closes current history atomically with survivability, records durable actor provenance, and makes committed retries non-restoring.';
 
@@ -256,9 +313,12 @@ comment on function fridge_internal.leave_household(uuid, uuid, uuid, uuid) is
 
 revoke all on table fridge.household_membership_end_command from public;
 revoke all on function fridge_internal.end_household_membership_core(uuid, uuid, uuid, uuid, text) from public;
+revoke all on function fridge_internal.replay_household_self_leave(uuid, uuid, uuid) from public;
 revoke all on function fridge_internal.end_household_membership(uuid, uuid, uuid, uuid, uuid) from public;
 revoke all on function fridge_internal.leave_household(uuid, uuid, uuid, uuid) from public;
 
+grant execute on function fridge_internal.replay_household_self_leave(uuid, uuid, uuid)
+  to fridge_app;
 grant execute on function fridge_internal.end_household_membership(uuid, uuid, uuid, uuid, uuid)
   to fridge_app;
 grant execute on function fridge_internal.leave_household(uuid, uuid, uuid, uuid)
