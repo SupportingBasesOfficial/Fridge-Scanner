@@ -4,13 +4,18 @@ import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   AddHouseholdMemberUseCase,
   HouseholdMembershipId,
+  PrincipalId,
   ReadAuthorizedHouseholdContext,
   ReadCurrentHouseholdMembersUseCase,
 } from '@fridge/application';
 import type { RuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
 import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
-import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
+import {
+  BearerAuthenticatedPrincipalResolver,
+  type PlatformPrincipalMapper,
+} from './auth.js';
+import { JwtJwksAuthenticationEvidenceVerifier } from './jwt-jwks-verifier.js';
 import { buildApiServer } from './server.js';
 
 const databaseUrl = process.env.BE00_TEST_DATABASE_URL;
@@ -31,6 +36,7 @@ const publicJwk = {
 };
 
 const household = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const actor = PrincipalId('33333333-3333-4333-8333-333333333333');
 const target = '22222222-2222-4222-8222-222222222222';
 const candidateMembership = 'f3000000-0000-4000-8000-000000000022';
 const commandId = 'f3000000-0000-4000-8000-000000000041';
@@ -76,16 +82,23 @@ function issueToken(): string {
 }
 
 function buildIntegrationServer(database: PgDatabase) {
-  const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
-    config,
-    database,
-    {
-      now: () => nowMs,
-      fetch: async () => new Response(
-        JSON.stringify({ keys: [publicJwk] }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+  const verifier = new JwtJwksAuthenticationEvidenceVerifier({
+    trust: config.authentication!,
+    now: () => nowMs,
+    fetch: async () => new Response(
+      JSON.stringify({ keys: [publicJwk] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    ),
+  });
+  const principalMapper: PlatformPrincipalMapper = {
+    async resolve(identity) {
+      assert.deepEqual(identity, { authority: issuer, subject });
+      return actor;
     },
+  };
+  const authenticatedPrincipal = new BearerAuthenticatedPrincipalResolver(
+    verifier,
+    principalMapper,
   );
   const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(
     database,
@@ -111,7 +124,7 @@ function buildIntegrationServer(database: PgDatabase) {
   });
 }
 
-test('B3-030 authenticated HTTP request crosses BE-02 identity into governed durable membership mutation', async () => {
+test('B3-030 authenticated HTTP request crosses BE-02 verification into governed durable membership mutation', async () => {
   const database = new PgDatabase({ connectionString: databaseUrl, capabilityRole: 'fridge_app' });
   const server = buildIntegrationServer(database);
 
