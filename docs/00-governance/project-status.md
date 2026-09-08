@@ -37,10 +37,17 @@
 - BE-03 unresolved material threads at merge: **0**
 - Canonical post-BE-03 `main`: **`546cb70ab6f752912d44f2140bcb3b474066dc07`**
 
+- Accepted BE-04 normative baseline: **Storage Topology Management**, PR #27 squash `b789ab74dcc9f3d151463ec64bfc2efd8edf0cb3`
+- BE-04 normative exact reviewed HEAD: `7b07c94fc9f28edaf73fdfc3c9f053f0c30e5420`
+- BE-04 normative exact-head gate: **BE-00 #160 SUCCESS**
+- BE-04 normative panoramic reviews: **CLEAN**
+- BE-04 normative unresolved material threads at merge: **0**
+- Canonical BE-04 baseline `main`: **`b789ab74dcc9f3d151463ec64bfc2efd8edf0cb3`**
+
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **Normative authority/lifecycle/concurrency baseline**
-- Active branch: **`backend/be-04-storage-topology-normative`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline in progress**
+- Active implementation slice: **`HOUSEHOLD_STORAGE_ADMINISTER` authority kernel**
+- Active branch: **`backend/be-04-storage-authority-kernel`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline accepted; storage administration authority kernel under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -56,7 +63,9 @@ BE-02 establishes the provider-neutral identity boundary: authenticated provider
 
 BE-03 establishes Household access governance: `HOUSEHOLD_MEMBERSHIP_ADMINISTER`, governed role/capability mapping, add/rejoin, role change, end/self-leave, durable command identity, actor provenance, atomic last-administrator survivability, post-lock temporal authority, current-member observation and authenticated HTTP delivery. The B3-030 proof demonstrates the complete chain from signed Bearer evidence through current Household authorization and membership-administration capability to durable governed mutation and post-commit observation.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 are normative for BE-04 and all later implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+BE-04 normative baseline establishes storage-topology authority/lifecycle/concurrency semantics before executable topology mutations: dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership, same-Household Compartment parentage, retirement rather than ordinary delete, current observational reads, stable command identity, non-restoring replay, canonical lock order `Household -> StorageLocation -> Compartment`, post-lock temporal observation, stock-safe retirement, no automatic business cascades, least privilege and B4-030 as the authenticated phase-exit proof.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -93,7 +102,7 @@ verified provider evidence
   -> provider-neutral delivery
 ```
 
-BE-04 must consume this chain rather than create a parallel storage authorization model.
+BE-04 consumes this chain rather than creating a parallel storage authorization model.
 
 ## Purpose of BE-04
 
@@ -118,14 +127,14 @@ BE-04 therefore establishes the application/persistence/delivery rules for curre
 
 BE-04 explicitly does **not** implement Product catalog, Purchase/Receipt, StockItem or InventoryMovement workflows. Those remain later phases and must consume the topology contract rather than invent placement semantics themselves.
 
-## Current BE-04 normative direction
+## Accepted BE-04 normative baseline
 
-The canonical BE-04 baseline is being established in:
+The accepted BE-04 baseline is recorded in:
 
 - `docs/05-backend/be-04-overview.md`
 - `docs/05-backend/be-04-decisions.md`
 
-Key target rules include:
+Key accepted rules include:
 
 - execution-time Household authority;
 - dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER` capability;
@@ -145,7 +154,7 @@ Key target rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-No executable BE-04 mutation should be merged until this normative baseline itself passes exact-HEAD review and is explicitly accepted.
+The first executable slice is intentionally the storage-administration authority kernel. StorageLocation/Compartment mutations may consume that stronger opaque capability only after its own exact-HEAD gate and review are accepted.
 
 ## Governance rule
 

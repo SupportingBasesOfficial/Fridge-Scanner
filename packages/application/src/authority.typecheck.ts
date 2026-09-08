@@ -1,9 +1,11 @@
 import {
   HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
+  HOUSEHOLD_STORAGE_ADMINISTRATION_CAPABILITY,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
   type HouseholdMembershipAdministrationTransaction,
+  type HouseholdStorageAdministrationTransaction,
   type TransactionHandle,
 } from './index.js';
 
@@ -35,5 +37,19 @@ const forgedAdministrationTransaction: HouseholdMembershipAdministrationTransact
     HOUSEHOLD_MEMBERSHIP_ADMINISTRATION_CAPABILITY,
 };
 
+// BE-04 storage authority is independent from membership administration. A role
+// string or the public capability literal cannot manufacture the stronger handle.
+// @ts-expect-error HouseholdStorageAdministrationTransaction requires trusted adapter materialization.
+const forgedStorageAdministrationTransaction: HouseholdStorageAdministrationTransaction = {
+  kind: 'fridge-transaction',
+  principalId,
+  householdId,
+  membershipId,
+  householdRoleCode: 'BE04_STORAGE_ADMIN',
+  storageAdministrationCapability:
+    HOUSEHOLD_STORAGE_ADMINISTRATION_CAPABILITY,
+};
+
 void forgedTransaction;
 void forgedAdministrationTransaction;
+void forgedStorageAdministrationTransaction;
