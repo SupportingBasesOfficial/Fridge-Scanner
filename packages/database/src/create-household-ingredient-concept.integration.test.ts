@@ -24,8 +24,10 @@ if (!ADMIN_DATABASE_URL) throw new Error('DATABASE_URL is required');
 const HOUSEHOLD = HouseholdId('a7d70101-0b07-4c01-8b07-000000000001');
 const ADMIN = PrincipalId('a7d70202-0b07-4c02-8b07-000000000002');
 const ORDINARY = PrincipalId('a7d70303-0b07-4c03-8b07-000000000003');
+const ADMIN_PEER = PrincipalId('a7d70606-0b07-4c06-8b07-000000000006');
 const ADMIN_MEMBERSHIP = 'a7d70404-0b07-4c04-8b07-000000000004';
 const ORDINARY_MEMBERSHIP = 'a7d70505-0b07-4c05-8b07-000000000005';
+const ADMIN_PEER_MEMBERSHIP = 'a7d70707-0b07-4c07-8b07-000000000007';
 const ADMIN_ROLE = 'BE05_CREATE_INGREDIENT_ADMIN';
 const ORDINARY_ROLE = 'BE05_CREATE_INGREDIENT_MEMBER';
 
@@ -34,8 +36,11 @@ async function seedFixture(): Promise<void> {
   try {
     await pool.query(
       `insert into fridge.user_profile (user_id, display_name)
-       values ($1::uuid, 'BE05 Ingredient Admin'), ($2::uuid, 'BE05 Ingredient Ordinary')`,
-      [ADMIN, ORDINARY],
+       values
+         ($1::uuid, 'BE05 Ingredient Admin'),
+         ($2::uuid, 'BE05 Ingredient Ordinary'),
+         ($3::uuid, 'BE05 Ingredient Peer Admin')`,
+      [ADMIN, ORDINARY, ADMIN_PEER],
     );
     await pool.query(
       `insert into fridge.household (household_id, display_name)
@@ -56,9 +61,20 @@ async function seedFixture(): Promise<void> {
       `insert into fridge.household_membership (
          membership_id, household_id, user_id, role_code, lifecycle_status, effective_from, effective_to
        ) values
-         ($1::uuid, $3::uuid, $4::uuid, $6, 'ACTIVE', clock_timestamp() - interval '1 hour', null),
-         ($2::uuid, $3::uuid, $5::uuid, $7, 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [ADMIN_MEMBERSHIP, ORDINARY_MEMBERSHIP, HOUSEHOLD, ADMIN, ORDINARY, ADMIN_ROLE, ORDINARY_ROLE],
+         ($1::uuid, $4::uuid, $5::uuid, $8, 'ACTIVE', clock_timestamp() - interval '1 hour', null),
+         ($2::uuid, $4::uuid, $6::uuid, $9, 'ACTIVE', clock_timestamp() - interval '1 hour', null),
+         ($3::uuid, $4::uuid, $7::uuid, $8, 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
+      [
+        ADMIN_MEMBERSHIP,
+        ORDINARY_MEMBERSHIP,
+        ADMIN_PEER_MEMBERSHIP,
+        HOUSEHOLD,
+        ADMIN,
+        ORDINARY,
+        ADMIN_PEER,
+        ADMIN_ROLE,
+        ORDINARY_ROLE,
+      ],
     );
   } finally {
     await pool.end();
@@ -156,7 +172,7 @@ test('committed retry returns original IngredientConcept and does not restore la
   }
 });
 
-test('same IngredientConcept CommandId with divergent semantic facts conflicts', async () => {
+test('same IngredientConcept CommandId with divergent canonical name conflicts', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const commandId = CommandId('a7d72626-0b07-4c26-8b07-000000000026');
   try {
@@ -179,6 +195,33 @@ test('same IngredientConcept CommandId with divergent semantic facts conflicts',
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         canonicalName: 'Red Onion',
+      }),
+      IdempotencyConflictError,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('same IngredientConcept CommandId with a different authorized actor conflicts', async () => {
+  const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
+  const commandId = CommandId('a7d72929-0b07-4c29-8b07-000000000029');
+  const firstCandidate = IngredientConceptId('a7d72a2a-0b07-4c2a-8b07-00000000002a');
+  const retryCandidate = IngredientConceptId('a7d72b2b-0b07-4c2b-8b07-00000000002b');
+  try {
+    await createUseCase(database, firstCandidate).execute({
+      commandId,
+      actorPrincipalId: ADMIN,
+      householdId: HOUSEHOLD,
+      canonicalName: 'Potato',
+    });
+
+    await assert.rejects(
+      createUseCase(database, retryCandidate).execute({
+        commandId,
+        actorPrincipalId: ADMIN_PEER,
+        householdId: HOUSEHOLD,
+        canonicalName: 'Potato',
       }),
       IdempotencyConflictError,
     );
