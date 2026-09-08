@@ -1,13 +1,34 @@
 import { randomUUID } from 'node:crypto';
 import {
   AddHouseholdMemberUseCase,
+  ChangeCompartmentMetadataUseCase,
+  ChangeStorageLocationMetadataUseCase,
+  CompartmentId,
+  CreateCompartmentUseCase,
+  CreateStorageLocationUseCase,
+  GetCurrentCompartmentUseCase,
+  GetCurrentStorageLocationUseCase,
   HouseholdMembershipId,
+  ListCurrentCompartmentsUseCase,
+  ListCurrentStorageLocationsUseCase,
   ReadAuthorizedHouseholdContext,
   ReadCurrentHouseholdMembersUseCase,
+  RetireCompartmentUseCase,
+  RetireStorageLocationUseCase,
+  StorageLocationId,
 } from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
+import { PgCompartmentMetadataChanger } from '@fridge/database/change-compartment-metadata';
+import { PgStorageLocationMetadataChanger } from '@fridge/database/change-storage-location-metadata';
+import { PgCompartmentWriter } from '@fridge/database/compartment';
+import { PgCurrentCompartmentReader } from '@fridge/database/compartment-read';
 import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
+import { PgCompartmentRetirer } from '@fridge/database/retire-compartment';
+import { PgStorageLocationRetirer } from '@fridge/database/retire-storage-location';
+import { PgHouseholdStorageAdministrationTransactionManager } from '@fridge/database/storage-administration';
+import { PgStorageLocationWriter } from '@fridge/database/storage-location';
+import { PgCurrentStorageLocationReader } from '@fridge/database/storage-location-read';
 import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
 import { buildApiServer } from './server.js';
 
@@ -32,6 +53,55 @@ const addHouseholdMember = new AddHouseholdMemberUseCase(
     generate: () => HouseholdMembershipId(randomUUID()),
   },
 );
+
+const storageAdministration = new PgHouseholdStorageAdministrationTransactionManager(database);
+const currentStorageLocations = new PgCurrentStorageLocationReader();
+const currentCompartments = new PgCurrentCompartmentReader();
+const storageTopology = {
+  listCurrentStorageLocations: new ListCurrentStorageLocationsUseCase(
+    database,
+    currentStorageLocations,
+  ),
+  getCurrentStorageLocation: new GetCurrentStorageLocationUseCase(
+    database,
+    currentStorageLocations,
+  ),
+  createStorageLocation: new CreateStorageLocationUseCase(
+    storageAdministration,
+    new PgStorageLocationWriter(),
+    { generate: () => StorageLocationId(randomUUID()) },
+  ),
+  changeStorageLocationMetadata: new ChangeStorageLocationMetadataUseCase(
+    storageAdministration,
+    new PgStorageLocationMetadataChanger(),
+  ),
+  retireStorageLocation: new RetireStorageLocationUseCase(
+    storageAdministration,
+    new PgStorageLocationRetirer(),
+  ),
+  listCurrentCompartments: new ListCurrentCompartmentsUseCase(
+    database,
+    currentCompartments,
+  ),
+  getCurrentCompartment: new GetCurrentCompartmentUseCase(
+    database,
+    currentCompartments,
+  ),
+  createCompartment: new CreateCompartmentUseCase(
+    storageAdministration,
+    new PgCompartmentWriter(),
+    { generate: () => CompartmentId(randomUUID()) },
+  ),
+  changeCompartmentMetadata: new ChangeCompartmentMetadataUseCase(
+    storageAdministration,
+    new PgCompartmentMetadataChanger(),
+  ),
+  retireCompartment: new RetireCompartmentUseCase(
+    storageAdministration,
+    new PgCompartmentRetirer(),
+  ),
+};
+
 const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
   config,
   database,
@@ -43,6 +113,7 @@ const server = buildApiServer({
   readAuthorizedHouseholdContext,
   readCurrentHouseholdMembers,
   addHouseholdMember,
+  storageTopology,
 });
 
 let shuttingDown = false;
