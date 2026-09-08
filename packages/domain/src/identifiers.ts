@@ -22,6 +22,7 @@ export type HouseholdId = Brand<'HouseholdId'>;
 export type UserId = Brand<'UserId'>;
 export type HouseholdMembershipId = Brand<'HouseholdMembershipId'>;
 export type ProductId = Brand<'ProductId'>;
+export type IngredientConceptId = Brand<'IngredientConceptId'>;
 export type BrandId = Brand<'BrandId'>;
 export type ManufacturerId = Brand<'ManufacturerId'>;
 export type ProductCategoryId = Brand<'ProductCategoryId'>;
@@ -38,6 +39,8 @@ export const UserId = (value: string): UserId => parseUuid(value, 'UserId');
 export const HouseholdMembershipId = (value: string): HouseholdMembershipId =>
   parseUuid(value, 'HouseholdMembershipId');
 export const ProductId = (value: string): ProductId => parseUuid(value, 'ProductId');
+export const IngredientConceptId = (value: string): IngredientConceptId =>
+  parseUuid(value, 'IngredientConceptId');
 export const BrandId = (value: string): BrandId => parseUuid(value, 'BrandId');
 export const ManufacturerId = (value: string): ManufacturerId => parseUuid(value, 'ManufacturerId');
 export const ProductCategoryId = (value: string): ProductCategoryId => parseUuid(value, 'ProductCategoryId');
