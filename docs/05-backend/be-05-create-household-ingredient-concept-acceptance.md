@@ -29,6 +29,10 @@ A Product command and IngredientConcept command may not acquire different meanin
 
 `fridge_app` receives only EXECUTE on the intent-specific SECURITY DEFINER function. Direct IngredientConcept INSERT/UPDATE/DELETE is not widened. `fridge_worker` and `fridge_readonly` do not receive the application creation boundary.
 
+## Review policy
+
+Repository CI plus an independent panoramic/adversarial review of the exact final HEAD are the acceptance authorities for this slice. External automated review (including Codex) is optional defense-in-depth evidence and must never be a blocking dependency. Any material finding from any source still invalidates the candidate until fixed and revalidated.
+
 ## Non-goals
 
 This slice does not implement IngredientConcept metadata change/retirement, compatibility mapping/evidence, ProductIdentifier/staged claims, global catalog mutation, HTTP delivery, frontend or deployment.
@@ -42,9 +46,11 @@ Before squash merge, one exact final HEAD must demonstrate:
 - BE-00 regression success;
 - catalog-admin-only mutation authority;
 - forced HOUSEHOLD scope/owner;
-- stable CommandId replay and divergent-fact conflict;
+- stable CommandId replay;
+- divergent canonical-name fingerprint conflict;
+- divergent authorized-actor fingerprint conflict;
 - cross-intent Product↔IngredientConcept CommandId conflict;
 - no privilege widening;
-- automated Codex review and panoramic review with zero unresolved material findings;
+- independent panoramic/adversarial review with zero unresolved material findings;
 - explicit owner authorization for squash merge;
 - branch preservation after merge.
