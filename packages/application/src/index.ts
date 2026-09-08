@@ -6,11 +6,14 @@ import type {
 } from '@fridge/domain';
 
 export {
+  BrandId,
   CommandId,
   CompartmentId,
   HouseholdId,
   HouseholdMembershipId,
+  ManufacturerId,
   PrincipalId,
+  ProductCategoryId,
   ProductId,
   StorageLocationId,
   instant,
@@ -19,6 +22,7 @@ export type { Instant } from '@fridge/domain';
 export * from './add-household-member.js';
 export * from './change-compartment-metadata.js';
 export * from './change-household-member-role.js';
+export * from './change-household-product-metadata.js';
 export * from './change-storage-location-metadata.js';
 export * from './create-compartment.js';
 export * from './create-household-product.js';

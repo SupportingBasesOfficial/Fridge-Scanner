@@ -1,24 +1,28 @@
-# BE-05 — CreateHouseholdProduct candidate evidence
+# BE-05 — CreateHouseholdProduct acceptance
 
 ## Status
 
-Candidate evidence only. Formal acceptance requires exact-final-HEAD DB-02 PostgreSQL 17/18 + BE-00 SUCCESS, CLEAN panoramic reviews, zero unresolved material findings and explicit owner-authorized squash merge.
+**Accepted.**
+
+- PR #40 — `backend: implement governed CreateHouseholdProduct mutation`
+- squash/main: `b568831c6227c3a48ff6d72f70f126b4aad30934`
+- parent: `37e93ded114f1c8f82a16d7089d9e65b887bc433`
+- exact reviewed HEAD: `a1fdc4c7d7a4e56eef13bd4ec1d969cf00ba3aee`
+- DB-02 #132: SUCCESS on PostgreSQL 17 and PostgreSQL 18
+- BE-00 #219: SUCCESS complete
+- final panoramic reviews: CLEAN
+- unresolved material threads at merge: 0
+- automated Codex review: none published; no claim of Codex CLEAN
+- branch `backend/be-05-create-household-product`: preserved
 
 ## Accepted upstream
 
-- BE-05 normative baseline: PR #38 squash `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`, reviewed HEAD `2e0c73387184c737abf0ec9bdada5af8e4f3f39d`, BE-00 #208 SUCCESS.
-- BE-05 Household catalog authority kernel: PR #39 squash `37e93ded114f1c8f82a16d7089d9e65b887bc433`, reviewed HEAD `25f56ac86a32657e1674527b686e26ef7922d229`, DB-02 #128 SUCCESS on PostgreSQL 17/18 and BE-00 #215 SUCCESS.
-- PR #39 Codex evidence: one P1 and one P2 on an earlier head; both fixed, replied, resolved and outdated. No claim of a final-head Codex CLEAN review.
+- BE-05 normative baseline: PR #38 squash `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`.
+- BE-05 Household catalog authority kernel: PR #39 squash `37e93ded114f1c8f82a16d7089d9e65b887bc433`.
 
-## Candidate slice
+## Accepted behavior
 
-PR #40 — `backend: implement governed CreateHouseholdProduct mutation`
-
-Branch: `backend/be-05-create-household-product`
-
-Base: `37e93ded114f1c8f82a16d7089d9e65b887bc433`
-
-The candidate establishes:
+The accepted slice establishes:
 
 - intent-specific `CreateHouseholdProduct`;
 - stable caller `CommandId`;
@@ -34,15 +38,6 @@ The candidate establishes:
 - provider-neutral error mapping;
 - least-privileged SECURITY DEFINER persistence.
 
-## First executable gate evidence
-
-Intermediate implementation HEAD `6ad1e64c4c06b0abf066ca93d2f3b40830c1848f`:
-
-- DB-02 #129: SUCCESS on PostgreSQL 17 and PostgreSQL 18;
-- BE-00 #216: SUCCESS for Runtime/TypeScript/Unit, Container Smoke/Non-root/Health, PostgreSQL Contract + Backend RLS Integration, and configured authentication regression.
-
-This evidence is intermediate because this document itself moves the PR HEAD. Final acceptance must use the later exact final HEAD.
-
 ## Adversarial behavior proved
 
 - created Product is HOUSEHOLD-scoped and owned by the authoritative Household;
@@ -54,6 +49,6 @@ This evidence is intermediate because this document itself moves the PR HEAD. Fi
 - ordinary current Household membership without `HOUSEHOLD_CATALOG_ADMINISTER` is denied;
 - malformed/non-exact canonical name is rejected before authority acquisition.
 
-## Non-goals
+## Non-goals retained
 
-No GLOBAL Product mutation, Product metadata change/retirement, catalog reads, Brand/Manufacturer/ProductCategory governance, ProductIdentifier/StagedIdentifierClaim, IngredientConcept/compatibility, HTTP delivery, procurement/inventory, frontend or production deployment.
+No GLOBAL Product mutation, Product metadata change/retirement, catalog reads, Brand/Manufacturer/ProductCategory mutation, ProductIdentifier/StagedIdentifierClaim, IngredientConcept/compatibility, HTTP delivery, procurement/inventory, frontend or production deployment.

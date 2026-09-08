@@ -76,20 +76,35 @@
 - Codex found one P1 and one P2 on an earlier head; both were fixed, replied, resolved and outdated before merge. No claim of a final-head Codex CLEAN review.
 - Accepted evidence: `docs/05-backend/be-05-household-catalog-authority-kernel.md`.
 
-### Active implementation candidate — CreateHouseholdProduct
+### Accepted CreateHouseholdProduct
 
-- Active PR: **#40 — `backend: implement governed CreateHouseholdProduct mutation`**.
-- Active branch: `backend/be-05-create-household-product`.
-- Base/canonical accepted `main`: `37e93ded114f1c8f82a16d7089d9e65b887bc433`.
-- Intent: `CreateHouseholdProduct`.
+- PR #40 squash/main `b568831c6227c3a48ff6d72f70f126b4aad30934`.
+- Parent `37e93ded114f1c8f82a16d7089d9e65b887bc433`.
+- Exact reviewed HEAD `a1fdc4c7d7a4e56eef13bd4ec1d969cf00ba3aee`.
+- DB-02 #132 SUCCESS on PostgreSQL 17/18.
+- BE-00 #219 SUCCESS complete.
+- Panoramic reviews CLEAN; unresolved material threads at merge: 0.
+- No automated Codex review published; no claim of Codex CLEAN.
+- `CreateHouseholdProduct`, `HOUSEHOLD` scope/owner enforcement, internal ProductId candidate, shared Household catalog CommandId registry and non-restoring replay: **accepted**.
+- Accepted evidence: `docs/05-backend/be-05-create-household-product-acceptance.md`.
+
+### Active implementation candidate — ChangeHouseholdProductMetadata
+
+- Active PR: **#41 — `backend: implement governed ChangeHouseholdProductMetadata mutation`**.
+- Active branch: `backend/be-05-change-household-product-metadata`.
+- Base/canonical accepted `main`: `b568831c6227c3a48ff6d72f70f126b4aad30934`.
+- Intent: `CHANGE_HOUSEHOLD_PRODUCT_METADATA`.
 - Required authority: current `HOUSEHOLD_CATALOG_ADMINISTER`.
-- Product scope forced to `HOUSEHOLD`; owner forced to authoritative Household.
-- Stable caller `CommandId`; ProductId candidate generated internally/server-side.
-- Shared Household catalog CommandId registry introduced with `CREATE_HOUSEHOLD_PRODUCT` as its first governed intent.
-- Committed replay is candidate-independent and non-restoring.
-- Brand, Manufacturer and ProductCategory remain intentionally null in this first mutation slice; their governance is not guessed.
-- ProductIdentifier, StagedIdentifierClaim, IngredientConcept, compatibility, GLOBAL catalog governance, HTTP delivery, procurement and inventory remain out of scope.
-- Candidate evidence: `docs/05-backend/be-05-create-household-product-acceptance.md`.
+- Current target: same-Household `HOUSEHOLD` Product with `lifecycle_status = ACTIVE` only.
+- ProductId, catalog scope and owner Household are immutable.
+- Mutable facts: exact canonical name, optional BrandId, ManufacturerId and ProductCategoryId.
+- Brand/Manufacturer/ProductCategory are global reference rows: this mutation may reference or clear them only when the selected row is ACTIVE; it receives no authority to create/change those global rows.
+- Canonical serialization for new execution: Household authority → Product → Brand → Manufacturer → ProductCategory.
+- Shared Household catalog CommandId registry extended with `CHANGE_HOUSEHOLD_PRODUCT_METADATA`.
+- Committed replay resolves before current target/reference validation and is non-restoring.
+- Foreign-Household private, GLOBAL, retired and missing Product targets collapse to provider-neutral NotFound.
+- ProductIdentifier, StagedIdentifierClaim, IngredientConcept, compatibility, GLOBAL catalog governance, Product retirement, HTTP delivery, procurement and inventory remain out of scope.
+- Candidate evidence: `docs/05-backend/be-05-change-household-product-metadata-acceptance.md`.
 - Acceptance status: **not yet accepted**; requires immutable final HEAD with DB-02 PG17/18 + BE-00 SUCCESS, CLEAN panoramics, zero unresolved material findings and explicit owner-authorized squash merge.
 
 ## Accepted foundation
@@ -116,11 +131,12 @@ BE-05 establishes Product Catalog as a separate authority domain. The accepted b
 - BE-04: `docs/05-backend/be-04-acceptance.md`
 - BE-05 normative: `docs/05-backend/be-05-overview.md`, `docs/05-backend/be-05-decisions.md`
 - BE-05 Household authority: `docs/05-backend/be-05-household-catalog-authority-kernel.md`
-- BE-05 CreateHouseholdProduct candidate: `docs/05-backend/be-05-create-household-product.md`, `docs/05-backend/be-05-create-household-product-acceptance.md`
+- BE-05 CreateHouseholdProduct: `docs/05-backend/be-05-create-household-product-acceptance.md`
+- BE-05 ChangeHouseholdProductMetadata candidate: `docs/05-backend/be-05-change-household-product-metadata-acceptance.md`
 
 ## Current delivery status
 
-- Backend: BE-00 through BE-04 accepted/closed; BE-05 normative baseline + Household catalog authority kernel accepted; CreateHouseholdProduct under validation/review.
+- Backend: BE-00 through BE-04 accepted/closed; BE-05 normative baseline + Household catalog authority + CreateHouseholdProduct accepted; ChangeHouseholdProductMetadata under validation/review.
 - Frontend: **not started**.
 - Production deployment: **not started**.
 
