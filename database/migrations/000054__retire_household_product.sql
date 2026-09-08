@@ -105,6 +105,60 @@ begin
 end;
 $$;
 
+-- Establish the invariant for pre-existing rows before relying on trigger-only
+-- enforcement. A deployment with invalid current references must fail closed.
+do $$
+begin
+  if exists (
+    select 1
+      from fridge.stock_item s
+      join fridge.product p on p.product_id = s.product_id
+     where s.lifecycle_status = 'ACTIVE'
+       and s.retired_at is null
+       and not (
+         p.lifecycle_status = 'ACTIVE'
+         and (
+           p.catalog_scope = 'GLOBAL'::fridge.catalog_scope
+           or (
+             p.catalog_scope = 'HOUSEHOLD'::fridge.catalog_scope
+             and p.owner_household_id = s.household_id
+           )
+         )
+       )
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'pre-existing current StockItem references an ineligible Product';
+  end if;
+
+  if exists (
+    select 1
+      from fridge.product_identifier i
+      join fridge.product p on p.product_id = i.product_id
+     where i.lifecycle_status = 'ACTIVE'
+       and i.retired_at is null
+       and p.lifecycle_status <> 'ACTIVE'
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'pre-existing current ProductIdentifier references an ineligible Product';
+  end if;
+
+  if exists (
+    select 1
+      from fridge.product_ingredient_compatibility c
+      join fridge.product p on p.product_id = c.product_id
+     where c.lifecycle_status = 'ACTIVE'
+       and (c.effective_to is null or c.effective_to > clock_timestamp())
+       and p.lifecycle_status <> 'ACTIVE'
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'pre-existing current compatibility references an ineligible Product';
+  end if;
+end;
+$$;
+
 create or replace function fridge_internal.guard_stock_item_current_product()
 returns trigger
 language plpgsql
@@ -267,10 +321,12 @@ begin
     return;
   end if;
 
-  -- Lock current StockItem dependencies deterministically.
+  -- Current private Product stock is Household-scoped by invariant. Including
+  -- the leading Household key lets PostgreSQL seek stock_item_household_product_idx.
   perform s.stock_item_id
     from fridge.stock_item s
-   where s.product_id = p_product_id
+   where s.household_id = p_household_id
+     and s.product_id = p_product_id
      and s.lifecycle_status = 'ACTIVE'
      and s.retired_at is null
    order by s.stock_item_id
