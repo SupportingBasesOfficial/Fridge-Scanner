@@ -33,6 +33,28 @@ function fakeTransaction(): HouseholdStorageAdministrationTransaction {
   } as unknown as HouseholdStorageAdministrationTransaction;
 }
 
+function rejectingFixture(): {
+  readonly transactions: HouseholdStorageAdministrationTransactionManager;
+  readonly compartments: CompartmentMetadataChanger;
+  readonly transactionRequested: () => boolean;
+} {
+  let requested = false;
+  return {
+    transactions: {
+      async withHouseholdStorageAdministrationTransaction() {
+        requested = true;
+        throw new Error('must not run');
+      },
+    },
+    compartments: {
+      async changeCompartmentMetadata() {
+        throw new Error('must not run');
+      },
+    },
+    transactionRequested: () => requested,
+  };
+}
+
 test('ChangeCompartmentMetadataUseCase preserves target identity and nullable kind', async () => {
   let persisted: ChangeCompartmentMetadataPersistenceInput | undefined;
   const transactions: HouseholdStorageAdministrationTransactionManager = {
@@ -68,20 +90,12 @@ test('ChangeCompartmentMetadataUseCase preserves target identity and nullable ki
   assert.deepEqual(output, { compartmentId: COMPARTMENT });
 });
 
-test('ChangeCompartmentMetadataUseCase rejects invalid metadata before authority acquisition', async () => {
-  let transactionRequested = false;
-  const transactions: HouseholdStorageAdministrationTransactionManager = {
-    async withHouseholdStorageAdministrationTransaction() {
-      transactionRequested = true;
-      throw new Error('must not run');
-    },
-  };
-  const compartments: CompartmentMetadataChanger = {
-    async changeCompartmentMetadata() {
-      throw new Error('must not run');
-    },
-  };
-  const useCase = new ChangeCompartmentMetadataUseCase(transactions, compartments);
+test('ChangeCompartmentMetadataUseCase rejects non-exact metadata before authority acquisition', async () => {
+  const fixture = rejectingFixture();
+  const useCase = new ChangeCompartmentMetadataUseCase(
+    fixture.transactions,
+    fixture.compartments,
+  );
 
   await assert.rejects(
     useCase.execute({
@@ -95,5 +109,38 @@ test('ChangeCompartmentMetadataUseCase rejects invalid metadata before authority
     }),
     InvalidInputError,
   );
-  assert.equal(transactionRequested, false);
+  assert.equal(fixture.transactionRequested(), false);
+});
+
+test('ChangeCompartmentMetadataUseCase maps non-string delivery values to InvalidInputError before authority acquisition', async () => {
+  for (const malformed of [
+    {
+      kindCode: 42 as unknown as string | null,
+      displayName: 'Upper shelf',
+    },
+    {
+      kindCode: null,
+      displayName: undefined as unknown as string,
+    },
+  ]) {
+    const fixture = rejectingFixture();
+    const useCase = new ChangeCompartmentMetadataUseCase(
+      fixture.transactions,
+      fixture.compartments,
+    );
+
+    await assert.rejects(
+      useCase.execute({
+        commandId: COMMAND,
+        actorPrincipalId: ACTOR,
+        householdId: HOUSEHOLD,
+        compartmentId: COMPARTMENT,
+        kindCode: malformed.kindCode,
+        displayName: malformed.displayName,
+        sortOrder: null,
+      }),
+      InvalidInputError,
+    );
+    assert.equal(fixture.transactionRequested(), false);
+  }
 });
