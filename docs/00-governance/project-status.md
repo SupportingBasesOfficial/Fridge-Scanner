@@ -50,12 +50,16 @@
 - BE-04 CreateStorageLocation exact-head gates: **DB-02 #86 SUCCESS on PostgreSQL 17/18; BE-00 #171 SUCCESS**
 - BE-04 CreateStorageLocation panoramic reviews: **CLEAN**
 - BE-04 CreateStorageLocation unresolved material threads at merge: **0**
-- Canonical BE-04 executable `main`: **`53e52e578058977637fb9e7193ab043b5566cea5`**
+- Accepted BE-04 ChangeStorageLocationMetadata: PR #30 squash `3a9e6f420f7b8410b786d65a3906490a35e36ef9`, exact reviewed HEAD `25ebc8e0c2e93eb8d8e9576a8bff61c6179db606`
+- BE-04 ChangeStorageLocationMetadata exact-head gates: **DB-02 #88 SUCCESS on PostgreSQL 17/18; BE-00 #173 SUCCESS**
+- BE-04 ChangeStorageLocationMetadata panoramic reviews: **CLEAN**
+- BE-04 ChangeStorageLocationMetadata unresolved material threads at merge: **0**
+- Canonical BE-04 executable `main`: **`3a9e6f420f7b8410b786d65a3906490a35e36ef9`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **ChangeStorageLocationMetadata governed mutation**
-- Active branch: **`backend/be-04-change-storage-location-metadata`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + CreateStorageLocation accepted; ChangeStorageLocationMetadata under exact-HEAD validation/review**
+- Active implementation slice: **RetireStorageLocation governed lifecycle mutation**
+- Active branch: **`backend/be-04-retire-storage-location`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + CreateStorageLocation + ChangeStorageLocationMetadata accepted; RetireStorageLocation under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -77,7 +81,9 @@ The accepted BE-04 storage authority kernel materializes `HOUSEHOLD_STORAGE_ADMI
 
 The accepted BE-04 CreateStorageLocation slice establishes intent-specific creation with stable caller CommandId, server-generated candidate identity, durable command provenance, active governed kind validation, post-lock creation time, candidate-independent committed replay, Household ownership preservation and least-privileged persistence.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel and CreateStorageLocation slice are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 ChangeStorageLocationMetadata slice preserves immutable Household/resource identity while allowing only governed mutable metadata on current active targets, validates active kind reference data, collapses hidden target states to nondisclosure-safe NOT_FOUND, binds stable command facts and makes committed replay non-restoring.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, CreateStorageLocation and ChangeStorageLocationMetadata slices are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -166,7 +172,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The accepted executable slices are the storage-administration authority kernel and CreateStorageLocation. The active ChangeStorageLocationMetadata slice must preserve immutable Household/resource identity, accept only current active targets, validate active governed kind facts for new execution, collapse missing/foreign/retired targets safely, bind stable command facts, make committed replay non-restoring and remain least-privileged before acceptance.
+The accepted executable slices are the storage-administration authority kernel, CreateStorageLocation and ChangeStorageLocationMetadata. The active RetireStorageLocation slice must retire rather than delete, preserve command/actor provenance, follow canonical lock order, block active child Compartments, block current StockItems that resolve directly or through child Compartments, perform no cascade/relocation, collapse hidden target states safely, make committed replay non-restoring and remain least-privileged before acceptance.
 
 ## Governance rule
 
