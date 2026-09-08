@@ -7,6 +7,7 @@ import type {
 
 export {
   CommandId,
+  CompartmentId,
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
@@ -23,6 +24,7 @@ export * from './errors.js';
 export * from './household-context.js';
 export * from './household-membership-administration.js';
 export * from './household-storage-administration.js';
+export * from './read-current-compartments.js';
 export * from './read-current-household-members.js';
 export * from './read-current-storage-locations.js';
 export * from './retire-storage-location.js';
