@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./change-compartment-metadata": "./dist/change-compartment-metadata.js",
     "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
     "./compartment": "./dist/compartment.js",
     "./compartment-read": "./dist/compartment-read.js",
