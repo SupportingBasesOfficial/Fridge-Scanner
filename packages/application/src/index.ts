@@ -11,6 +11,7 @@ export {
   HouseholdId,
   HouseholdMembershipId,
   PrincipalId,
+  ProductId,
   StorageLocationId,
   instant,
 } from '@fridge/domain';
@@ -20,6 +21,7 @@ export * from './change-compartment-metadata.js';
 export * from './change-household-member-role.js';
 export * from './change-storage-location-metadata.js';
 export * from './create-compartment.js';
+export * from './create-household-product.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
 export * from './errors.js';
