@@ -2,11 +2,24 @@
 
 ## Status
 
-BE-04 — Storage Topology Management is a **closure candidate pending exact-HEAD final validation/review and explicit owner-authorized merge of PR #37**.
+BE-04 — Storage Topology Management is **formally accepted and closed**.
 
-This document does not declare BE-04 formally accepted before merge. The repository `main` remains authoritative until the closure PR is squash-merged and verified.
+Final closure:
 
-## Accepted upstream implementation lineage
+- PR #37: `backend: deliver BE-04 storage topology HTTP and B4-030 proof`
+- Exact final reviewed HEAD: `e13f1c40e310e9fd5944feccc71498684de7e678`
+- Squash merge on `main`: `bc3874df2d3106bb66f57a102465a48c57d83956`
+- Parent: `549498b14d28339a5b763126fd41b5128b9f5cef`
+- Branch `backend/be-04-http-delivery-proof`: preserved
+- DB-02 PostgreSQL Gate #121: SUCCESS on PostgreSQL 17 and PostgreSQL 18
+- BE-00 Backend Gate #207: SUCCESS across runtime/unit, container, DB-02 replay, PostgreSQL/RLS integration and authenticated B4-030 runtime
+- final panoramic reviews: CLEAN
+- unresolved material review threads at merge: 0
+- no automated Codex review was published on PR #37; no claim of Codex CLEAN is made
+
+BE-04 is no longer an active closure candidate. Later phases consume it as accepted upstream topology authority.
+
+## Accepted implementation lineage
 
 - PR #27 — normative BE-04 baseline: squash `b789ab74dcc9f3d151463ec64bfc2efd8edf0cb3`, reviewed HEAD `7b07c94fc9f28edaf73fdfc3c9f053f0c30e5420`.
 - PR #28 — storage administration authority kernel: squash `3b3c7e56063357590ba6677240ee0d63ba73c8c3`, reviewed HEAD `fffe8e9cdb3ad96111c9e57a35076eb4026de139`.
@@ -18,14 +31,47 @@ This document does not declare BE-04 formally accepted before merge. The reposit
 - PR #34 — CreateCompartment: squash `d629c80da263477d001a10c00a40ad6703cf59e6`, reviewed HEAD `e367d96a13f5c081ca7b6723bfbb9ac32b9621df`.
 - PR #35 — ChangeCompartmentMetadata: squash `b9581d593c694b794fcb60c8ed26d30ad4189133`, reviewed HEAD `fa483d13949b319ed8e0925ac74a42218560a3f6`.
 - PR #36 — RetireCompartment + current-stock topology serialization hardening: squash `549498b14d28339a5b763126fd41b5128b9f5cef`, reviewed HEAD `2a0b6ae14009521f97aff2cd78d21c1fb66d990b`.
+- PR #37 — authenticated HTTP delivery + B4-030 closure: squash `bc3874df2d3106bb66f57a102465a48c57d83956`, reviewed HEAD `e13f1c40e310e9fd5944feccc71498684de7e678`.
 
-PR #36 final gates were DB-02 #118 SUCCESS on PostgreSQL 17/18 and BE-00 #203 SUCCESS. Its final panoramic reviews were CLEAN and its one material Codex P1 on concurrent new stock placement was fixed systemically and resolved before merge. The accepted `000050__current_stock_topology_guard.sql` now serializes current StockItem placement with topology retirement while preserving historical placement references and the canonical composite-FK identity boundary.
+## Accepted authority and lifecycle model
 
-## Closure PR #37
+BE-04 establishes:
 
-PR #37 — `backend: deliver BE-04 storage topology HTTP and B4-030 proof` — is the closure candidate.
+- dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER` capability;
+- current Household authority as execution-time truth;
+- immutable StorageLocation Household ownership;
+- immutable same-Household Compartment parentage for ordinary BE-04 operations;
+- lifecycle retirement instead of ordinary hard delete;
+- current observational reads distinct from mutation authority;
+- stable caller-supplied CommandId for retriable mutations;
+- shared Household-scoped topology CommandId intent registry;
+- non-restoring committed replay;
+- canonical serialization order beginning `Household -> StorageLocation -> Compartment`;
+- post-lock temporal observation for lifecycle decisions;
+- stock-safe retirement with no automatic business cascade/relocation;
+- provider-neutral errors and tenant nondisclosure;
+- least-privileged intent-specific persistence;
+- authenticated HTTP delivery as adapter only.
 
-It exposes the already-accepted topology use cases through an authenticated Fastify adapter without moving authority or persistence rules into delivery:
+## Accepted current-stock topology serialization
+
+PR #36 introduced `000050__current_stock_topology_guard.sql` after a valid Codex P1 identified the race between topology retirement and a new concurrent current-stock placement.
+
+The accepted invariant is:
+
+- a current StockItem anchored directly to a StorageLocation must acquire/revalidate that same-Household StorageLocation as current;
+- a current StockItem anchored to a Compartment must acquire/revalidate current same-Household parent StorageLocation and current Compartment;
+- placement locks serialize with topology retirement locks;
+- if placement wins first, retirement later observes the stock dependency and blocks;
+- if retirement wins first, placement later revalidates lifecycle and is rejected;
+- historical/non-current stock may preserve historical topology references;
+- missing/cross-Household identity continues to be governed by the accepted composite foreign-key boundary.
+
+This physical invariant is also recorded in the DB-02 enforcement map.
+
+## Accepted HTTP surface
+
+PR #37 exposes the accepted topology application contracts through Fastify without moving authority or persistence into delivery:
 
 - `GET /households/:householdId/storage-locations`
 - `GET /households/:householdId/storage-locations/:storageLocationId`
@@ -38,11 +84,11 @@ It exposes the already-accepted topology use cases through an authenticated Fast
 - `POST /households/:householdId/compartments/:compartmentId/metadata-changes`
 - `POST /households/:householdId/compartments/:compartmentId/retirements`
 
-Delivery performs wire parsing, calls intent-specific application contracts, serializes provider-neutral output and reuses the accepted application error boundary. It contains no SQL, role-name authorization or provider-specific Household authority logic.
+Delivery performs only authentication-entry integration, wire parsing, invocation of intent-specific use cases, serialization and provider-neutral error mapping. It contains no SQL, role-name policy or provider-specific Household authority logic.
 
-## B4-030 proving chain
+## B4-030 accepted proving chain
 
-The closure candidate contains a real authenticated proof:
+The final accepted runtime proof executes:
 
 ```text
 signed ES256 Bearer JWT
@@ -57,59 +103,49 @@ signed ES256 Bearer JWT
   -> authenticated current topology observation
 ```
 
-The proving JWT deliberately contains a provider role claim (`provider-super-admin`) and a provider Household claim that does not match the requested Household. Neither is used as platform Household authority. A caller-supplied `x-principal-id` is also ignored.
+The proving JWT deliberately carries a provider `provider-super-admin` role claim and a provider Household claim inconsistent with the requested Household. Neither becomes platform authority. A caller-controlled `x-principal-id` is ignored.
 
-The proof demonstrates that an ordinary current Household member can observe current topology but cannot mutate it even while presenting the same provider-side super-admin claim.
+The accepted proof also demonstrates:
 
-## B4-030 adversarial coverage
+- ordinary current Household members may observe current topology but cannot mutate it;
+- lost-response retry returns the original committed identity;
+- foreign-Household observation and foreign-parent mutation remain nondisclosure-safe;
+- cross-intent topology CommandId reuse maps to provider-neutral conflict;
+- metadata changes remain intent-specific;
+- retired StorageLocations/Compartments are hidden from current reads while history is preserved;
+- malformed wire CommandId is rejected before business mutation.
 
-The closure candidate proves through real HTTP/runtime integration:
+## Final execution evidence
 
-- authenticated governed StorageLocation creation;
-- lost-response retry returning the original committed StorageLocation identity despite a different internal candidate;
-- authenticated current observation after commit;
-- ordinary-member read access without storage-mutation authority;
-- provider role/Household claims do not substitute for platform authority;
-- caller-controlled principal header does not substitute for verified PrincipalId;
-- foreign-Household observation is nondisclosure-safe;
-- governed StorageLocation metadata change;
-- governed Compartment creation under a current same-Household parent;
-- foreign-parent Compartment creation is nondisclosure-safe;
-- parent-scoped and identity-scoped current Compartment observation;
-- cross-intent topology CommandId reuse maps to provider-neutral HTTP conflict;
-- governed Compartment metadata change;
-- history-preserving Compartment retirement followed by current-read hiding;
-- history-preserving StorageLocation retirement followed by current-read hiding;
-- malformed wire CommandId fails as provider-neutral invalid input before business mutation.
+On exact final HEAD `e13f1c40e310e9fd5944feccc71498684de7e678`:
 
-Accepted database integration suites continue to prove stock-safe retirement, current-stock/topology concurrency serialization, same-Household physical integrity, least privilege and historical preservation beneath this delivery adapter.
-
-## Execution evidence
-
-Initial executable proof on PR #37 HEAD `dd38e3a32ec80513d5984da1280549ae3142ac4c`:
-
-- BE-00 Backend Gate #204: SUCCESS.
+- DB-02 PostgreSQL Gate #121: SUCCESS.
+- PostgreSQL 17: SUCCESS.
+- PostgreSQL 18: SUCCESS.
+- BE-00 Backend Gate #207: SUCCESS.
 - Runtime / TypeScript / Unit: SUCCESS.
 - Container Smoke / Non-root / Health Semantics: SUCCESS.
-- accepted DB-02 replay in the PostgreSQL 17 integration lane: SUCCESS.
-- least-privileged backend fixtures: SUCCESS.
-- `@fridge/database` integration regressions: SUCCESS.
-- configured authentication runtime + `@fridge/api` integration including B4-030: SUCCESS.
+- accepted DB-02 replay in PostgreSQL/RLS lane: SUCCESS.
+- database/RLS/identity integration regressions: SUCCESS.
+- configured authentication runtime including B4-030: SUCCESS.
+- final authority/lifecycle/nondisclosure/idempotency/delivery panoramic review: CLEAN.
+- final least-privilege/provider-neutrality/package-boundary/governance panoramic review: CLEAN.
+- unresolved material review threads: 0.
 
-This evidence is **intermediate**, because governance/physical-contract documentation changes move the PR HEAD. Formal closure requires the final exact HEAD to pass DB-02 PostgreSQL 17/18 and BE-00 again, followed by CLEAN panoramic reviews and zero unresolved material findings.
+The owner explicitly authorized squash merge. GitHub merged exactly the reviewed HEAD and `main` was verified at `bc3874df2d3106bb66f57a102465a48c57d83956` with parent `549498b14d28339a5b763126fd41b5128b9f5cef`. The closure branch was preserved.
 
-## Closure condition
+## Accepted BE-04 outcome
 
-BE-04 becomes formally accepted only after all of the following are true on one immutable final PR #37 HEAD:
+BE-04 now provides the canonical storage-topology substrate:
 
-1. DB-02 PostgreSQL Gate is SUCCESS on PostgreSQL 17 and 18;
-2. BE-00 Backend Gate is SUCCESS across runtime/unit, container, database/RLS integration and configured authentication/B4-030;
-3. B4-030 remains a real signed-Bearer governed mutation proof;
-4. panoramic authority/delivery/concurrency review is CLEAN;
-5. panoramic least-privilege/provider-neutrality/package-boundary review is CLEAN;
-6. unresolved material review threads are zero;
-7. the owner explicitly authorizes squash merge;
-8. GitHub merges exactly the reviewed HEAD and the resulting `main` commit/parent are verified;
-9. the closure branch is preserved.
+```text
+BE-02 verified identity
+  -> BE-03 current Household authority
+  -> HOUSEHOLD_STORAGE_ADMINISTER
+  -> StorageLocation / Compartment current reads + governed create/change/retire
+  -> command provenance + replay safety + deterministic serialization
+  -> stock-safe topology lifecycle
+  -> authenticated provider-neutral HTTP delivery
+```
 
-Until then, PR #37 is a closure candidate, not accepted history.
+All later phases may consume this topology contract. They may not bypass, weaken or reinterpret its ownership, lifecycle, placement, authority, concurrency, nondisclosure or least-privilege guarantees without an explicit governed architectural change.
