@@ -23,6 +23,7 @@ export * from './create-compartment.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
 export * from './errors.js';
+export * from './household-catalog-administration.js';
 export * from './household-context.js';
 export * from './household-membership-administration.js';
 export * from './household-storage-administration.js';
