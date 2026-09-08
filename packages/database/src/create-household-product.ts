@@ -1,6 +1,5 @@
 import {
   DependencyUnavailableError,
-  HouseholdAuthorizationError as ApplicationHouseholdAuthorizationError,
   IdempotencyConflictError,
   InternalApplicationError,
   ProductId,
@@ -18,15 +17,6 @@ const DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES = new Set([
 ]);
 
 function normalizeHouseholdProductDatabaseFailure(error: unknown): Error {
-  if (
-    error instanceof ApplicationHouseholdAuthorizationError ||
-    error instanceof IdempotencyConflictError ||
-    error instanceof DependencyUnavailableError ||
-    error instanceof InternalApplicationError
-  ) {
-    return error;
-  }
-
   const code =
     typeof error === 'object' && error !== null && 'code' in error
       ? String((error as { readonly code?: unknown }).code ?? '')
