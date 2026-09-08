@@ -86,14 +86,28 @@
 - BE-04 RetireCompartment unresolved material threads at merge: **0**
 - BE-04 current-stock topology guard (`000050`): **accepted**; current StockItem LOCATION/COMPARTMENT placement serializes with topology retirement under compatible locks and revalidates current lifecycle, while historical/non-current stock may preserve historical topology references and missing/cross-Household identity remains governed by accepted composite foreign keys
 - PR #36 Codex evidence: one P1 on an earlier head identified a race between retirement and a new concurrent stock placement; fixed systemically, replied and resolved; **no claim of a final-head Codex CLEAN review**
-- Canonical BE-04 executable `main`: **`549498b14d28339a5b763126fd41b5128b9f5cef`**
+- Accepted BE-04 authenticated HTTP delivery + B4-030 closure: PR #37 squash `bc3874df2d3106bb66f57a102465a48c57d83956`, exact reviewed HEAD `e13f1c40e310e9fd5944feccc71498684de7e678`
+- BE-04 closure exact-head gates: **DB-02 #121 SUCCESS on PostgreSQL 17/18; BE-00 #207 SUCCESS**
+- BE-04 B4-030 authenticated governed mutation/observation proof: **accepted**
+- BE-04 closure panoramic reviews: **CLEAN**
+- BE-04 closure unresolved material threads at merge: **0**
+- PR #37 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
+- BE-04 status: **formally accepted and closed**
+- Canonical post-BE-04 `main`: **`bc3874df2d3106bb66f57a102465a48c57d83956`**
 
-- Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **authenticated HTTP delivery + B4-030 phase-exit proof / closure candidate**
-- Active branch: **`backend/be-04-http-delivery-proof`**
-- Active PR: **#37 — `backend: deliver BE-04 storage topology HTTP and B4-030 proof`**
-- Backend implementation: **BE-00 through BE-03 accepted; all BE-04 StorageLocation/Compartment authority, read and mutation slices accepted; authenticated topology HTTP delivery/B4-030 closure candidate under exact-HEAD validation/review**
-- BE-04 closure status: **not yet accepted; requires final exact-HEAD DB-02 PG17/18 + BE-00, CLEAN reviews, zero unresolved material findings and explicit owner-authorized squash merge**
+- Accepted BE-05 normative baseline: **Product Catalog Governance**, PR #38 squash `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`, exact reviewed HEAD `2e0c73387184c737abf0ec9bdada5af8e4f3f39d`
+- BE-05 normative exact-head gate: **BE-00 #208 SUCCESS**
+- BE-05 normative panoramic reviews: **CLEAN**
+- BE-05 normative unresolved material threads at merge: **0**
+- PR #38 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
+- Canonical BE-05 baseline `main`: **`bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`**
+
+- Active phase: **BE-05 — Product Catalog Governance**
+- Active implementation slice: **Household catalog authority kernel**
+- Active branch: **`backend/be-05-household-catalog-authority-kernel`**
+- Active PR: **#39 — `backend: establish BE-05 household catalog authority kernel`**
+- Backend implementation: **BE-00 through BE-04 accepted/closed; BE-05 normative baseline accepted; Household catalog authority kernel under exact-HEAD validation/review**
+- BE-05 active capability: **`HOUSEHOLD_CATALOG_ADMINISTER` candidate; distinct from membership/storage authority and from future GLOBAL catalog governance**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -109,27 +123,11 @@ BE-02 establishes the provider-neutral identity boundary: authenticated provider
 
 BE-03 establishes Household access governance: `HOUSEHOLD_MEMBERSHIP_ADMINISTER`, governed role/capability mapping, add/rejoin, role change, end/self-leave, durable command identity, actor provenance, atomic last-administrator survivability, post-lock temporal authority, current-member observation and authenticated HTTP delivery. The B3-030 proof demonstrates the complete chain from signed Bearer evidence through current Household authorization and membership-administration capability to durable governed mutation and post-commit observation.
 
-BE-04 normative baseline establishes storage-topology authority/lifecycle/concurrency semantics before executable topology mutations: dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership, same-Household Compartment parentage, retirement rather than ordinary delete, current observational reads, stable command identity, non-restoring replay, canonical lock order `Household -> StorageLocation -> Compartment`, post-lock temporal observation, stock-safe retirement, no automatic business cascades, least privilege and B4-030 as the authenticated phase-exit proof.
+BE-04 establishes the complete storage-topology authority/lifecycle/concurrency substrate: dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership, immutable same-Household Compartment parentage for ordinary operations, governed kinds, current observational reads, stable command identity, shared cross-intent CommandId registry, non-restoring replay, canonical Household → StorageLocation → Compartment serialization, post-lock temporal observation, stock-safe retirement, current-stock/topology placement serialization, no automatic business cascades, least privilege and authenticated HTTP delivery. B4-030 proves the complete signed-Bearer chain through current authority, durable topology mutation and authenticated observation. BE-04 is formally closed at `main @ bc3874df2d3106bb66f57a102465a48c57d83956`.
 
-The accepted BE-04 storage authority kernel materializes `HOUSEHOLD_STORAGE_ADMINISTER` only after current Household authorization, Household-first serialization, post-lock authority observation and governed role/capability revalidation. Membership-administration authority does not implicitly grant storage administration authority.
+BE-05 normative baseline establishes Product Catalog as a separate authority domain before executable catalog mutations. It preserves explicit `GLOBAL` vs `HOUSEHOLD` scope, forbids ordinary scope/owner mutation, separates Product from IngredientConcept/identifier/Batch/stock, governs ProductIdentifier namespace and normalization-rule semantics, preserves staged identifier evidence separately from canonical uniqueness, requires explicit versioned Product↔IngredientConcept compatibility, preserves immutable compatibility decision evidence, mandates lifecycle/history preservation, stable command identity, post-serialization current time, least privilege, provider-neutral failures and authenticated phase-exit proof. Household catalog administration is distinct from GLOBAL catalog governance.
 
-The accepted BE-04 CreateStorageLocation slice establishes intent-specific creation with stable caller CommandId, server-generated candidate identity, durable command provenance, active governed kind validation, post-lock creation time, candidate-independent committed replay, Household ownership preservation and least-privileged persistence.
-
-The accepted BE-04 ChangeStorageLocationMetadata slice preserves immutable Household/resource identity while allowing only governed mutable metadata on current active targets, validates active kind reference data, collapses hidden target states to nondisclosure-safe NOT_FOUND, binds stable command facts and makes committed replay non-restoring.
-
-The accepted BE-04 RetireStorageLocation slice preserves history, follows the canonical Household -> StorageLocation -> Compartment lock order before dependent stock inspection, blocks active children and current stock dependencies, performs no cascade or relocation, uses post-lock retirement time and provides non-restoring committed replay. Its accepted `000044` hardening also reserves each Household-scoped topology CommandId to exactly one committed mutation intent and normalizes cross-intent reuse to provider-neutral idempotency conflict without exposing registry state as an authority oracle.
-
-The accepted BE-04 current StorageLocation read slice provides current Household-scoped observational List/Get contracts for ACTIVE/non-retired StorageLocations, distinguishes authorized empty lists from unauthorized access, collapses hidden Get targets to provider-neutral NOT_FOUND, revalidates the exact acting membership at read time, preserves deterministic presentation ordering and never upgrades observation into storage-administration authority.
-
-The accepted BE-04 current Compartment read slice provides parent-scoped and identity-scoped observational List/Get contracts, exposes a Compartment as current only when both child and parent StorageLocation are ACTIVE/non-retired in the same Household, preserves optional Compartment kind semantics, distinguishes current empty parents from hidden/non-current parents, collapses hidden child states to provider-neutral NOT_FOUND, revalidates exact membership and never upgrades observation into storage-administration authority.
-
-The accepted BE-04 CreateCompartment slice establishes governed creation beneath a current same-Household StorageLocation, binds immutable parent identity and normalized facts to a stable caller CommandId, uses an internal/server-generated Compartment candidate identity, preserves nullable governed kind semantics, locks the parent in canonical order before post-lock creation time, extends the shared topology CommandId registry with `CREATE_COMPARTMENT`, provides non-reapplying replay and serializes deterministically against parent retirement.
-
-The accepted BE-04 ChangeCompartmentMetadata slice preserves immutable Household/resource/parent identity while allowing only kind/display/order metadata changes on a current child beneath a current same-Household parent, preserves nullable governed kind semantics, locks parent before child, extends the shared topology CommandId registry with `CHANGE_COMPARTMENT_METADATA`, collapses hidden target states safely, provides non-restoring replay, remains least-privileged and maps malformed runtime metadata to provider-neutral invalid input rather than internal failure.
-
-The accepted BE-04 RetireCompartment slice preserves immutable Household/resource/parent identity, requires a current same-Household parent and child, blocks current stock anchored to the target without cascade or relocation, samples retirement time only after Household -> parent -> child -> stock serialization, extends the shared registry with `RETIRE_COMPARTMENT`, preserves non-restoring replay and hides retired topology from current observations. The accepted `000050` physical guard complements both topology retirements by serializing any new current StockItem placement with current topology under `FOR KEY SHARE`, preventing a placement from committing against a topology resource retired concurrently.
-
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry, current StorageLocation/Compartment reads, Create/Change/Retire Compartment and current-stock topology guard are authoritative for the current implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+DB-00, DB-01, DB-02 and BE-00 through BE-04 plus the accepted BE-05 normative baseline are authoritative for the current implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -166,41 +164,49 @@ verified provider evidence
   -> provider-neutral delivery
 ```
 
-BE-04 consumes this chain rather than creating a parallel storage authorization model.
+BE-04 and BE-05 consume this chain rather than creating parallel Household authorization models.
 
-## Purpose of BE-04
+## BE-04 acceptance
 
-BE-04 governs the Household's physical storage topology before executable inventory placement is introduced.
+Canonical BE-04 evidence is recorded in `docs/05-backend/be-04-acceptance.md`.
 
-DB-00 defines:
+BE-04 is formally closed at `main @ bc3874df2d3106bb66f57a102465a48c57d83956`. Later phases consume its StorageLocation/Compartment ownership, lifecycle, current-read, placement, serialization and stock-safety contracts rather than inventing alternate topology semantics.
 
-- every `StorageLocation` belongs to exactly one Household;
-- every `Compartment` belongs to exactly one StorageLocation;
-- every Compartment therefore resolves to exactly one Household through its parent;
-- a stored StockItem has one current placement anchor, either a StorageLocation, a Compartment whose parent StorageLocation is authoritative, or an explicit unplaced state;
-- occupancy labels are projections/observations, not authoritative stock truth.
+The accepted topology authority chain is:
 
-DB-02 provides governed topology reference data, explicit ownership/lifecycle fields, same-Household composite foreign keys and the accepted current-stock topology guard. BE-04 consumes these structures rather than creating an alternate topology store.
+```text
+BE-02 verified identity
+  -> BE-03 current Household authority
+  -> HOUSEHOLD_STORAGE_ADMINISTER
+  -> governed StorageLocation / Compartment read + mutation
+  -> stock-safe topology lifecycle
+  -> authenticated provider-neutral delivery
+```
 
-BE-04 explicitly does **not** implement Product catalog, Purchase/Receipt, InventoryMovement/Transfer/Count/Reconciliation, frontend UI or production deployment. Later phases must consume the topology contract rather than invent placement semantics themselves.
+## Purpose of BE-05
 
-## Accepted BE-04 normative baseline
+BE-05 governs canonical catalog identity and visibility before procurement/inventory are allowed to depend on Product truth.
 
-The accepted BE-04 baseline is recorded in:
+DB-00/DB-02 already define the physical/conceptual substrate for:
 
-- `docs/05-backend/be-04-overview.md`
-- `docs/05-backend/be-04-decisions.md`
+- `Product` with explicit `GLOBAL` or `HOUSEHOLD` catalog scope;
+- `IngredientConcept` with explicit catalog scope;
+- `ProductCategory`, `Brand` and `Manufacturer` reference data;
+- versioned/effective Product↔IngredientConcept compatibility;
+- `ProductIdentifier` with governed scheme/namespace/normalization-rule identity;
+- `StagedIdentifierClaim` as Household-scoped unresolved evidence rather than canonical reservation;
+- immutable `CompatibilityDecisionEvidence` for committed downstream decisions.
 
-Key accepted rules include execution-time Household authority, dedicated `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership and Compartment parentage, lifecycle retirement instead of hard delete, governed kinds, current observational reads, stable CommandId, non-restoring replay, canonical lock order, post-lock time, stock-safe retirement, no business cascades, provider-neutral nondisclosure and least-privileged persistence.
+The accepted BE-05 baseline requires dedicated `HOUSEHOLD_CATALOG_ADMINISTER` for Household-private mutation and a separate real platform-governance strategy for GLOBAL mutation. Household roles, storage authority, possession of stock, scanner observations and provider claims cannot manufacture global or private catalog authority.
 
-All intended StorageLocation and Compartment read/mutation contracts are now accepted on `main @ 549498b14d28339a5b763126fd41b5128b9f5cef`. The active PR #37 is limited to authenticated HTTP delivery and the B4-030 phase-exit proof. It must remain a transport adapter: no SQL, role-name authorization, provider-claim Household authority, cross-tenant lookup logic or database-specific error leakage may move into Fastify delivery.
+The active PR #39 is limited to the Household authority kernel. It must not implement Product/IngredientConcept/Identifier/Compatibility mutation, GLOBAL catalog governance, HTTP delivery, procurement, inventory, frontend or deployment behavior.
 
-Canonical closure-candidate evidence is recorded in `docs/05-backend/be-04-acceptance.md`. BE-04 is not formally closed until PR #37 passes final exact-HEAD gates/reviews and the owner explicitly authorizes its squash merge.
+Candidate evidence for this slice is recorded in `docs/05-backend/be-05-household-catalog-authority-kernel.md`. The kernel is not accepted history until one immutable final PR HEAD passes DB-02 PostgreSQL 17/18 + BE-00, panoramic reviews are CLEAN, unresolved material findings are zero, the owner explicitly authorizes squash merge, the resulting `main` SHA/parent are verified and the branch is preserved.
 
 ## Governance rule
 
 The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization.
 
-A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary, Household-access or storage-topology invariant.
+A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary, Household-access, storage-topology or product-catalog invariant.
 
-BE-04 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02/BE-03. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
+BE-05 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02/BE-03/BE-04. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
