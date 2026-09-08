@@ -16,24 +16,6 @@ begin
     raise exception 'fridge_app must not access the topology CommandId registry directly';
   end if;
 
-  if has_function_privilege(
-       'fridge_app',
-       'fridge_internal.create_storage_location_v1(uuid,uuid,uuid,uuid,uuid,text,text,integer)',
-       'EXECUTE'
-     )
-     or has_function_privilege(
-       'fridge_app',
-       'fridge_internal.change_storage_location_metadata_v1(uuid,uuid,uuid,uuid,uuid,text,text,integer)',
-       'EXECUTE'
-     )
-     or has_function_privilege(
-       'fridge_app',
-       'fridge_internal.retire_storage_location_v1(uuid,uuid,uuid,uuid,uuid)',
-       'EXECUTE'
-     ) then
-    raise exception 'fridge_app must not bypass canonical topology CommandId wrappers';
-  end if;
-
   if not has_function_privilege(
        'fridge_app',
        'fridge_internal.create_storage_location(uuid,uuid,uuid,uuid,uuid,text,text,integer)',
@@ -49,7 +31,7 @@ begin
        'fridge_internal.retire_storage_location(uuid,uuid,uuid,uuid,uuid)',
        'EXECUTE'
      ) then
-    raise exception 'fridge_app must retain only canonical topology mutation entrypoints';
+    raise exception 'fridge_app must retain the canonical topology mutation entrypoints';
   end if;
 
   select pg_get_functiondef(
@@ -65,19 +47,25 @@ begin
   if position('acquire_household_storage_admin_authority' in v_create_definition) = 0
      or position('assert_storage_topology_command_intent' in v_create_definition) = 0
      or position('register_storage_topology_command_intent' in v_create_definition) = 0 then
-    raise exception 'CreateStorageLocation wrapper must authorize then enforce shared CommandId intent';
+    raise exception 'CreateStorageLocation must authorize then enforce shared CommandId intent';
   end if;
 
   if position('acquire_household_storage_admin_authority' in v_change_definition) = 0
      or position('assert_storage_topology_command_intent' in v_change_definition) = 0
      or position('register_storage_topology_command_intent' in v_change_definition) = 0 then
-    raise exception 'ChangeStorageLocationMetadata wrapper must authorize then enforce shared CommandId intent';
+    raise exception 'ChangeStorageLocationMetadata must authorize then enforce shared CommandId intent';
   end if;
 
   if position('acquire_household_storage_admin_authority' in v_retire_definition) = 0
      or position('assert_storage_topology_command_intent' in v_retire_definition) = 0
      or position('register_storage_topology_command_intent' in v_retire_definition) = 0 then
-    raise exception 'RetireStorageLocation wrapper must authorize then enforce shared CommandId intent';
+    raise exception 'RetireStorageLocation must authorize then enforce shared CommandId intent';
+  end if;
+
+  if position('storage_location_create_command' in v_create_definition) = 0
+     or position('storage_location_metadata_change_command' in v_change_definition) = 0
+     or position('storage_location_retire_command' in v_retire_definition) = 0 then
+    raise exception 'canonical topology functions must remain self-contained over their accepted local command ledgers';
   end if;
 
   if exists (
