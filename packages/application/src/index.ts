@@ -35,6 +35,7 @@ export * from './household-membership-administration.js';
 export * from './household-storage-administration.js';
 export * from './read-current-compartments.js';
 export * from './read-current-household-members.js';
+export * from './read-current-products.js';
 export * from './read-current-storage-locations.js';
 export * from './retire-compartment.js';
 export * from './retire-household-product.js';

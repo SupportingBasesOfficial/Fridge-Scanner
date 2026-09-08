@@ -14,6 +14,7 @@
     "./create-household-product": "./dist/create-household-product.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
+    "./product-read": "./dist/product-read.js",
     "./retire-compartment": "./dist/retire-compartment.js",
     "./retire-household-product": "./dist/retire-household-product.js",
     "./retire-storage-location": "./dist/retire-storage-location.js",

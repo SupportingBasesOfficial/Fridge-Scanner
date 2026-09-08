@@ -1,5 +1,5 @@
 -- FridgeScanner DB-02 RLS tests
--- Requires migrations through 000019 applied by a bootstrap/superuser test identity.
+-- Runs after the canonical migration set is applied by a bootstrap/superuser test identity.
 
 begin;
 
@@ -61,23 +61,15 @@ begin
     raise exception 'RLS failure: Household A saw Household B storage';
   end if;
 
-  if (select count(*) from fridge.product) <> 2 then
-    raise exception 'catalog RLS failure: Household A must see GLOBAL + private A only';
-  end if;
-
-  if not exists (
-    select 1 from fridge.product
-    where product_id = '17200000-0000-0000-0000-000000000001'
-  ) then
-    raise exception 'catalog RLS failure: GLOBAL product must remain tenant-readable';
-  end if;
-
-  if exists (
-    select 1 from fridge.product
-    where product_id = '17200000-0000-0000-0000-000000000003'
-  ) then
-    raise exception 'catalog RLS failure: Household A saw Household B private product';
-  end if;
+  -- Product observation has moved behind exact-membership governed functions.
+  -- Direct Product SELECT must stay unavailable even with a trusted Household context.
+  begin
+    perform 1 from fridge.product limit 1;
+    raise exception 'privilege failure: fridge_app bypassed governed Product reads';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 end;
 $$;
 
@@ -202,7 +194,8 @@ $$;
 
 reset role;
 
--- Readonly can evaluate RLS but has no mutation-boundary EXECUTE privilege.
+-- Readonly can evaluate RLS on legacy readable resources but has no mutation-boundary
+-- EXECUTE privilege and no direct Product read bypass.
 set local role fridge_readonly;
 select set_config('fridge.household_id', '17000000-0000-0000-0000-000000000001', true);
 
@@ -222,6 +215,14 @@ begin
       null
     );
     raise exception 'privilege failure: fridge_readonly executed mutation boundary';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    perform 1 from fridge.product limit 1;
+    raise exception 'privilege failure: fridge_readonly bypassed governed Product reads';
   exception
     when insufficient_privilege then
       null;
