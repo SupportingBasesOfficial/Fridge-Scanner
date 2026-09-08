@@ -18,6 +18,7 @@ export type { Instant } from '@fridge/domain';
 export * from './add-household-member.js';
 export * from './change-household-member-role.js';
 export * from './change-storage-location-metadata.js';
+export * from './create-compartment.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
 export * from './errors.js';
