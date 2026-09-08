@@ -302,24 +302,33 @@ test('CommandId binds immutable parent and cross-intent reuse is rejected', asyn
   }
 });
 
-test('missing, foreign or retired parent is nondisclosure-safe NOT_FOUND with no durable create', async () => {
+test('missing, foreign or retired parent is nondisclosure-safe NOT_FOUND', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
-  const targets = [
-    RETIRED_PARENT,
-    FOREIGN_PARENT,
-    StorageLocationId('a7d66161-0b04-4d61-8b04-000000000061'),
+  const cases = [
+    {
+      target: RETIRED_PARENT,
+      candidate: CompartmentId('a7d66262-0b04-4d62-8b04-000000000062'),
+      command: CommandId('a7d66565-0b04-4d65-8b04-000000000065'),
+    },
+    {
+      target: FOREIGN_PARENT,
+      candidate: CompartmentId('a7d66363-0b04-4d63-8b04-000000000063'),
+      command: CommandId('a7d66666-0b04-4d66-8b04-000000000066'),
+    },
+    {
+      target: StorageLocationId('a7d66161-0b04-4d61-8b04-000000000061'),
+      candidate: CompartmentId('a7d66464-0b04-4d64-8b04-000000000064'),
+      command: CommandId('a7d66767-0b04-4d67-8b04-000000000067'),
+    },
   ];
   try {
-    for (let index = 0; index < targets.length; index += 1) {
+    for (const entry of cases) {
       await assert.rejects(
-        createCompartmentUseCase(
-          database,
-          CompartmentId(`a7d66${index + 2}${index + 2}-0b04-4d6${index + 2}-8b04-00000000006${index + 2}`),
-        ).execute({
-          commandId: CommandId(`a7d66${index + 5}${index + 5}-0b04-4d6${index + 5}-8b04-00000000006${index + 5}`),
+        createCompartmentUseCase(database, entry.candidate).execute({
+          commandId: entry.command,
           actorPrincipalId: ADMIN,
           householdId: HOUSEHOLD,
-          storageLocationId: targets[index]!,
+          storageLocationId: entry.target,
           kindCode: null,
           displayName: 'Hidden parent child',
           sortOrder: null,
@@ -354,24 +363,25 @@ test('ordinary member cannot create Compartment', async () => {
 
 test('concurrent CreateCompartment and RetireStorageLocation cannot both commit against one current parent', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app', maxConnections: 2 });
-  const create = createCompartmentUseCase(database, CompartmentId('a7d68181-0b04-4d81-8b04-000000000081')).execute({
-    commandId: CommandId('a7d68282-0b04-4d82-8b04-000000000082'),
-    actorPrincipalId: ADMIN,
-    householdId: HOUSEHOLD,
-    storageLocationId: RACE_PARENT,
-    kindCode: null,
-    displayName: 'Race child',
-    sortOrder: null,
-  });
-  const retire = retireStorageLocationUseCase(database).execute({
-    commandId: CommandId('a7d68383-0b04-4d83-8b04-000000000083'),
-    actorPrincipalId: ADMIN,
-    householdId: HOUSEHOLD,
-    storageLocationId: RACE_PARENT,
-  });
-
   try {
-    const results = await Promise.allSettled([create, retire]);
+    const results = await Promise.allSettled([
+      createCompartmentUseCase(database, CompartmentId('a7d68181-0b04-4d81-8b04-000000000081')).execute({
+        commandId: CommandId('a7d68282-0b04-4d82-8b04-000000000082'),
+        actorPrincipalId: ADMIN,
+        householdId: HOUSEHOLD,
+        storageLocationId: RACE_PARENT,
+        kindCode: null,
+        displayName: 'Race child',
+        sortOrder: null,
+      }),
+      retireStorageLocationUseCase(database).execute({
+        commandId: CommandId('a7d68383-0b04-4d83-8b04-000000000083'),
+        actorPrincipalId: ADMIN,
+        householdId: HOUSEHOLD,
+        storageLocationId: RACE_PARENT,
+      }),
+    ]);
+
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
     const rejected = results.find((result) => result.status === 'rejected');
     assert.ok(rejected && rejected.status === 'rejected');
