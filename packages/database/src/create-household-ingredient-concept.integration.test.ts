@@ -156,6 +156,37 @@ test('committed retry returns original IngredientConcept and does not restore la
   }
 });
 
+test('same IngredientConcept CommandId with divergent semantic facts conflicts', async () => {
+  const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
+  const commandId = CommandId('a7d72626-0b07-4c26-8b07-000000000026');
+  try {
+    await createUseCase(
+      database,
+      IngredientConceptId('a7d72727-0b07-4c27-8b07-000000000027'),
+    ).execute({
+      commandId,
+      actorPrincipalId: ADMIN,
+      householdId: HOUSEHOLD,
+      canonicalName: 'Onion',
+    });
+
+    await assert.rejects(
+      createUseCase(
+        database,
+        IngredientConceptId('a7d72828-0b07-4c28-8b07-000000000028'),
+      ).execute({
+        commandId,
+        actorPrincipalId: ADMIN,
+        householdId: HOUSEHOLD,
+        canonicalName: 'Red Onion',
+      }),
+      IdempotencyConflictError,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
 test('shared Household catalog CommandId cannot change intent from Product to IngredientConcept', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const commandId = CommandId('a7d73131-0b07-4c31-8b07-000000000031');
