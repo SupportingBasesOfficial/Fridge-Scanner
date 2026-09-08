@@ -5,7 +5,7 @@ import type {
   StorageLocationId,
 } from '@fridge/domain';
 import { InvalidInputError } from './errors.js';
-import type { IdentifierGenerator, UseCase } from './index.js';
+import type { UseCase } from './index.js';
 import type {
   HouseholdStorageAdministrationTransaction,
   HouseholdStorageAdministrationTransactionManager,
@@ -13,6 +13,7 @@ import type {
 
 export interface CreateStorageLocationInput {
   readonly commandId: CommandId;
+  readonly candidateStorageLocationId: StorageLocationId;
   readonly actorPrincipalId: PrincipalId;
   readonly householdId: HouseholdId;
   readonly kindCode: string;
@@ -55,8 +56,8 @@ function requireSortOrder(value: number | null): number | null {
   if (value === null) {
     return null;
   }
-  if (!Number.isSafeInteger(value)) {
-    throw new InvalidInputError('sort order must be a safe integer or null');
+  if (!Number.isInteger(value) || value < -2147483648 || value > 2147483647) {
+    throw new InvalidInputError('sort order must fit PostgreSQL integer or be null');
   }
   return value;
 }
@@ -67,14 +68,12 @@ export class CreateStorageLocationUseCase
   constructor(
     private readonly transactions: HouseholdStorageAdministrationTransactionManager,
     private readonly storageLocations: StorageLocationWriter,
-    private readonly storageLocationIds: IdentifierGenerator<StorageLocationId>,
   ) {}
 
   async execute(input: CreateStorageLocationInput): Promise<CreateStorageLocationOutput> {
     const kindCode = requireExactNonblank(input.kindCode, 'storage location kind code');
     const displayName = requireExactNonblank(input.displayName, 'storage location display name');
     const sortOrder = requireSortOrder(input.sortOrder);
-    const candidateStorageLocationId = this.storageLocationIds.generate();
     let storageLocationId: StorageLocationId | undefined;
 
     await this.transactions.withHouseholdStorageAdministrationTransaction(
@@ -83,7 +82,7 @@ export class CreateStorageLocationUseCase
       async (transaction) => {
         storageLocationId = await this.storageLocations.createStorageLocation(transaction, {
           commandId: input.commandId,
-          candidateStorageLocationId,
+          candidateStorageLocationId: input.candidateStorageLocationId,
           kindCode,
           displayName,
           sortOrder,
