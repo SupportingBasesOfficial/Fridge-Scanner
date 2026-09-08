@@ -5,6 +5,7 @@ import {
   ChangeCompartmentMetadataUseCase,
   CommandId,
   CompartmentId,
+  CreateCompartmentUseCase,
   HouseholdId,
   IdempotencyConflictError,
   InvalidInputError,
@@ -13,6 +14,7 @@ import {
   StorageLocationId,
 } from '@fridge/application';
 import { PgCompartmentMetadataChanger } from './change-compartment-metadata.js';
+import { PgCompartmentWriter } from './compartment.js';
 import { PgDatabase } from './index.js';
 import { PgHouseholdStorageAdministrationTransactionManager } from './storage-administration.js';
 
@@ -97,8 +99,19 @@ async function seedFixture(): Promise<void> {
          ($3::uuid, $6::uuid, $8::uuid, null, 'Child under retired parent', 3, 'ACTIVE', clock_timestamp() - interval '1 hour', null),
          ($4::uuid, $9::uuid, $10::uuid, null, 'Foreign child', 1, 'ACTIVE', clock_timestamp() - interval '1 hour', null),
          ($5::uuid, $6::uuid, $7::uuid, $11, 'Replay target', 4, 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [TARGET, RETIRED_CHILD, CHILD_UNDER_RETIRED_PARENT, FOREIGN_CHILD, REPLAY_TARGET,
-       HOUSEHOLD, PARENT, RETIRED_PARENT, OTHER_HOUSEHOLD, FOREIGN_PARENT, ACTIVE_KIND],
+      [
+        TARGET,
+        RETIRED_CHILD,
+        CHILD_UNDER_RETIRED_PARENT,
+        FOREIGN_CHILD,
+        REPLAY_TARGET,
+        HOUSEHOLD,
+        PARENT,
+        RETIRED_PARENT,
+        OTHER_HOUSEHOLD,
+        FOREIGN_PARENT,
+        ACTIVE_KIND,
+      ],
     );
   } finally {
     await pool.end();
@@ -243,11 +256,17 @@ test('retired child, child under retired parent, foreign child and missing child
     FOREIGN_CHILD,
     CompartmentId('c9f16161-0b04-4f61-8b04-000000000061'),
   ];
+  const commands = [
+    CommandId('c9f17171-0b04-4f71-8b04-000000000071'),
+    CommandId('c9f17272-0b04-4f72-8b04-000000000072'),
+    CommandId('c9f17373-0b04-4f73-8b04-000000000073'),
+    CommandId('c9f17474-0b04-4f74-8b04-000000000074'),
+  ];
   try {
     for (let index = 0; index < targets.length; index += 1) {
       await assert.rejects(
         useCase(database).execute({
-          commandId: CommandId(`c9f17${index + 1}${index + 1}-0b04-4f7${index + 1}-8b04-00000000007${index + 1}`),
+          commandId: commands[index]!,
           actorPrincipalId: ADMIN,
           householdId: HOUSEHOLD,
           compartmentId: targets[index]!,
@@ -265,16 +284,10 @@ test('retired child, child under retired parent, foreign child and missing child
 
 test('same CommandId cannot cross from CreateCompartment intent to ChangeCompartmentMetadata', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
-  const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
   const commandId = CommandId('c9f18181-0b04-4f81-8b04-000000000081');
   const candidate = CompartmentId('c9f18282-0b04-4f82-8b04-000000000082');
   try {
-    await adminPool.query(
-      `set local role fridge_app`,
-    ).catch(() => undefined);
     const transactions = new PgHouseholdStorageAdministrationTransactionManager(database);
-    const { CreateCompartmentUseCase } = await import('@fridge/application');
-    const { PgCompartmentWriter } = await import('./compartment.js');
     await new CreateCompartmentUseCase(
       transactions,
       new PgCompartmentWriter(),
@@ -302,7 +315,6 @@ test('same CommandId cannot cross from CreateCompartment intent to ChangeCompart
       IdempotencyConflictError,
     );
   } finally {
-    await adminPool.end();
     await database.close();
   }
 });
