@@ -20,14 +20,14 @@ const ADMIN_DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error('BE00_TEST_DATABASE_URL is required');
 if (!ADMIN_DATABASE_URL) throw new Error('DATABASE_URL is required');
 
-const HOUSEHOLD = HouseholdId('f4e40101-0b04-4e01-8b04-000000000001');
-const FOREIGN_HOUSEHOLD = HouseholdId('f4e40101-0b04-4e01-8b04-000000000099');
-const ADMIN = PrincipalId('f4e40202-0b04-4e02-8b04-000000000002');
-const ORDINARY = PrincipalId('f4e40303-0b04-4e03-8b04-000000000003');
-const ADMIN_MEMBERSHIP = 'f4e40404-0b04-4e04-8b04-000000000004';
-const ORDINARY_MEMBERSHIP = 'f4e40505-0b04-4e05-8b04-000000000005';
+const HOUSEHOLD = HouseholdId('9f7e0101-0b04-4e01-8b04-000000000001');
+const FOREIGN_HOUSEHOLD = HouseholdId('9f7e0101-0b04-4e01-8b04-000000000099');
+const ADMIN = PrincipalId('9f7e0202-0b04-4e02-8b04-000000000002');
+const ORDINARY = PrincipalId('9f7e0303-0b04-4e03-8b04-000000000003');
+const ADMIN_MEMBERSHIP = '9f7e0404-0b04-4e04-8b04-000000000004';
+const ORDINARY_MEMBERSHIP = '9f7e0505-0b04-4e05-8b04-000000000005';
 const KIND = 'BE04_RETIRE_FRIDGE';
-const PRODUCT = 'f4e40606-0b04-4e06-8b04-000000000006';
+const PRODUCT = '9f7e0606-0b04-4e06-8b04-000000000006';
 
 async function seedFixture(): Promise<void> {
   const pool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
@@ -106,8 +106,8 @@ function createUseCase(database: PgDatabase): RetireStorageLocationUseCase {
 test('governed retirement records post-lock lifecycle state and durable actor provenance', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const location = StorageLocationId('f4e41111-0b04-4e11-8b04-000000000011');
-  const command = CommandId('f4e41212-0b04-4e12-8b04-000000000012');
+  const location = StorageLocationId('9f7e1111-0b04-4e11-8b04-000000000011');
+  const command = CommandId('9f7e1212-0b04-4e12-8b04-000000000012');
   try {
     await seedLocation(admin, location);
     const result = await createUseCase(database).execute({
@@ -151,8 +151,8 @@ test('governed retirement records post-lock lifecycle state and durable actor pr
 test('committed replay succeeds without reapplying or restoring the retired StorageLocation', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const location = StorageLocationId('f4e42121-0b04-4e21-8b04-000000000021');
-  const command = CommandId('f4e42222-0b04-4e22-8b04-000000000022');
+  const location = StorageLocationId('9f7e2121-0b04-4e21-8b04-000000000021');
+  const command = CommandId('9f7e2222-0b04-4e22-8b04-000000000022');
   const input = { commandId: command, actorPrincipalId: ADMIN, householdId: HOUSEHOLD, storageLocationId: location } as const;
   try {
     await seedLocation(admin, location);
@@ -174,17 +174,17 @@ test('committed replay succeeds without reapplying or restoring the retired Stor
 test('active child Compartment blocks parent StorageLocation retirement', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const location = StorageLocationId('f4e43131-0b04-4e31-8b04-000000000031');
+  const location = StorageLocationId('9f7e3131-0b04-4e31-8b04-000000000031');
   try {
     await seedLocation(admin, location);
     await admin.query(
       `insert into fridge.compartment (compartment_id, household_id, storage_location_id, display_name, lifecycle_status)
-       values ('f4e43232-0b04-4e32-8b04-000000000032'::uuid, $1::uuid, $2::uuid, 'Active child', 'ACTIVE')`,
+       values ('9f7e3232-0b04-4e32-8b04-000000000032'::uuid, $1::uuid, $2::uuid, 'Active child', 'ACTIVE')`,
       [HOUSEHOLD, location],
     );
     await assert.rejects(
       createUseCase(database).execute({
-        commandId: CommandId('f4e43333-0b04-4e33-8b04-000000000033'),
+        commandId: CommandId('9f7e3333-0b04-4e33-8b04-000000000033'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         storageLocationId: location,
@@ -200,7 +200,7 @@ test('active child Compartment blocks parent StorageLocation retirement', async 
 test('current stock directly in the StorageLocation blocks retirement', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const location = StorageLocationId('f4e44141-0b04-4e41-8b04-000000000041');
+  const location = StorageLocationId('9f7e4141-0b04-4e41-8b04-000000000041');
   try {
     await seedLocation(admin, location);
     await admin.query(
@@ -208,14 +208,14 @@ test('current stock directly in the StorageLocation blocks retirement', async ()
          stock_item_id, household_id, product_id, lifecycle_status,
          placement_anchor_kind, storage_location_id, compartment_id
        ) values (
-         'f4e44242-0b04-4e42-8b04-000000000042'::uuid,
+         '9f7e4242-0b04-4e42-8b04-000000000042'::uuid,
          $1::uuid, $2::uuid, 'ACTIVE', 'LOCATION', $3::uuid, null
        )`,
       [HOUSEHOLD, PRODUCT, location],
     );
     await assert.rejects(
       createUseCase(database).execute({
-        commandId: CommandId('f4e44343-0b04-4e43-8b04-000000000043'),
+        commandId: CommandId('9f7e4343-0b04-4e43-8b04-000000000043'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         storageLocationId: location,
@@ -231,8 +231,8 @@ test('current stock directly in the StorageLocation blocks retirement', async ()
 test('current stock in a retired child Compartment still blocks parent retirement', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const location = StorageLocationId('f4e45151-0b04-4e51-8b04-000000000051');
-  const compartment = 'f4e45252-0b04-4e52-8b04-000000000052';
+  const location = StorageLocationId('9f7e5151-0b04-4e51-8b04-000000000051');
+  const compartment = '9f7e5252-0b04-4e52-8b04-000000000052';
   try {
     await seedLocation(admin, location);
     await admin.query(
@@ -250,14 +250,14 @@ test('current stock in a retired child Compartment still blocks parent retiremen
          stock_item_id, household_id, product_id, lifecycle_status,
          placement_anchor_kind, storage_location_id, compartment_id
        ) values (
-         'f4e45353-0b04-4e53-8b04-000000000053'::uuid,
+         '9f7e5353-0b04-4e53-8b04-000000000053'::uuid,
          $1::uuid, $2::uuid, 'ACTIVE', 'COMPARTMENT', null, $3::uuid
        )`,
       [HOUSEHOLD, PRODUCT, compartment],
     );
     await assert.rejects(
       createUseCase(database).execute({
-        commandId: CommandId('f4e45454-0b04-4e54-8b04-000000000054'),
+        commandId: CommandId('9f7e5454-0b04-4e54-8b04-000000000054'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         storageLocationId: location,
@@ -273,11 +273,11 @@ test('current stock in a retired child Compartment still blocks parent retiremen
 test('hidden target states collapse to NOT_FOUND and divergent CommandId reuse conflicts', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const retired = StorageLocationId('f4e46161-0b04-4e61-8b04-000000000061');
-  const foreign = StorageLocationId('f4e46262-0b04-4e62-8b04-000000000062');
-  const first = StorageLocationId('f4e46363-0b04-4e63-8b04-000000000063');
-  const second = StorageLocationId('f4e46464-0b04-4e64-8b04-000000000064');
-  const command = CommandId('f4e46565-0b04-4e65-8b04-000000000065');
+  const retired = StorageLocationId('9f7e6161-0b04-4e61-8b04-000000000061');
+  const foreign = StorageLocationId('9f7e6262-0b04-4e62-8b04-000000000062');
+  const first = StorageLocationId('9f7e6363-0b04-4e63-8b04-000000000063');
+  const second = StorageLocationId('9f7e6464-0b04-4e64-8b04-000000000064');
+  const command = CommandId('9f7e6565-0b04-4e65-8b04-000000000065');
   try {
     await seedLocation(admin, retired, HOUSEHOLD, 'RETIRED');
     await seedLocation(admin, foreign, FOREIGN_HOUSEHOLD);
@@ -287,11 +287,11 @@ test('hidden target states collapse to NOT_FOUND and divergent CommandId reuse c
     for (const target of [
       retired,
       foreign,
-      StorageLocationId('f4e46666-0b04-4e66-8b04-000000000066'),
+      StorageLocationId('9f7e6666-0b04-4e66-8b04-000000000066'),
     ]) {
       await assert.rejects(
         createUseCase(database).execute({
-          commandId: CommandId(`f4e46767-0b04-4e67-8b04-${target.slice(-12)}`),
+          commandId: CommandId(`9f7e6767-0b04-4e67-8b04-${target.slice(-12)}`),
           actorPrincipalId: ADMIN,
           householdId: HOUSEHOLD,
           storageLocationId: target,
@@ -314,15 +314,15 @@ test('hidden target states collapse to NOT_FOUND and divergent CommandId reuse c
 test('ordinary member is denied and identical concurrent retries converge on one retirement command', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app', maxConnections: 2 });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const denied = StorageLocationId('f4e47171-0b04-4e71-8b04-000000000071');
-  const concurrent = StorageLocationId('f4e47272-0b04-4e72-8b04-000000000072');
-  const command = CommandId('f4e47373-0b04-4e73-8b04-000000000073');
+  const denied = StorageLocationId('9f7e7171-0b04-4e71-8b04-000000000071');
+  const concurrent = StorageLocationId('9f7e7272-0b04-4e72-8b04-000000000072');
+  const command = CommandId('9f7e7373-0b04-4e73-8b04-000000000073');
   try {
     await seedLocation(admin, denied);
     await seedLocation(admin, concurrent);
     await assert.rejects(
       createUseCase(database).execute({
-        commandId: CommandId('f4e47474-0b04-4e74-8b04-000000000074'),
+        commandId: CommandId('9f7e7474-0b04-4e74-8b04-000000000074'),
         actorPrincipalId: ORDINARY,
         householdId: HOUSEHOLD,
         storageLocationId: denied,
