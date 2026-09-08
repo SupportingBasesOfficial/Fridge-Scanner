@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
     "./storage-administration": "./dist/storage-administration.js",
