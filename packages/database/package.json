@@ -6,6 +6,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
+    "./compartment-read": "./dist/compartment-read.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
     "./retire-storage-location": "./dist/retire-storage-location.js",
