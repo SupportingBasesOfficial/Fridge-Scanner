@@ -45,7 +45,7 @@ create table fridge.storage_location_create_command (
 );
 
 comment on table fridge.storage_location_create_command is
-  'Durable BE-04 CreateStorageLocation command identity. CommandId is Household-scoped and binds actor, stable candidate identity and normalized requested facts; committed replay returns the original StorageLocation identity without reapplying creation.';
+  'Durable BE-04 CreateStorageLocation command identity. CommandId is Household-scoped and binds actor, the first committed server-generated candidate identity and normalized requested facts; committed replay returns the original StorageLocation identity without reapplying creation.';
 
 create or replace function fridge_internal.create_storage_location(
   p_household_id uuid,
@@ -70,7 +70,6 @@ declare
   v_actor_role_code text;
   v_created_at timestamptz;
   v_existing_actor_user_id uuid;
-  v_existing_candidate_storage_location_id uuid;
   v_existing_kind_code text;
   v_existing_display_name text;
   v_existing_sort_order integer;
@@ -83,9 +82,6 @@ begin
     return;
   end if;
 
-  -- Revalidate the stronger BE-04 authority inside this exact transaction. The
-  -- authority helper serializes on Household and samples current authority only
-  -- after any lock wait.
   v_actor_role_code := fridge_internal.acquire_household_storage_admin_authority(
     p_household_id,
     p_actor_user_id,
@@ -97,22 +93,19 @@ begin
     return;
   end if;
 
-  -- Bind the creation instant after Household serialization. The same instant
-  -- is used for the newly-created resource rather than pre-lock statement time.
   v_created_at := clock_timestamp();
 
-  -- A committed replay resolves before current kind-state validation. Later
-  -- retirement of the kind or resource must not reinterpret or reapply an
-  -- already committed command.
+  -- Replay is keyed by the caller-stable command and semantic request facts.
+  -- The candidate UUID is an internal first-execution allocation proposal: a
+  -- retry may generate a different proposal, but once one command commits the
+  -- persisted candidate/result identity is authoritative and must be returned.
   select c.actor_user_id,
-         c.candidate_storage_location_id,
          c.kind_code,
          c.display_name,
          c.sort_order,
          c.outcome_code,
          c.result_storage_location_id
     into v_existing_actor_user_id,
-         v_existing_candidate_storage_location_id,
          v_existing_kind_code,
          v_existing_display_name,
          v_existing_sort_order,
@@ -125,7 +118,6 @@ begin
 
   if found then
     if v_existing_actor_user_id is distinct from p_actor_user_id
-       or v_existing_candidate_storage_location_id is distinct from p_candidate_storage_location_id
        or v_existing_kind_code is distinct from p_kind_code
        or v_existing_display_name is distinct from p_display_name
        or v_existing_sort_order is distinct from p_sort_order then
@@ -142,8 +134,6 @@ begin
     raise exception 'unexpected pending StorageLocation create command';
   end if;
 
-  -- A new command may use only an active governed kind. FOR SHARE keeps the
-  -- reference fact stable through command recording and resource creation.
   select true
     into v_kind_active
     from fridge.storage_location_kind k
@@ -209,7 +199,7 @@ end;
 $$;
 
 comment on function fridge_internal.create_storage_location(uuid, uuid, uuid, uuid, uuid, text, text, integer) is
-  'BE-04 intent-specific CreateStorageLocation persistence boundary. Revalidates current HOUSEHOLD_STORAGE_ADMINISTER authority, preserves Household ownership, requires active governed kind for new execution, binds stable command/candidate identity, uses post-lock creation time and returns committed replay without reapplying.';
+  'BE-04 intent-specific CreateStorageLocation persistence boundary. Revalidates current HOUSEHOLD_STORAGE_ADMINISTER authority, preserves Household ownership, requires active governed kind for new execution, durably binds the first server-generated candidate to the stable command, uses post-lock creation time and returns committed replay without reapplying.';
 
 revoke all on table fridge.storage_location_create_command from public;
 revoke all on function fridge_internal.create_storage_location(uuid, uuid, uuid, uuid, uuid, text, text, integer) from public;
