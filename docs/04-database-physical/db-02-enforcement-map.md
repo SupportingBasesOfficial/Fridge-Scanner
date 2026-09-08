@@ -31,6 +31,8 @@ Maps the accepted DB-01 relational integrity contract to concrete PostgreSQL enf
 | --- | --- |
 | StockItem StorageLocation XOR Compartment XOR unplaced | DDL CHECK exact-one state |
 | Compartment belongs to selected Household/location | composite FK paths |
+| Current StockItem placement requires current topology and serializes with topology retirement | TXFN/trigger guard `fridge_internal.assert_current_stock_topology` + `FOR KEY SHARE` on same-Household StorageLocation/Compartment; retirement uses conflicting `FOR UPDATE`; TEST both serialization orders, retired-target rejection and preserved composite-FK boundary |
+| Historical/non-current StockItem may preserve historical topology references | current-topology guard bypasses non-ACTIVE/retired StockItems; immutable history remains referentially anchored |
 | Historical placement never inferred from mutable current placement | IMM ledger effect placement columns + TEST reconstruction case |
 | Preferred storage policy is not placement truth | separate typed preference table; no FK from stock history to preference rows |
 
