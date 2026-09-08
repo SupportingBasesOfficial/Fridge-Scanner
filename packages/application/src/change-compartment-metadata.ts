@@ -42,14 +42,24 @@ export interface CompartmentMetadataChanger {
 
 function requireOptionalExactNonblank(value: string | null, label: string): string | null {
   if (value === null) return null;
-  if (value.length === 0 || value.trim().length === 0 || value !== value.trim()) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.trim().length === 0 ||
+    value !== value.trim()
+  ) {
     throw new InvalidInputError(`${label} must be null or a nonblank exact value`);
   }
   return value;
 }
 
 function requireExactNonblank(value: string, label: string): string {
-  if (value.length === 0 || value.trim().length === 0 || value !== value.trim()) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.trim().length === 0 ||
+    value !== value.trim()
+  ) {
     throw new InvalidInputError(`${label} must be a nonblank exact value`);
   }
   return value;
