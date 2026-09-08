@@ -4,6 +4,8 @@
 
 Executable BE-05 slice candidate built on accepted `main @ 460f7d452fbac180a1db6320764c5ad60601c376`.
 
+This document defines the candidate contract only. Acceptance evidence is recorded only after the exact final HEAD passes its CI and review gates.
+
 ## Purpose
 
 Establish provider-neutral observational Product reads before BE-05 HTTP delivery and phase-exit proof. This slice implements B5-006, B5-019, B5-020, B5-021 and B5-033 without widening Household catalog mutation authority.
