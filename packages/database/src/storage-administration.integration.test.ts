@@ -15,12 +15,14 @@ import { PgHouseholdStorageAdministrationTransactionManager } from './storage-ad
 const DATABASE_URL = process.env.BE00_TEST_DATABASE_URL;
 const ADMIN_DATABASE_URL = process.env.DATABASE_URL;
 
-const HOUSEHOLD = HouseholdId('d4444444-4444-4444-8444-444444444444');
-const OTHER_HOUSEHOLD = HouseholdId('d5555555-5555-4555-8555-555555555555');
-const STORAGE_ADMIN = PrincipalId('d1111111-1111-4111-8111-111111111111');
-const ORDINARY_MEMBER = PrincipalId('d2222222-2222-4222-8222-222222222222');
-const STORAGE_ADMIN_MEMBERSHIP = 'd1111111-aaaa-4111-8111-111111111111';
-const ORDINARY_MEMBER_MEMBERSHIP = 'd2222222-aaaa-4222-8222-222222222222';
+// BE-04 owns an isolated fixture namespace. Deliberately do not use ON CONFLICT:
+// accidental cross-suite identity reuse must fail loudly rather than hide coupling.
+const HOUSEHOLD = HouseholdId('f4a40404-0b04-4a04-8b04-000000000004');
+const OTHER_HOUSEHOLD = HouseholdId('f4a40505-0b04-4a05-8b04-000000000005');
+const STORAGE_ADMIN = PrincipalId('f4a40101-0b04-4a01-8b04-000000000001');
+const ORDINARY_MEMBER = PrincipalId('f4a40202-0b04-4a02-8b04-000000000002');
+const STORAGE_ADMIN_MEMBERSHIP = 'f4a41111-0b04-4a11-8b04-000000000011';
+const ORDINARY_MEMBER_MEMBERSHIP = 'f4a42222-0b04-4a22-8b04-000000000022';
 
 if (!DATABASE_URL) {
   throw new Error('BE00_TEST_DATABASE_URL is required for storage authority integration tests');
