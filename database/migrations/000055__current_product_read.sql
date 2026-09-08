@@ -4,11 +4,91 @@
 
 begin;
 
--- Product observations now cross only the governed functions below. Earlier
--- DB-02 capability grants included direct SELECT on fridge.product for runtime
--- roles; retaining that privilege would let callers bypass exact-membership,
+-- Product observations now cross only governed boundaries. Earlier DB-02
+-- capability grants included direct SELECT on fridge.product for runtime roles;
+-- retaining that privilege would let callers bypass exact-membership,
 -- lifecycle and Household-visibility revalidation.
 revoke select on table fridge.product from fridge_app, fridge_worker, fridge_readonly;
+
+-- Some pre-existing RLS policies on dependent resources (Batch and
+-- ProductIdentifier) legitimately need Product visibility as part of their own
+-- row predicate. Encapsulate that dependency behind narrow SECURITY DEFINER
+-- predicates instead of restoring broad Product SELECT to runtime roles.
+create or replace function fridge_internal.rls_product_visible_to_current_household(
+  p_product_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog
+as $$
+  select exists (
+    select 1
+      from fridge.product p
+     where p.product_id = p_product_id
+       and (
+         p.catalog_scope = 'GLOBAL'::fridge.catalog_scope
+         or p.owner_household_id = fridge_internal.current_household_id()
+       )
+  )
+$$;
+
+create or replace function fridge_internal.rls_product_owned_by_current_household(
+  p_product_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog
+as $$
+  select exists (
+    select 1
+      from fridge.product p
+     where p.product_id = p_product_id
+       and p.catalog_scope = 'HOUSEHOLD'::fridge.catalog_scope
+       and p.owner_household_id = fridge_internal.current_household_id()
+  )
+$$;
+
+comment on function fridge_internal.rls_product_visible_to_current_household(uuid) is
+  'Internal RLS predicate preserving GLOBAL plus same-Household Product visibility for dependent resources without granting direct Product SELECT.';
+comment on function fridge_internal.rls_product_owned_by_current_household(uuid) is
+  'Internal RLS predicate preserving same-Household private Product ownership checks for dependent resource write policies without granting direct Product SELECT.';
+
+revoke all on function fridge_internal.rls_product_visible_to_current_household(uuid) from public;
+revoke all on function fridge_internal.rls_product_owned_by_current_household(uuid) from public;
+grant execute on function fridge_internal.rls_product_visible_to_current_household(uuid)
+  to fridge_app, fridge_worker, fridge_readonly;
+grant execute on function fridge_internal.rls_product_owned_by_current_household(uuid)
+  to fridge_app, fridge_worker, fridge_readonly;
+
+drop policy batch_visible on fridge.batch;
+create policy batch_visible
+  on fridge.batch
+  for select
+  using (fridge_internal.rls_product_visible_to_current_household(batch.product_id));
+
+drop policy batch_household_write on fridge.batch;
+create policy batch_household_write
+  on fridge.batch
+  for all
+  using (fridge_internal.rls_product_owned_by_current_household(batch.product_id))
+  with check (fridge_internal.rls_product_owned_by_current_household(batch.product_id));
+
+drop policy product_identifier_visible on fridge.product_identifier;
+create policy product_identifier_visible
+  on fridge.product_identifier
+  for select
+  using (fridge_internal.rls_product_visible_to_current_household(product_identifier.product_id));
+
+drop policy product_identifier_household_write on fridge.product_identifier;
+create policy product_identifier_household_write
+  on fridge.product_identifier
+  for all
+  using (fridge_internal.rls_product_owned_by_current_household(product_identifier.product_id))
+  with check (fridge_internal.rls_product_owned_by_current_household(product_identifier.product_id));
 
 create or replace function fridge_internal.list_current_products(
   p_household_id uuid,
