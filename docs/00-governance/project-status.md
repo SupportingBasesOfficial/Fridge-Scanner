@@ -58,7 +58,7 @@
 - BE-04 RetireStorageLocation exact-head gates: **DB-02 #99 SUCCESS on PostgreSQL 17/18; BE-00 #184 SUCCESS**
 - BE-04 RetireStorageLocation panoramic reviews: **CLEAN**
 - BE-04 RetireStorageLocation unresolved material threads at merge: **0**
-- BE-04 shared topology CommandId registry (`000044`): **accepted**; one Household-scoped CommandId is bound to exactly one committed topology intent across CreateStorageLocation, ChangeStorageLocationMetadata and RetireStorageLocation
+- BE-04 shared topology CommandId registry (`000044`): **accepted**; one Household-scoped CommandId is bound to exactly one committed topology intent and later accepted migrations extend its governed intent set without creating parallel registries
 - PR #31 Codex evidence: one P2 on an earlier head identified cross-intent CommandId reuse; fixed systemically, replied and resolved; **no claim of a final-head Codex CLEAN review**
 - Accepted BE-04 current StorageLocation reads: PR #32 squash `24e88933ab63d9b725e841cd643de132243689d8`, exact reviewed HEAD `1cab3d06cb301c847c45073d2d63534cdadd0356`
 - BE-04 current StorageLocation read exact-head gates: **DB-02 #103 SUCCESS on PostgreSQL 17/18; BE-00 #188 SUCCESS**
@@ -70,12 +70,17 @@
 - BE-04 current Compartment read panoramic reviews: **CLEAN**
 - BE-04 current Compartment read unresolved material threads at merge: **0**
 - PR #33 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
-- Canonical BE-04 executable `main`: **`3505a136c74e700cfc17ba05518c0fda56cc6bc0`**
+- Accepted BE-04 CreateCompartment: PR #34 squash `d629c80da263477d001a10c00a40ad6703cf59e6`, exact reviewed HEAD `e367d96a13f5c081ca7b6723bfbb9ac32b9621df`
+- BE-04 CreateCompartment exact-head gates: **DB-02 #107 SUCCESS on PostgreSQL 17/18; BE-00 #192 SUCCESS**
+- BE-04 CreateCompartment panoramic reviews: **CLEAN**
+- BE-04 CreateCompartment unresolved material threads at merge: **0**
+- PR #34 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
+- Canonical BE-04 executable `main`: **`d629c80da263477d001a10c00a40ad6703cf59e6`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **CreateCompartment**
-- Active branch: **`backend/be-04-create-compartment`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + StorageLocation create/change/retire + shared CommandId registry + current StorageLocation/Compartment reads accepted; CreateCompartment under exact-HEAD validation/review**
+- Active implementation slice: **ChangeCompartmentMetadata**
+- Active branch: **`backend/be-04-change-compartment-metadata`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + StorageLocation create/change/retire + shared CommandId registry + current StorageLocation/Compartment reads + CreateCompartment accepted; ChangeCompartmentMetadata under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -105,7 +110,9 @@ The accepted BE-04 current StorageLocation read slice provides current Household
 
 The accepted BE-04 current Compartment read slice provides parent-scoped and identity-scoped observational List/Get contracts, exposes a Compartment as current only when both child and parent StorageLocation are ACTIVE/non-retired in the same Household, preserves optional Compartment kind semantics, distinguishes current empty parents from hidden/non-current parents, collapses hidden child states to provider-neutral NOT_FOUND, revalidates exact membership and never upgrades observation into storage-administration authority.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry and current StorageLocation/Compartment read slices are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 CreateCompartment slice establishes governed creation beneath a current same-Household StorageLocation, binds immutable parent identity and normalized facts to a stable caller CommandId, uses an internal/server-generated Compartment candidate identity, preserves nullable governed kind semantics, locks the parent in canonical order before post-lock creation time, extends the shared topology CommandId registry with `CREATE_COMPARTMENT`, provides non-reapplying replay and serializes deterministically against parent retirement.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry, current StorageLocation/Compartment reads and CreateCompartment slice are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -194,7 +201,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The accepted executable slices are the storage-administration authority kernel, StorageLocation create/change/retire with the shared topology CommandId registry, and current StorageLocation/Compartment reads. The active CreateCompartment slice must require `HOUSEHOLD_STORAGE_ADMINISTER`, bind immutable parent identity and normalized facts to the stable command, preserve server-generated candidate identity and optional governed kind semantics, acquire the current same-Household parent in canonical lock order, sample creation time only after parent serialization, integrate `CREATE_COMPARTMENT` into the shared topology CommandId registry, provide non-reapplying replay, remain least-privileged and serialize deterministically against parent retirement before acceptance.
+The accepted executable slices are the storage-administration authority kernel, StorageLocation create/change/retire with the shared topology CommandId registry, current StorageLocation/Compartment reads and CreateCompartment. The active ChangeCompartmentMetadata slice must preserve immutable Household/resource/parent identity, require `HOUSEHOLD_STORAGE_ADMINISTER`, keep nullable governed kind semantics, resolve committed replay before current-state validation, lock current parent before current child in canonical order, collapse hidden/foreign/retired target states safely, integrate `CHANGE_COMPARTMENT_METADATA` into the shared topology CommandId registry, remain least-privileged and never silently reactivate or reparent a Compartment before acceptance.
 
 ## Governance rule
 
