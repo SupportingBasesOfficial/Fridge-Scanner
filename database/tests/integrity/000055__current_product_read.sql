@@ -40,6 +40,12 @@ begin
     raise exception 'worker/readonly must not bypass application Household authorization for Product reads';
   end if;
 
+  if has_table_privilege('fridge_app', 'fridge.product', 'SELECT')
+     or has_table_privilege('fridge_worker', 'fridge.product', 'SELECT')
+     or has_table_privilege('fridge_readonly', 'fridge.product', 'SELECT') then
+    raise exception 'runtime capability roles must not bypass governed Product read functions with direct SELECT';
+  end if;
+
   if has_table_privilege('fridge_app', 'fridge.product', 'INSERT')
      or has_table_privilege('fridge_app', 'fridge.product', 'UPDATE')
      or has_table_privilege('fridge_app', 'fridge.product', 'DELETE') then
