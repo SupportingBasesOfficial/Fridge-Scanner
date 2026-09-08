@@ -65,12 +65,17 @@
 - BE-04 current StorageLocation read panoramic reviews: **CLEAN**
 - BE-04 current StorageLocation read unresolved material threads at merge: **0**
 - PR #32 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
-- Canonical BE-04 executable `main`: **`24e88933ab63d9b725e841cd643de132243689d8`**
+- Accepted BE-04 current Compartment reads: PR #33 squash `3505a136c74e700cfc17ba05518c0fda56cc6bc0`, exact reviewed HEAD `2957b52dd0f4cc537903b72fc36554a86f2d8c2d`
+- BE-04 current Compartment read exact-head gates: **DB-02 #105 SUCCESS on PostgreSQL 17/18; BE-00 #190 SUCCESS**
+- BE-04 current Compartment read panoramic reviews: **CLEAN**
+- BE-04 current Compartment read unresolved material threads at merge: **0**
+- PR #33 Codex evidence: **no automated Codex review published; no claim of Codex CLEAN**
+- Canonical BE-04 executable `main`: **`3505a136c74e700cfc17ba05518c0fda56cc6bc0`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **current Compartment reads (`ListCurrentCompartments` + `GetCurrentCompartment`)**
-- Active branch: **`backend/be-04-compartment-reads`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + StorageLocation create/change/retire + shared CommandId registry + current StorageLocation reads accepted; current Compartment reads under exact-HEAD validation/review**
+- Active implementation slice: **CreateCompartment**
+- Active branch: **`backend/be-04-create-compartment`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + StorageLocation create/change/retire + shared CommandId registry + current StorageLocation/Compartment reads accepted; CreateCompartment under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -98,7 +103,9 @@ The accepted BE-04 RetireStorageLocation slice preserves history, follows the ca
 
 The accepted BE-04 current StorageLocation read slice provides current Household-scoped observational List/Get contracts for ACTIVE/non-retired StorageLocations, distinguishes authorized empty lists from unauthorized access, collapses hidden Get targets to provider-neutral NOT_FOUND, revalidates the exact acting membership at read time, preserves deterministic presentation ordering and never upgrades observation into storage-administration authority.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry and current StorageLocation read slices are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 current Compartment read slice provides parent-scoped and identity-scoped observational List/Get contracts, exposes a Compartment as current only when both child and parent StorageLocation are ACTIVE/non-retired in the same Household, preserves optional Compartment kind semantics, distinguishes current empty parents from hidden/non-current parents, collapses hidden child states to provider-neutral NOT_FOUND, revalidates exact membership and never upgrades observation into storage-administration authority.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry and current StorageLocation/Compartment read slices are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -187,7 +194,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The accepted executable slices are the storage-administration authority kernel, StorageLocation create/change/retire with the shared topology CommandId registry, and current StorageLocation reads. The active current-Compartment-read slice must remain observational, require ordinary current Household authority rather than storage-administration capability, expose a Compartment as current only when both child and parent StorageLocation are current ACTIVE/non-retired in the same Household, preserve DB-02 optional Compartment kind semantics, use deterministic ordering, distinguish current empty parents from hidden parents, collapse missing/foreign/retired child and parent states safely, remain least-privileged and never become later mutation authority before acceptance.
+The accepted executable slices are the storage-administration authority kernel, StorageLocation create/change/retire with the shared topology CommandId registry, and current StorageLocation/Compartment reads. The active CreateCompartment slice must require `HOUSEHOLD_STORAGE_ADMINISTER`, bind immutable parent identity and normalized facts to the stable command, preserve server-generated candidate identity and optional governed kind semantics, acquire the current same-Household parent in canonical lock order, sample creation time only after parent serialization, integrate `CREATE_COMPARTMENT` into the shared topology CommandId registry, provide non-reapplying replay, remain least-privileged and serialize deterministically against parent retirement before acceptance.
 
 ## Governance rule
 
