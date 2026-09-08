@@ -23,6 +23,10 @@ function normalizeStorageLocationDatabaseFailure(error: unknown): Error {
       ? String((error as { readonly code?: unknown }).code ?? '')
       : '';
 
+  if (code === 'P4I01') {
+    return new IdempotencyConflictError();
+  }
+
   if (code.startsWith('08') || DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)) {
     return new DependencyUnavailableError('required dependency is unavailable', error);
   }
