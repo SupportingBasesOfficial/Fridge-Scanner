@@ -160,7 +160,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The accepted first executable slice is the storage-administration authority kernel. The active CreateStorageLocation slice consumes that opaque capability and must prove stable caller-supplied CommandId plus candidate StorageLocation identity, active governed kind validation, post-lock creation time, durable non-restoring replay and least-privileged persistence before acceptance.
+The accepted first executable slice is the storage-administration authority kernel. The active CreateStorageLocation slice consumes that opaque capability and must prove a stable caller-supplied CommandId, a server-generated candidate identity durably bound by the first committed command, active governed kind validation, post-lock creation time, candidate-independent lost-response replay and least-privileged persistence before acceptance.
 
 ## Governance rule
 
