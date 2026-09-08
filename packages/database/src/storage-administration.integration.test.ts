@@ -24,6 +24,11 @@ const ORDINARY_MEMBER = PrincipalId('f4a40202-0b04-4a02-8b04-000000000002');
 const STORAGE_ADMIN_MEMBERSHIP = 'f4a41111-0b04-4a11-8b04-000000000011';
 const ORDINARY_MEMBER_MEMBERSHIP = 'f4a42222-0b04-4a22-8b04-000000000022';
 
+// Accepted BE-03 workflow fixture: this principal has only
+// HOUSEHOLD_MEMBERSHIP_ADMINISTER and must not inherit BE-04 storage authority.
+const BE03_HOUSEHOLD = HouseholdId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+const BE03_MEMBERSHIP_ADMIN = PrincipalId('33333333-3333-4333-8333-333333333333');
+
 if (!DATABASE_URL) {
   throw new Error('BE00_TEST_DATABASE_URL is required for storage authority integration tests');
 }
@@ -113,6 +118,31 @@ test('governed role capability upgrades current authority to storage administrat
       capability: HOUSEHOLD_STORAGE_ADMINISTRATION_CAPABILITY,
       capabilityEnumerable: false,
     });
+  } finally {
+    await database.close();
+  }
+});
+
+test('BE-03 membership administration capability does not imply BE-04 storage administration', async () => {
+  const database = new PgDatabase({
+    connectionString: DATABASE_URL,
+    capabilityRole: 'fridge_app',
+  });
+  const manager = new PgHouseholdStorageAdministrationTransactionManager(database);
+  let callbackRan = false;
+
+  try {
+    await assert.rejects(
+      manager.withHouseholdStorageAdministrationTransaction(
+        BE03_MEMBERSHIP_ADMIN,
+        BE03_HOUSEHOLD,
+        async () => {
+          callbackRan = true;
+        },
+      ),
+      HouseholdAuthorizationError,
+    );
+    assert.equal(callbackRan, false);
   } finally {
     await database.close();
   }
