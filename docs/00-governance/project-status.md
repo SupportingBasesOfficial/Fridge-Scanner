@@ -80,12 +80,20 @@
 - BE-04 ChangeCompartmentMetadata panoramic reviews: **CLEAN**
 - BE-04 ChangeCompartmentMetadata unresolved material threads at merge: **0**
 - PR #35 Codex evidence: one P2 on an earlier head identified malformed non-string metadata mapping; fixed with runtime type guards and explicit unit proof, replied and resolved; **no claim of a final-head Codex CLEAN review**
-- Canonical BE-04 executable `main`: **`b9581d593c694b794fcb60c8ed26d30ad4189133`**
+- Accepted BE-04 RetireCompartment + current-stock topology serialization hardening: PR #36 squash `549498b14d28339a5b763126fd41b5128b9f5cef`, exact reviewed HEAD `2a0b6ae14009521f97aff2cd78d21c1fb66d990b`
+- BE-04 RetireCompartment exact-head gates: **DB-02 #118 SUCCESS on PostgreSQL 17/18; BE-00 #203 SUCCESS**
+- BE-04 RetireCompartment panoramic reviews: **CLEAN**
+- BE-04 RetireCompartment unresolved material threads at merge: **0**
+- BE-04 current-stock topology guard (`000050`): **accepted**; current StockItem LOCATION/COMPARTMENT placement serializes with topology retirement under compatible locks and revalidates current lifecycle, while historical/non-current stock may preserve historical topology references and missing/cross-Household identity remains governed by accepted composite foreign keys
+- PR #36 Codex evidence: one P1 on an earlier head identified a race between retirement and a new concurrent stock placement; fixed systemically, replied and resolved; **no claim of a final-head Codex CLEAN review**
+- Canonical BE-04 executable `main`: **`549498b14d28339a5b763126fd41b5128b9f5cef`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **RetireCompartment**
-- Active branch: **`backend/be-04-retire-compartment`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + StorageLocation create/change/retire + shared CommandId registry + current StorageLocation/Compartment reads + CreateCompartment + ChangeCompartmentMetadata accepted; RetireCompartment under exact-HEAD validation/review**
+- Active implementation slice: **authenticated HTTP delivery + B4-030 phase-exit proof / closure candidate**
+- Active branch: **`backend/be-04-http-delivery-proof`**
+- Active PR: **#37 — `backend: deliver BE-04 storage topology HTTP and B4-030 proof`**
+- Backend implementation: **BE-00 through BE-03 accepted; all BE-04 StorageLocation/Compartment authority, read and mutation slices accepted; authenticated topology HTTP delivery/B4-030 closure candidate under exact-HEAD validation/review**
+- BE-04 closure status: **not yet accepted; requires final exact-HEAD DB-02 PG17/18 + BE-00, CLEAN reviews, zero unresolved material findings and explicit owner-authorized squash merge**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -119,7 +127,9 @@ The accepted BE-04 CreateCompartment slice establishes governed creation beneath
 
 The accepted BE-04 ChangeCompartmentMetadata slice preserves immutable Household/resource/parent identity while allowing only kind/display/order metadata changes on a current child beneath a current same-Household parent, preserves nullable governed kind semantics, locks parent before child, extends the shared topology CommandId registry with `CHANGE_COMPARTMENT_METADATA`, collapses hidden target states safely, provides non-restoring replay, remains least-privileged and maps malformed runtime metadata to provider-neutral invalid input rather than internal failure.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry, current StorageLocation/Compartment reads, CreateCompartment and ChangeCompartmentMetadata slices are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 RetireCompartment slice preserves immutable Household/resource/parent identity, requires a current same-Household parent and child, blocks current stock anchored to the target without cascade or relocation, samples retirement time only after Household -> parent -> child -> stock serialization, extends the shared registry with `RETIRE_COMPARTMENT`, preserves non-restoring replay and hides retired topology from current observations. The accepted `000050` physical guard complements both topology retirements by serializing any new current StockItem placement with current topology under `FOR KEY SHARE`, preventing a placement from committing against a topology resource retired concurrently.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel, StorageLocation create/change/retire/shared-command-registry, current StorageLocation/Compartment reads, Create/Change/Retire Compartment and current-stock topology guard are authoritative for the current implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -167,19 +177,12 @@ DB-00 defines:
 - every `StorageLocation` belongs to exactly one Household;
 - every `Compartment` belongs to exactly one StorageLocation;
 - every Compartment therefore resolves to exactly one Household through its parent;
-- a stored StockItem eventually has one placement anchor, either a StorageLocation or a Compartment whose parent StorageLocation is authoritative;
+- a stored StockItem has one current placement anchor, either a StorageLocation, a Compartment whose parent StorageLocation is authoritative, or an explicit unplaced state;
 - occupancy labels are projections/observations, not authoritative stock truth.
 
-DB-02 already provides:
+DB-02 provides governed topology reference data, explicit ownership/lifecycle fields, same-Household composite foreign keys and the accepted current-stock topology guard. BE-04 consumes these structures rather than creating an alternate topology store.
 
-- governed `storage_location_kind` and `compartment_kind` reference tables;
-- `storage_location` Household ownership/lifecycle/order/retirement fields;
-- `compartment` Household ownership/parent/lifecycle/order/retirement fields;
-- a composite same-Household FK preventing a Compartment from attaching to another Household's StorageLocation.
-
-BE-04 therefore establishes the application/persistence/delivery rules for current topology reads, create/change/retire lifecycle, explicit `HOUSEHOLD_STORAGE_ADMINISTER` capability, stable command identity, nondisclosure, least privilege and deterministic concurrency.
-
-BE-04 explicitly does **not** implement Product catalog, Purchase/Receipt, StockItem or InventoryMovement workflows. Those remain later phases and must consume the topology contract rather than invent placement semantics themselves.
+BE-04 explicitly does **not** implement Product catalog, Purchase/Receipt, InventoryMovement/Transfer/Count/Reconciliation, frontend UI or production deployment. Later phases must consume the topology contract rather than invent placement semantics themselves.
 
 ## Accepted BE-04 normative baseline
 
@@ -188,27 +191,11 @@ The accepted BE-04 baseline is recorded in:
 - `docs/05-backend/be-04-overview.md`
 - `docs/05-backend/be-04-decisions.md`
 
-Key accepted rules include:
+Key accepted rules include execution-time Household authority, dedicated `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership and Compartment parentage, lifecycle retirement instead of hard delete, governed kinds, current observational reads, stable CommandId, non-restoring replay, canonical lock order, post-lock time, stock-safe retirement, no business cascades, provider-neutral nondisclosure and least-privileged persistence.
 
-- execution-time Household authority;
-- dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER` capability;
-- immutable Household ownership of StorageLocation;
-- same-Household immutable Compartment parentage for BE-04;
-- retirement instead of ordinary hard delete;
-- active governed kinds;
-- current observational read models;
-- stable caller-supplied CommandId for retriable mutations;
-- non-restoring committed replay;
-- canonical lock order `Household -> StorageLocation -> Compartment`;
-- post-lock temporal observation;
-- parent retirement blocked while active children remain;
-- topology retirement blocked when it would strand current stock;
-- no automatic business cascades;
-- provider-neutral errors and nondisclosure;
-- least-privileged intent-specific persistence;
-- B4-030 authenticated governed topology-mutation proof as phase exit condition.
+All intended StorageLocation and Compartment read/mutation contracts are now accepted on `main @ 549498b14d28339a5b763126fd41b5128b9f5cef`. The active PR #37 is limited to authenticated HTTP delivery and the B4-030 phase-exit proof. It must remain a transport adapter: no SQL, role-name authorization, provider-claim Household authority, cross-tenant lookup logic or database-specific error leakage may move into Fastify delivery.
 
-The accepted executable slices are the storage-administration authority kernel, StorageLocation create/change/retire with the shared topology CommandId registry, current StorageLocation/Compartment reads, CreateCompartment and ChangeCompartmentMetadata. The active RetireCompartment slice must require `HOUSEHOLD_STORAGE_ADMINISTER`, preserve immutable Household/resource/parent identity, resolve committed replay before current-state validation, lock Household -> current parent -> current child -> dependent StockItems, block current stock anchored to the target without cascade or relocation, sample retirement time only after serialization, collapse hidden target states safely, integrate `RETIRE_COMPARTMENT` into the shared topology CommandId registry and remain least-privileged before acceptance.
+Canonical closure-candidate evidence is recorded in `docs/05-backend/be-04-acceptance.md`. BE-04 is not formally closed until PR #37 passes final exact-HEAD gates/reviews and the owner explicitly authorizes its squash merge.
 
 ## Governance rule
 
