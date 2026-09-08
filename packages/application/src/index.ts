@@ -26,6 +26,7 @@ export * from './change-household-member-role.js';
 export * from './change-household-product-metadata.js';
 export * from './change-storage-location-metadata.js';
 export * from './create-compartment.js';
+export * from './create-household-ingredient-concept.js';
 export * from './create-household-product.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
