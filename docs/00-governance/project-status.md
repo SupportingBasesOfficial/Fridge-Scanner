@@ -46,12 +46,16 @@
 - BE-04 storage authority exact-head gates: **DB-02 #80 SUCCESS on PostgreSQL 17/18; BE-00 #165 SUCCESS**
 - BE-04 storage authority panoramic reviews: **CLEAN**
 - BE-04 storage authority unresolved material threads at merge: **0**
-- Canonical BE-04 executable `main`: **`3b3c7e56063357590ba6677240ee0d63ba73c8c3`**
+- Accepted BE-04 CreateStorageLocation: PR #29 squash `53e52e578058977637fb9e7193ab043b5566cea5`, exact reviewed HEAD `5f3096beeac836cfc7155c8f6482c0e9cdd202e1`
+- BE-04 CreateStorageLocation exact-head gates: **DB-02 #86 SUCCESS on PostgreSQL 17/18; BE-00 #171 SUCCESS**
+- BE-04 CreateStorageLocation panoramic reviews: **CLEAN**
+- BE-04 CreateStorageLocation unresolved material threads at merge: **0**
+- Canonical BE-04 executable `main`: **`53e52e578058977637fb9e7193ab043b5566cea5`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **CreateStorageLocation governed mutation**
-- Active branch: **`backend/be-04-create-storage-location`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel accepted; CreateStorageLocation under exact-HEAD validation/review**
+- Active implementation slice: **ChangeStorageLocationMetadata governed mutation**
+- Active branch: **`backend/be-04-change-storage-location-metadata`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel + CreateStorageLocation accepted; ChangeStorageLocationMetadata under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -71,7 +75,9 @@ BE-04 normative baseline establishes storage-topology authority/lifecycle/concur
 
 The accepted BE-04 storage authority kernel materializes `HOUSEHOLD_STORAGE_ADMINISTER` only after current Household authorization, Household-first serialization, post-lock authority observation and governed role/capability revalidation. Membership-administration authority does not implicitly grant storage administration authority.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline and storage authority kernel are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 CreateStorageLocation slice establishes intent-specific creation with stable caller CommandId, server-generated candidate identity, durable command provenance, active governed kind validation, post-lock creation time, candidate-independent committed replay, Household ownership preservation and least-privileged persistence.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline, storage authority kernel and CreateStorageLocation slice are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -160,7 +166,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The accepted first executable slice is the storage-administration authority kernel. The active CreateStorageLocation slice consumes that opaque capability and must prove a stable caller-supplied CommandId, a server-generated candidate identity durably bound by the first committed command, active governed kind validation, post-lock creation time, candidate-independent lost-response replay and least-privileged persistence before acceptance.
+The accepted executable slices are the storage-administration authority kernel and CreateStorageLocation. The active ChangeStorageLocationMetadata slice must preserve immutable Household/resource identity, accept only current active targets, validate active governed kind facts for new execution, collapse missing/foreign/retired targets safely, bind stable command facts, make committed replay non-restoring and remain least-privileged before acceptance.
 
 ## Governance rule
 
