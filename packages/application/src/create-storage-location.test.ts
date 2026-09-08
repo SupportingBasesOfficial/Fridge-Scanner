@@ -34,7 +34,7 @@ function fakeStorageAdministrationTransaction(): HouseholdStorageAdministrationT
   } as unknown as HouseholdStorageAdministrationTransaction;
 }
 
-test('CreateStorageLocationUseCase binds stable command and candidate identity', async () => {
+test('CreateStorageLocationUseCase generates an internal candidate and binds command facts', async () => {
   let requestedActor: unknown;
   let requestedHousehold: unknown;
   let persisted: CreateStorageLocationPersistenceInput | undefined;
@@ -54,11 +54,14 @@ test('CreateStorageLocationUseCase binds stable command and candidate identity',
     },
   };
 
-  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
+  const useCase = new CreateStorageLocationUseCase(
+    transactions,
+    storageLocations,
+    { generate: () => CANDIDATE },
+  );
 
   const output = await useCase.execute({
     commandId: COMMAND,
-    candidateStorageLocationId: CANDIDATE,
     actorPrincipalId: ACTOR,
     householdId: HOUSEHOLD,
     kindCode: 'FRIDGE',
@@ -91,12 +94,15 @@ test('CreateStorageLocationUseCase rejects non-exact metadata before authority a
       throw new Error('must not run');
     },
   };
-  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
+  const useCase = new CreateStorageLocationUseCase(
+    transactions,
+    storageLocations,
+    { generate: () => CANDIDATE },
+  );
 
   await assert.rejects(
     useCase.execute({
       commandId: COMMAND,
-      candidateStorageLocationId: CANDIDATE,
       actorPrincipalId: ACTOR,
       householdId: HOUSEHOLD,
       kindCode: ' FRIDGE ',
@@ -121,12 +127,15 @@ test('CreateStorageLocationUseCase rejects sort order outside PostgreSQL integer
       throw new Error('must not run');
     },
   };
-  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
+  const useCase = new CreateStorageLocationUseCase(
+    transactions,
+    storageLocations,
+    { generate: () => CANDIDATE },
+  );
 
   await assert.rejects(
     useCase.execute({
       commandId: COMMAND,
-      candidateStorageLocationId: CANDIDATE,
       actorPrincipalId: ACTOR,
       householdId: HOUSEHOLD,
       kindCode: 'FRIDGE',
