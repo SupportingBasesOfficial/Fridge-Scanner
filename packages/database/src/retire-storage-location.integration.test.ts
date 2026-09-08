@@ -228,7 +228,7 @@ test('current stock directly in the StorageLocation blocks retirement', async ()
   }
 });
 
-test('current stock in a retired child Compartment still blocks parent retirement', async () => {
+test('legacy current stock in a retired child Compartment still blocks parent retirement', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
   const location = StorageLocationId('9f7e5151-0b04-4e51-8b04-000000000051');
@@ -245,16 +245,31 @@ test('current stock in a retired child Compartment still blocks parent retiremen
        )`,
       [compartment, HOUSEHOLD, location],
     );
+
+    // The current-stock topology guard now prevents this state through every
+    // ordinary write path. Disable only that guard while seeding a deliberately
+    // legacy/corrupted fixture so RetireStorageLocation keeps proving defensive
+    // stock-safety if such pre-hardening data exists. Canonical FKs remain active.
     await admin.query(
-      `insert into fridge.stock_item (
-         stock_item_id, household_id, product_id, lifecycle_status,
-         placement_anchor_kind, storage_location_id, compartment_id
-       ) values (
-         '9f7e5353-0b04-4e53-8b04-000000000053'::uuid,
-         $1::uuid, $2::uuid, 'ACTIVE', 'COMPARTMENT', null, $3::uuid
-       )`,
-      [HOUSEHOLD, PRODUCT, compartment],
+      `alter table fridge.stock_item disable trigger stock_item_current_topology_guard`,
     );
+    try {
+      await admin.query(
+        `insert into fridge.stock_item (
+           stock_item_id, household_id, product_id, lifecycle_status,
+           placement_anchor_kind, storage_location_id, compartment_id
+         ) values (
+           '9f7e5353-0b04-4e53-8b04-000000000053'::uuid,
+           $1::uuid, $2::uuid, 'ACTIVE', 'COMPARTMENT', null, $3::uuid
+         )`,
+        [HOUSEHOLD, PRODUCT, compartment],
+      );
+    } finally {
+      await admin.query(
+        `alter table fridge.stock_item enable trigger stock_item_current_topology_guard`,
+      );
+    }
+
     await assert.rejects(
       createUseCase(database).execute({
         commandId: CommandId('9f7e5454-0b04-4e54-8b04-000000000054'),
