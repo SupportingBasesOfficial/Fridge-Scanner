@@ -34,7 +34,7 @@ function fakeStorageAdministrationTransaction(): HouseholdStorageAdministrationT
   } as unknown as HouseholdStorageAdministrationTransaction;
 }
 
-test('CreateStorageLocationUseCase binds stable command facts and returns persisted identity', async () => {
+test('CreateStorageLocationUseCase binds stable command and candidate identity', async () => {
   let requestedActor: unknown;
   let requestedHousehold: unknown;
   let persisted: CreateStorageLocationPersistenceInput | undefined;
@@ -54,14 +54,11 @@ test('CreateStorageLocationUseCase binds stable command facts and returns persis
     },
   };
 
-  const useCase = new CreateStorageLocationUseCase(
-    transactions,
-    storageLocations,
-    { generate: () => CANDIDATE },
-  );
+  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
 
   const output = await useCase.execute({
     commandId: COMMAND,
+    candidateStorageLocationId: CANDIDATE,
     actorPrincipalId: ACTOR,
     householdId: HOUSEHOLD,
     kindCode: 'FRIDGE',
@@ -83,7 +80,6 @@ test('CreateStorageLocationUseCase binds stable command facts and returns persis
 
 test('CreateStorageLocationUseCase rejects non-exact metadata before authority acquisition', async () => {
   let transactionRequested = false;
-
   const transactions: HouseholdStorageAdministrationTransactionManager = {
     async withHouseholdStorageAdministrationTransaction() {
       transactionRequested = true;
@@ -95,15 +91,12 @@ test('CreateStorageLocationUseCase rejects non-exact metadata before authority a
       throw new Error('must not run');
     },
   };
-  const useCase = new CreateStorageLocationUseCase(
-    transactions,
-    storageLocations,
-    { generate: () => CANDIDATE },
-  );
+  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
 
   await assert.rejects(
     useCase.execute({
       commandId: COMMAND,
+      candidateStorageLocationId: CANDIDATE,
       actorPrincipalId: ACTOR,
       householdId: HOUSEHOLD,
       kindCode: ' FRIDGE ',
@@ -115,9 +108,8 @@ test('CreateStorageLocationUseCase rejects non-exact metadata before authority a
   assert.equal(transactionRequested, false);
 });
 
-test('CreateStorageLocationUseCase rejects unsafe sort order before authority acquisition', async () => {
+test('CreateStorageLocationUseCase rejects sort order outside PostgreSQL integer range', async () => {
   let transactionRequested = false;
-
   const transactions: HouseholdStorageAdministrationTransactionManager = {
     async withHouseholdStorageAdministrationTransaction() {
       transactionRequested = true;
@@ -129,20 +121,17 @@ test('CreateStorageLocationUseCase rejects unsafe sort order before authority ac
       throw new Error('must not run');
     },
   };
-  const useCase = new CreateStorageLocationUseCase(
-    transactions,
-    storageLocations,
-    { generate: () => CANDIDATE },
-  );
+  const useCase = new CreateStorageLocationUseCase(transactions, storageLocations);
 
   await assert.rejects(
     useCase.execute({
       commandId: COMMAND,
+      candidateStorageLocationId: CANDIDATE,
       actorPrincipalId: ACTOR,
       householdId: HOUSEHOLD,
       kindCode: 'FRIDGE',
       displayName: 'Kitchen Fridge',
-      sortOrder: Number.MAX_SAFE_INTEGER + 1,
+      sortOrder: 2147483648,
     }),
     InvalidInputError,
   );
