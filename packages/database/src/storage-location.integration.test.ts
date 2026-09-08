@@ -78,10 +78,14 @@ async function seedFixture(): Promise<void> {
 
 await seedFixture();
 
-function createUseCase(database: PgDatabase): CreateStorageLocationUseCase {
+function createUseCase(
+  database: PgDatabase,
+  candidateStorageLocationId: StorageLocationId,
+): CreateStorageLocationUseCase {
   return new CreateStorageLocationUseCase(
     new PgHouseholdStorageAdministrationTransactionManager(database),
     new PgStorageLocationWriter(),
+    { generate: () => candidateStorageLocationId },
   );
 }
 
@@ -92,9 +96,8 @@ test('governed administrator creates a Household-owned StorageLocation with dura
   const candidateId = StorageLocationId('f4c41212-0b04-4c12-8b04-000000000012');
 
   try {
-    const result = await createUseCase(database).execute({
+    const result = await createUseCase(database, candidateId).execute({
       commandId,
-      candidateStorageLocationId: candidateId,
       actorPrincipalId: ADMIN,
       householdId: HOUSEHOLD,
       kindCode: ACTIVE_KIND,
@@ -110,6 +113,7 @@ test('governed administrator creates a Household-owned StorageLocation with dura
       lifecycle_status: string;
       sort_order: number | null;
       actor_user_id: string;
+      candidate_storage_location_id: string;
       outcome_code: string;
     }>(
       `select sl.household_id::text,
@@ -118,6 +122,7 @@ test('governed administrator creates a Household-owned StorageLocation with dura
               sl.lifecycle_status,
               sl.sort_order,
               c.actor_user_id::text,
+              c.candidate_storage_location_id::text,
               c.outcome_code
          from fridge.storage_location sl
          join fridge.storage_location_create_command c
@@ -133,6 +138,7 @@ test('governed administrator creates a Household-owned StorageLocation with dura
       lifecycle_status: 'ACTIVE',
       sort_order: 7,
       actor_user_id: ADMIN,
+      candidate_storage_location_id: candidateId,
       outcome_code: 'CREATED',
     });
   } finally {
@@ -141,14 +147,14 @@ test('governed administrator creates a Household-owned StorageLocation with dura
   }
 });
 
-test('committed replay returns the original identity without allocating or reapplying', async () => {
+test('lost-response replay returns original identity even when retry generated a different candidate', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
   const commandId = CommandId('f4c42121-0b04-4c21-8b04-000000000021');
-  const candidateId = StorageLocationId('f4c42222-0b04-4c22-8b04-000000000022');
+  const firstCandidate = StorageLocationId('f4c42222-0b04-4c22-8b04-000000000022');
+  const retryCandidate = StorageLocationId('f4c42323-0b04-4c23-8b04-000000000023');
   const input = {
     commandId,
-    candidateStorageLocationId: candidateId,
     actorPrincipalId: ADMIN,
     householdId: HOUSEHOLD,
     kindCode: ACTIVE_KIND,
@@ -157,33 +163,34 @@ test('committed replay returns the original identity without allocating or reapp
   } as const;
 
   try {
-    const first = await createUseCase(database).execute(input);
-    const second = await createUseCase(database).execute(input);
-    assert.equal(first.storageLocationId, candidateId);
-    assert.equal(second.storageLocationId, candidateId);
+    const first = await createUseCase(database, firstCandidate).execute(input);
+    const replay = await createUseCase(database, retryCandidate).execute(input);
+    assert.equal(first.storageLocationId, firstCandidate);
+    assert.equal(replay.storageLocationId, firstCandidate);
 
-    const count = await adminPool.query<{ count: string }>(
-      `select count(*)::text as count
-         from fridge.storage_location
-        where storage_location_id = $1::uuid`,
-      [candidateId],
+    const counts = await adminPool.query<{ first_count: string; retry_count: string }>(
+      `select
+         (select count(*) from fridge.storage_location where storage_location_id = $1::uuid)::text as first_count,
+         (select count(*) from fridge.storage_location where storage_location_id = $2::uuid)::text as retry_count`,
+      [firstCandidate, retryCandidate],
     );
-    assert.equal(count.rows[0]?.count, '1');
+    assert.deepEqual(counts.rows[0], { first_count: '1', retry_count: '0' });
   } finally {
     await adminPool.end();
     await database.close();
   }
 });
 
-test('CommandId reuse with different candidate or facts is an idempotency conflict', async () => {
+test('CommandId reuse with different semantic facts is an idempotency conflict', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const commandId = CommandId('f4c43131-0b04-4c31-8b04-000000000031');
-  const candidateId = StorageLocationId('f4c43232-0b04-4c32-8b04-000000000032');
 
   try {
-    await createUseCase(database).execute({
+    await createUseCase(
+      database,
+      StorageLocationId('f4c43232-0b04-4c32-8b04-000000000032'),
+    ).execute({
       commandId,
-      candidateStorageLocationId: candidateId,
       actorPrincipalId: ADMIN,
       householdId: HOUSEHOLD,
       kindCode: ACTIVE_KIND,
@@ -192,9 +199,11 @@ test('CommandId reuse with different candidate or facts is an idempotency confli
     });
 
     await assert.rejects(
-      createUseCase(database).execute({
+      createUseCase(
+        database,
+        StorageLocationId('f4c43333-0b04-4c33-8b04-000000000033'),
+      ).execute({
         commandId,
-        candidateStorageLocationId: StorageLocationId('f4c43333-0b04-4c33-8b04-000000000033'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         kindCode: ACTIVE_KIND,
@@ -216,9 +225,8 @@ test('new create rejects inactive governed kind without durable command or resou
 
   try {
     await assert.rejects(
-      createUseCase(database).execute({
+      createUseCase(database, candidateId).execute({
         commandId,
-        candidateStorageLocationId: candidateId,
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         kindCode: RETIRED_KIND,
@@ -245,10 +253,10 @@ test('committed replay after later retirement never resurrects the StorageLocati
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
   const commandId = CommandId('f4c45151-0b04-4c51-8b04-000000000051');
-  const candidateId = StorageLocationId('f4c45252-0b04-4c52-8b04-000000000052');
+  const firstCandidate = StorageLocationId('f4c45252-0b04-4c52-8b04-000000000052');
+  const retryCandidate = StorageLocationId('f4c45353-0b04-4c53-8b04-000000000053');
   const input = {
     commandId,
-    candidateStorageLocationId: candidateId,
     actorPrincipalId: ADMIN,
     householdId: HOUSEHOLD,
     kindCode: ACTIVE_KIND,
@@ -257,12 +265,12 @@ test('committed replay after later retirement never resurrects the StorageLocati
   } as const;
 
   try {
-    await createUseCase(database).execute(input);
+    await createUseCase(database, firstCandidate).execute(input);
     await adminPool.query(
       `update fridge.storage_location
           set lifecycle_status = 'RETIRED', retired_at = clock_timestamp()
         where storage_location_id = $1::uuid`,
-      [candidateId],
+      [firstCandidate],
     );
     await adminPool.query(
       `update fridge.storage_location_kind
@@ -271,30 +279,36 @@ test('committed replay after later retirement never resurrects the StorageLocati
       [ACTIVE_KIND],
     );
 
-    const replay = await createUseCase(database).execute(input);
-    assert.equal(replay.storageLocationId, candidateId);
+    const replay = await createUseCase(database, retryCandidate).execute(input);
+    assert.equal(replay.storageLocationId, firstCandidate);
 
-    const observed = await adminPool.query<{ lifecycle_status: string; retired: boolean }>(
-      `select lifecycle_status, retired_at is not null as retired
-         from fridge.storage_location
-        where storage_location_id = $1::uuid`,
-      [candidateId],
+    const observed = await adminPool.query<{ lifecycle_status: string; retired: boolean; retry_count: string }>(
+      `select sl.lifecycle_status,
+              sl.retired_at is not null as retired,
+              (select count(*) from fridge.storage_location where storage_location_id = $2::uuid)::text as retry_count
+         from fridge.storage_location sl
+        where sl.storage_location_id = $1::uuid`,
+      [firstCandidate, retryCandidate],
     );
-    assert.deepEqual(observed.rows[0], { lifecycle_status: 'RETIRED', retired: true });
+    assert.deepEqual(observed.rows[0], {
+      lifecycle_status: 'RETIRED',
+      retired: true,
+      retry_count: '0',
+    });
   } finally {
     await adminPool.end();
     await database.close();
   }
 });
 
-test('two retries of the same create command converge on one durable StorageLocation', async () => {
+test('two concurrent attempts of the same command converge on the first committed candidate', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app', maxConnections: 2 });
   const adminPool = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
   const commandId = CommandId('f4c46161-0b04-4c61-8b04-000000000061');
-  const candidateId = StorageLocationId('f4c46262-0b04-4c62-8b04-000000000062');
+  const firstCandidate = StorageLocationId('f4c46262-0b04-4c62-8b04-000000000062');
+  const secondCandidate = StorageLocationId('f4c46363-0b04-4c63-8b04-000000000063');
   const input = {
     commandId,
-    candidateStorageLocationId: candidateId,
     actorPrincipalId: ADMIN,
     householdId: HOUSEHOLD,
     kindCode: RETIRED_KIND,
@@ -309,15 +323,19 @@ test('two retries of the same create command converge on one durable StorageLoca
     );
 
     const [first, second] = await Promise.all([
-      createUseCase(database).execute(input),
-      createUseCase(database).execute(input),
+      createUseCase(database, firstCandidate).execute(input),
+      createUseCase(database, secondCandidate).execute(input),
     ]);
-    assert.equal(first.storageLocationId, candidateId);
-    assert.equal(second.storageLocationId, candidateId);
+    assert.equal(first.storageLocationId, second.storageLocationId);
+    assert.ok(
+      first.storageLocationId === firstCandidate || first.storageLocationId === secondCandidate,
+    );
 
     const count = await adminPool.query<{ count: string }>(
-      `select count(*)::text as count from fridge.storage_location where storage_location_id = $1::uuid`,
-      [candidateId],
+      `select count(*)::text as count
+         from fridge.storage_location
+        where storage_location_id in ($1::uuid, $2::uuid)`,
+      [firstCandidate, secondCandidate],
     );
     assert.equal(count.rows[0]?.count, '1');
   } finally {
@@ -330,9 +348,11 @@ test('ordinary current member cannot create StorageLocation', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   try {
     await assert.rejects(
-      createUseCase(database).execute({
+      createUseCase(
+        database,
+        StorageLocationId('f4c47272-0b04-4c72-8b04-000000000072'),
+      ).execute({
         commandId: CommandId('f4c47171-0b04-4c71-8b04-000000000071'),
-        candidateStorageLocationId: StorageLocationId('f4c47272-0b04-4c72-8b04-000000000072'),
         actorPrincipalId: ORDINARY,
         householdId: HOUSEHOLD,
         kindCode: RETIRED_KIND,
