@@ -58,9 +58,9 @@ begin
     raise exception 'current topology reads must revalidate the exact actor membership';
   end if;
 
-  if position("lifecycle_status = 'ACTIVE'" in v_list_definition) = 0
+  if position('lifecycle_status = ''ACTIVE''' in v_list_definition) = 0
      or position('retired_at is null' in lower(v_list_definition)) = 0
-     or position("lifecycle_status = 'ACTIVE'" in v_get_definition) = 0
+     or position('lifecycle_status = ''ACTIVE''' in v_get_definition) = 0
      or position('retired_at is null' in lower(v_get_definition)) = 0 then
     raise exception 'current topology reads must expose active non-retired StorageLocations only';
   end if;
