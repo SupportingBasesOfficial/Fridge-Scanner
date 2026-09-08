@@ -61,7 +61,7 @@ begin
   end if;
 
   if position('for update' in lower(v_definition)) = 0
-     or position("sl.lifecycle_status = 'ACTIVE'" in v_definition) = 0
+     or position('sl.lifecycle_status = ''ACTIVE''' in v_definition) = 0
      or position('sl.retired_at is null' in lower(v_definition)) = 0 then
     raise exception 'CreateCompartment must lock and require a current active parent StorageLocation';
   end if;
@@ -72,7 +72,7 @@ begin
   end if;
 
   if position('p_kind_code is not null' in lower(v_definition)) = 0
-     or position("k.lifecycle_status = 'ACTIVE'" in v_definition) = 0 then
+     or position('k.lifecycle_status = ''ACTIVE''' in v_definition) = 0 then
     raise exception 'optional Compartment kind must be validated only when supplied and must be active';
   end if;
 end;
