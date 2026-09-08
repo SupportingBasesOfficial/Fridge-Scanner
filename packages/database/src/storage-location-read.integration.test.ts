@@ -19,8 +19,10 @@ if (!ADMIN_DATABASE_URL) throw new Error('DATABASE_URL is required');
 
 const HOUSEHOLD = HouseholdId('7c4a0101-0b04-4c01-8b04-000000000001');
 const OTHER_HOUSEHOLD = HouseholdId('7c4a0202-0b04-4c02-8b04-000000000002');
+const EMPTY_HOUSEHOLD = HouseholdId('7c4a0606-0b04-4c06-8b04-000000000006');
 const MEMBER = PrincipalId('7c4a0303-0b04-4c03-8b04-000000000003');
 const MEMBER_MEMBERSHIP = '7c4a0404-0b04-4c04-8b04-000000000004';
+const EMPTY_MEMBERSHIP = '7c4a0707-0b04-4c07-8b04-000000000007';
 const KIND = 'BE04_READ_FRIDGE';
 const FIRST = StorageLocationId('7c4a1111-0b04-4c11-8b04-000000000011');
 const SECOND = StorageLocationId('7c4a1212-0b04-4c12-8b04-000000000012');
@@ -37,8 +39,10 @@ async function seedFixture(): Promise<void> {
     );
     await pool.query(
       `insert into fridge.household (household_id, display_name)
-       values ($1::uuid, 'BE04 Read Household'), ($2::uuid, 'BE04 Foreign Household')`,
-      [HOUSEHOLD, OTHER_HOUSEHOLD],
+       values ($1::uuid, 'BE04 Read Household'),
+              ($2::uuid, 'BE04 Foreign Household'),
+              ($3::uuid, 'BE04 Empty Household')`,
+      [HOUSEHOLD, OTHER_HOUSEHOLD, EMPTY_HOUSEHOLD],
     );
     await pool.query(
       `insert into fridge.household_role (role_code, display_name)
@@ -48,8 +52,10 @@ async function seedFixture(): Promise<void> {
       `insert into fridge.household_membership (
          membership_id, household_id, user_id, role_code,
          lifecycle_status, effective_from, effective_to
-       ) values ($1::uuid, $2::uuid, $3::uuid, 'BE04_READ_MEMBER', 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [MEMBER_MEMBERSHIP, HOUSEHOLD, MEMBER],
+       ) values
+         ($1::uuid, $3::uuid, $5::uuid, 'BE04_READ_MEMBER', 'ACTIVE', clock_timestamp() - interval '1 hour', null),
+         ($2::uuid, $4::uuid, $5::uuid, 'BE04_READ_MEMBER', 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
+      [MEMBER_MEMBERSHIP, EMPTY_MEMBERSHIP, HOUSEHOLD, EMPTY_HOUSEHOLD, MEMBER],
     );
     await pool.query(
       `insert into fridge.storage_location_kind (kind_code, display_name, lifecycle_status)
@@ -88,6 +94,20 @@ test('ordinary current member lists current StorageLocations with stable orderin
     );
     assert.equal(result.storageLocations[0]?.displayName, 'First location');
     assert.equal(result.storageLocations[1]?.sortOrder, null);
+  } finally {
+    await database.close();
+  }
+});
+
+test('authorized Household with no current StorageLocations returns an empty list', async () => {
+  const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
+  try {
+    const result = await new ListCurrentStorageLocationsUseCase(
+      database,
+      new PgCurrentStorageLocationReader(),
+    ).execute({ actorPrincipalId: MEMBER, householdId: EMPTY_HOUSEHOLD });
+
+    assert.deepEqual(result.storageLocations, []);
   } finally {
     await database.close();
   }
