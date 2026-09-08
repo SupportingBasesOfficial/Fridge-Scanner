@@ -15,6 +15,7 @@
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
     "./retire-compartment": "./dist/retire-compartment.js",
+    "./retire-household-product": "./dist/retire-household-product.js",
     "./retire-storage-location": "./dist/retire-storage-location.js",
     "./storage-administration": "./dist/storage-administration.js",
     "./storage-location": "./dist/storage-location.js",
