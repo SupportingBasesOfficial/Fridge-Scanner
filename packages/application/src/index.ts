@@ -29,6 +29,7 @@ export * from './household-storage-administration.js';
 export * from './read-current-compartments.js';
 export * from './read-current-household-members.js';
 export * from './read-current-storage-locations.js';
+export * from './retire-compartment.js';
 export * from './retire-storage-location.js';
 
 declare const verifiedTransactionBrand: unique symbol;
