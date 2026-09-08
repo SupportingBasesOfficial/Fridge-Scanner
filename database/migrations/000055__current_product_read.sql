@@ -4,6 +4,12 @@
 
 begin;
 
+-- Product observations now cross only the governed functions below. Earlier
+-- DB-02 capability grants included direct SELECT on fridge.product for runtime
+-- roles; retaining that privilege would let callers bypass exact-membership,
+-- lifecycle and Household-visibility revalidation.
+revoke select on table fridge.product from fridge_app, fridge_worker, fridge_readonly;
+
 create or replace function fridge_internal.list_current_products(
   p_household_id uuid,
   p_actor_user_id uuid,
