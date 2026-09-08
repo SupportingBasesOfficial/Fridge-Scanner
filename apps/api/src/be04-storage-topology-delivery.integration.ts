@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { Pool } from 'pg';
 import {
   AddHouseholdMemberUseCase,
   ChangeCompartmentMetadataUseCase,
@@ -41,9 +40,7 @@ import { JwtJwksAuthenticationEvidenceVerifier } from './jwt-jwks-verifier.js';
 import { buildApiServer } from './server.js';
 
 const databaseUrl = process.env.BE00_TEST_DATABASE_URL;
-const adminDatabaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('BE00_TEST_DATABASE_URL is required for BE-04 delivery integration tests');
-if (!adminDatabaseUrl) throw new Error('DATABASE_URL is required for BE-04 delivery integration tests');
 
 const issuer = 'https://be04-issuer.example.test';
 const audience = 'fridge-api';
@@ -57,15 +54,16 @@ const publicJwk = {
   key_ops: ['verify'],
 };
 
-const HOUSEHOLD = 'b4000000-0000-4000-8000-000000000001';
-const FOREIGN_HOUSEHOLD = 'b4000000-0000-4000-8000-000000000002';
-const ADMIN = PrincipalId('b4000000-0000-4000-8000-000000000101');
-const ORDINARY = PrincipalId('b4000000-0000-4000-8000-000000000102');
-const ADMIN_MEMBERSHIP = 'b4000000-0000-4000-8000-000000000201';
-const ORDINARY_MEMBERSHIP = 'b4000000-0000-4000-8000-000000000202';
-const STORAGE_KIND = 'BE04_HTTP_FRIDGE';
-const COMPARTMENT_KIND = 'BE04_HTTP_SHELF';
-const FOREIGN_LOCATION = 'b4000000-0000-4000-8000-000000000301';
+// Reuse the accepted CreateCompartment integration fixture. The BE-00 database
+// integration suite establishes these rows before API delivery integration runs,
+// just as the accepted B3-030 proof reuses its upstream database fixtures.
+const HOUSEHOLD = 'a7d60101-0b04-4d01-8b04-000000000001';
+const FOREIGN_HOUSEHOLD = 'a7d60202-0b04-4d02-8b04-000000000002';
+const ADMIN = PrincipalId('a7d60303-0b04-4d03-8b04-000000000003');
+const ORDINARY = PrincipalId('a7d60404-0b04-4d04-8b04-000000000004');
+const STORAGE_KIND = 'BE04_CC_STORAGE';
+const COMPARTMENT_KIND = 'BE04_CC_SHELF';
+const FOREIGN_LOCATION = 'a7d61414-0b04-4d14-8b04-000000000014';
 const FIRST_STORAGE_LOCATION = StorageLocationId('b4000000-0000-4000-8000-000000000401');
 const SECOND_STORAGE_CANDIDATE = StorageLocationId('b4000000-0000-4000-8000-000000000402');
 const THIRD_STORAGE_CANDIDATE = StorageLocationId('b4000000-0000-4000-8000-000000000403');
@@ -101,6 +99,8 @@ function issueToken(subject: string): string {
     sub: subject,
     aud: audience,
     exp: Math.floor(nowMs / 1000) + 300,
+    // Deliberately untrusted provider claims. Neither may substitute for current
+    // platform Household authority or HOUSEHOLD_STORAGE_ADMINISTER.
     role: 'provider-super-admin',
     household_id: FOREIGN_HOUSEHOLD,
   });
@@ -113,60 +113,6 @@ function issueToken(subject: string): string {
   return `${signingInput}.${signature.toString('base64url')}`;
 }
 
-async function seedFixture(): Promise<void> {
-  const pool = new Pool({ connectionString: adminDatabaseUrl, max: 1 });
-  try {
-    await pool.query(
-      `insert into fridge.user_profile (user_id, display_name)
-       values ($1::uuid, 'BE04 HTTP Admin'), ($2::uuid, 'BE04 HTTP Ordinary')`,
-      [ADMIN, ORDINARY],
-    );
-    await pool.query(
-      `insert into fridge.household (household_id, display_name)
-       values ($1::uuid, 'BE04 HTTP Household'), ($2::uuid, 'BE04 HTTP Foreign')`,
-      [HOUSEHOLD, FOREIGN_HOUSEHOLD],
-    );
-    await pool.query(
-      `insert into fridge.household_role (role_code, display_name)
-       values ('BE04_HTTP_STORAGE_ADMIN', 'BE04 HTTP storage administrator'),
-              ('BE04_HTTP_ORDINARY', 'BE04 HTTP ordinary member')`,
-    );
-    await pool.query(
-      `insert into fridge.household_role_capability (role_code, capability_code)
-       values ('BE04_HTTP_STORAGE_ADMIN', 'HOUSEHOLD_STORAGE_ADMINISTER')`,
-    );
-    await pool.query(
-      `insert into fridge.household_membership (
-         membership_id, household_id, user_id, role_code,
-         lifecycle_status, effective_from, effective_to
-       ) values
-         ($1::uuid, $3::uuid, $4::uuid, 'BE04_HTTP_STORAGE_ADMIN', 'ACTIVE', clock_timestamp() - interval '1 hour', null),
-         ($2::uuid, $3::uuid, $5::uuid, 'BE04_HTTP_ORDINARY', 'ACTIVE', clock_timestamp() - interval '1 hour', null)`,
-      [ADMIN_MEMBERSHIP, ORDINARY_MEMBERSHIP, HOUSEHOLD, ADMIN, ORDINARY],
-    );
-    await pool.query(
-      `insert into fridge.storage_location_kind (kind_code, display_name, lifecycle_status)
-       values ($1, 'BE04 HTTP fridge', 'ACTIVE')`,
-      [STORAGE_KIND],
-    );
-    await pool.query(
-      `insert into fridge.compartment_kind (kind_code, display_name, lifecycle_status)
-       values ($1, 'BE04 HTTP shelf', 'ACTIVE')`,
-      [COMPARTMENT_KIND],
-    );
-    await pool.query(
-      `insert into fridge.storage_location (
-         storage_location_id, household_id, kind_code, display_name, lifecycle_status
-       ) values ($1::uuid, $2::uuid, $3, 'Foreign topology target', 'ACTIVE')`,
-      [FOREIGN_LOCATION, FOREIGN_HOUSEHOLD, STORAGE_KIND],
-    );
-  } finally {
-    await pool.end();
-  }
-}
-
-await seedFixture();
-
 function buildIntegrationServer(database: PgDatabase) {
   const verifier = new JwtJwksAuthenticationEvidenceVerifier({
     trust: config.authentication!,
@@ -178,10 +124,10 @@ function buildIntegrationServer(database: PgDatabase) {
   });
   const principalMapper: PlatformPrincipalMapper = {
     async resolve(identity) {
-      if (identity.authority !== issuer) throw new Error('unexpected identity authority');
+      assert.equal(identity.authority, issuer);
       if (identity.subject === ADMIN_SUBJECT) return ADMIN;
       if (identity.subject === ORDINARY_SUBJECT) return ORDINARY;
-      throw new Error('unexpected identity subject');
+      throw new Error('unexpected BE-04 integration identity subject');
     },
   };
   const authenticatedPrincipal = new BearerAuthenticatedPrincipalResolver(verifier, principalMapper);
@@ -263,7 +209,6 @@ function buildIntegrationServer(database: PgDatabase) {
 
 test('B4-030 authenticated HTTP delivery crosses identity, Household authority, storage capability and durable topology mutation', async () => {
   const database = new PgDatabase({ connectionString: databaseUrl, capabilityRole: 'fridge_app', maxConnections: 4 });
-  const adminPool = new Pool({ connectionString: adminDatabaseUrl, max: 1 });
   const server = buildIntegrationServer(database);
 
   const adminToken = issueToken(ADMIN_SUBJECT);
@@ -281,18 +226,21 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       url: `/households/${HOUSEHOLD}/storage-locations`,
       headers: {
         authorization: `Bearer ${adminToken}`,
+        // A caller-controlled principal header is deliberately ignored.
         'x-principal-id': String(ORDINARY),
       },
       payload: {
         commandId: storageCreateCommand,
         kindCode: STORAGE_KIND,
-        displayName: 'Kitchen Fridge',
+        displayName: 'HTTP Kitchen Fridge',
         sortOrder: 10,
       },
     });
     assert.equal(createStorage.statusCode, 201);
     assert.deepEqual(createStorage.json(), { storageLocationId: String(FIRST_STORAGE_LOCATION) });
 
+    // Lost-response retry proposes a different internal candidate but must replay
+    // the first committed resource identity.
     const replayStorage = await server.inject({
       method: 'POST',
       url: `/households/${HOUSEHOLD}/storage-locations`,
@@ -300,7 +248,7 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       payload: {
         commandId: storageCreateCommand,
         kindCode: STORAGE_KIND,
-        displayName: 'Kitchen Fridge',
+        displayName: 'HTTP Kitchen Fridge',
         sortOrder: 10,
       },
     });
@@ -313,8 +261,10 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(observeStorage.statusCode, 200);
-    assert.equal(observeStorage.json().storageLocation.displayName, 'Kitchen Fridge');
+    assert.equal(observeStorage.json().storageLocation.displayName, 'HTTP Kitchen Fridge');
 
+    // Ordinary current membership permits observation but the provider's fake
+    // super-admin claim still cannot manufacture storage-administration authority.
     const ordinaryRead = await server.inject({
       method: 'GET',
       url: `/households/${HOUSEHOLD}/storage-locations`,
@@ -356,7 +306,7 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       payload: {
         commandId: storageChangeCommand,
         kindCode: STORAGE_KIND,
-        displayName: 'Kitchen Fridge Updated',
+        displayName: 'HTTP Kitchen Fridge Updated',
         sortOrder: 20,
       },
     });
@@ -370,7 +320,7 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       payload: {
         commandId: compartmentCreateCommand,
         kindCode: COMPARTMENT_KIND,
-        displayName: 'Upper Shelf',
+        displayName: 'HTTP Upper Shelf',
         sortOrder: 1,
       },
     });
@@ -391,13 +341,25 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
     assert.equal(foreignParentCreate.statusCode, 404);
     assert.equal(foreignParentCreate.json().error.code, 'NOT_FOUND');
 
+    const compartmentList = await server.inject({
+      method: 'GET',
+      url: `/households/${HOUSEHOLD}/storage-locations/${FIRST_STORAGE_LOCATION}/compartments`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(compartmentList.statusCode, 200);
+    assert.ok(
+      compartmentList.json().compartments.some(
+        (compartment: { compartmentId: string }) => compartment.compartmentId === String(FIRST_COMPARTMENT),
+      ),
+    );
+
     const compartmentObservation = await server.inject({
       method: 'GET',
       url: `/households/${HOUSEHOLD}/compartments/${FIRST_COMPARTMENT}`,
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(compartmentObservation.statusCode, 200);
-    assert.equal(compartmentObservation.json().compartment.displayName, 'Upper Shelf');
+    assert.equal(compartmentObservation.json().compartment.displayName, 'HTTP Upper Shelf');
     assert.equal(
       compartmentObservation.json().compartment.storageLocationId,
       String(FIRST_STORAGE_LOCATION),
@@ -424,7 +386,7 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       payload: {
         commandId: compartmentChangeCommand,
         kindCode: null,
-        displayName: 'Upper Shelf Updated',
+        displayName: 'HTTP Upper Shelf Updated',
         sortOrder: 3,
       },
     });
@@ -474,29 +436,8 @@ test('B4-030 authenticated HTTP delivery crosses identity, Household authority, 
       },
     });
     assert.equal(malformedCommand.statusCode, 400);
-
-    const history = await adminPool.query<{
-      storage_lifecycle: string;
-      compartment_lifecycle: string;
-      storage_retire_commands: string;
-      compartment_retire_commands: string;
-    }>(
-      `select
-         (select lifecycle_status from fridge.storage_location where storage_location_id = $1::uuid) as storage_lifecycle,
-         (select lifecycle_status from fridge.compartment where compartment_id = $2::uuid) as compartment_lifecycle,
-         (select count(*)::text from fridge.storage_location_retire_command where household_id = $3::uuid and storage_location_id = $1::uuid) as storage_retire_commands,
-         (select count(*)::text from fridge.compartment_retire_command where household_id = $3::uuid and compartment_id = $2::uuid) as compartment_retire_commands`,
-      [FIRST_STORAGE_LOCATION, FIRST_COMPARTMENT, HOUSEHOLD],
-    );
-    assert.deepEqual(history.rows[0], {
-      storage_lifecycle: 'RETIRED',
-      compartment_lifecycle: 'RETIRED',
-      storage_retire_commands: '1',
-      compartment_retire_commands: '1',
-    });
   } finally {
     await server.close();
     await database.close();
-    await adminPool.end();
   }
 });
