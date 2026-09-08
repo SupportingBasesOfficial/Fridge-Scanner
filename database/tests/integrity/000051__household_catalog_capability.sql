@@ -6,6 +6,8 @@ begin;
 do $$
 declare
   v_definition text;
+  v_time_position integer;
+  v_last_authority_lock_position integer;
 begin
   if not exists (
     select 1
@@ -56,8 +58,16 @@ begin
     'fridge_internal.acquire_household_catalog_admin_authority(uuid,uuid,uuid)'::regprocedure
   ) into v_definition;
 
-  if position('clock_timestamp()' in v_definition) = 0 then
+  v_time_position := position('v_observed_at := clock_timestamp()' in v_definition);
+  v_last_authority_lock_position := position('if v_capability_locked is null then' in v_definition);
+
+  if v_time_position = 0 then
     raise exception 'catalog administration authority must explicitly sample post-lock database time';
+  end if;
+
+  if v_last_authority_lock_position = 0
+     or v_time_position <= v_last_authority_lock_position then
+    raise exception 'catalog administration authority must sample current time only after role/mapping/capability lock waits';
   end if;
 
   if position('statement_timestamp()' in v_definition) > 0 then
