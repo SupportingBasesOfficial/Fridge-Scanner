@@ -21,6 +21,8 @@ declare
   v_parent_id uuid;
   v_locked_location_id uuid;
   v_locked_compartment_id uuid;
+  v_location_current boolean;
+  v_compartment_current boolean;
 begin
   -- Historical/non-current StockItems may continue to reference historical
   -- topology. Only current stock placement must require current topology.
@@ -33,16 +35,23 @@ begin
   end if;
 
   if p_placement_anchor_kind = 'LOCATION' then
-    select sl.storage_location_id
-      into v_locked_location_id
+    -- Preserve the accepted composite-FK error boundary for missing/cross-
+    -- Household identity: only a same-Household target participates in lifecycle
+    -- serialization here. If none exists, the canonical FK remains authoritative.
+    select sl.storage_location_id,
+           (sl.lifecycle_status = 'ACTIVE' and sl.retired_at is null)
+      into v_locked_location_id,
+           v_location_current
       from fridge.storage_location sl
      where sl.household_id = p_household_id
        and sl.storage_location_id = p_storage_location_id
-       and sl.lifecycle_status = 'ACTIVE'
-       and sl.retired_at is null
      for key share;
 
     if v_locked_location_id is null then
+      return;
+    end if;
+
+    if coalesce(v_location_current, false) is false then
       raise exception using
         errcode = '23514',
         message = 'current StockItem LOCATION placement requires a current StorageLocation';
@@ -52,8 +61,10 @@ begin
   end if;
 
   if p_placement_anchor_kind = 'COMPARTMENT' then
-    -- Compartment parentage is immutable in BE-04. Discover parent identity only
-    -- so the lock order remains StorageLocation -> Compartment.
+    -- Compartment parentage is immutable in BE-04. Discover same-Household parent
+    -- identity without locking so canonical StorageLocation -> Compartment lock
+    -- order remains intact. Missing/cross-Household identity is left to the
+    -- accepted composite FK boundary rather than being reclassified here.
     select c.storage_location_id
       into v_parent_id
       from fridge.compartment c
@@ -61,37 +72,43 @@ begin
        and c.compartment_id = p_compartment_id;
 
     if v_parent_id is null then
-      raise exception using
-        errcode = '23514',
-        message = 'current StockItem COMPARTMENT placement requires a same-Household Compartment';
+      return;
     end if;
 
-    select sl.storage_location_id
-      into v_locked_location_id
+    select sl.storage_location_id,
+           (sl.lifecycle_status = 'ACTIVE' and sl.retired_at is null)
+      into v_locked_location_id,
+           v_location_current
       from fridge.storage_location sl
      where sl.household_id = p_household_id
        and sl.storage_location_id = v_parent_id
-       and sl.lifecycle_status = 'ACTIVE'
-       and sl.retired_at is null
      for key share;
 
     if v_locked_location_id is null then
+      return;
+    end if;
+
+    if coalesce(v_location_current, false) is false then
       raise exception using
         errcode = '23514',
         message = 'current StockItem COMPARTMENT placement requires a current parent StorageLocation';
     end if;
 
-    select c.compartment_id
-      into v_locked_compartment_id
+    select c.compartment_id,
+           (c.lifecycle_status = 'ACTIVE' and c.retired_at is null)
+      into v_locked_compartment_id,
+           v_compartment_current
       from fridge.compartment c
      where c.household_id = p_household_id
        and c.compartment_id = p_compartment_id
        and c.storage_location_id = v_parent_id
-       and c.lifecycle_status = 'ACTIVE'
-       and c.retired_at is null
      for key share;
 
     if v_locked_compartment_id is null then
+      return;
+    end if;
+
+    if coalesce(v_compartment_current, false) is false then
       raise exception using
         errcode = '23514',
         message = 'current StockItem COMPARTMENT placement requires a current Compartment';
@@ -107,7 +124,7 @@ end;
 $$;
 
 comment on function fridge_internal.assert_current_stock_topology(uuid,text,timestamptz,fridge.inventory_placement_anchor_kind,uuid,uuid) is
-  'DB guard for current StockItem placement. Acquires current topology KEY SHARE locks so placement serializes with BE-04 topology FOR UPDATE retirement; historical StockItems remain allowed to reference historical topology.';
+  'DB guard for current StockItem placement. Same-Household topology identity is locked with KEY SHARE then current lifecycle is revalidated so placement serializes with BE-04 FOR UPDATE retirement; missing/cross-Household identity remains governed by accepted composite foreign keys and historical StockItems may reference historical topology.';
 
 revoke all on function fridge_internal.assert_current_stock_topology(uuid,text,timestamptz,fridge.inventory_placement_anchor_kind,uuid,uuid) from public;
 
@@ -131,7 +148,7 @@ end;
 $$;
 
 comment on function fridge_internal.guard_current_stock_topology() is
-  'BE-04 current-stock placement guard. Runs before StockItem insertion or placement/lifecycle update and revalidates current topology under locks compatible with future governed inventory mutations.';
+  'BE-04 current-stock placement guard. Runs before StockItem insertion or placement/lifecycle update and revalidates same-Household current topology under locks compatible with future governed inventory mutations while preserving canonical FK rejection for hidden identity.';
 
 revoke all on function fridge_internal.guard_current_stock_topology() from public;
 
