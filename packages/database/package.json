@@ -10,7 +10,8 @@
     "./membership-read": "./dist/membership-read.js",
     "./retire-storage-location": "./dist/retire-storage-location.js",
     "./storage-administration": "./dist/storage-administration.js",
-    "./storage-location": "./dist/storage-location.js"
+    "./storage-location": "./dist/storage-location.js",
+    "./storage-location-read": "./dist/storage-location-read.js"
   },
   "types": "./dist/index.d.ts",
   "scripts": {
