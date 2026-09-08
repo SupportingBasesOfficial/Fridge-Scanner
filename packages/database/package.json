@@ -7,7 +7,8 @@
     ".": "./dist/index.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
-    "./storage-administration": "./dist/storage-administration.js"
+    "./storage-administration": "./dist/storage-administration.js",
+    "./storage-location": "./dist/storage-location.js"
   },
   "types": "./dist/index.d.ts",
   "scripts": {
