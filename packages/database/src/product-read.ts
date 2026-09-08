@@ -101,7 +101,8 @@ export class PgCurrentProductReader implements CurrentProductReader {
              $1::uuid,
              $2::uuid,
              $3::uuid
-           )`,
+           )
+          order by product_id nulls last`,
         [transaction.householdId, transaction.principalId, transaction.membershipId],
       );
     } catch (error) {
