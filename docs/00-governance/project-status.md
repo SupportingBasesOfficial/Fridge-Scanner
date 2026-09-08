@@ -42,12 +42,16 @@
 - BE-04 normative exact-head gate: **BE-00 #160 SUCCESS**
 - BE-04 normative panoramic reviews: **CLEAN**
 - BE-04 normative unresolved material threads at merge: **0**
-- Canonical BE-04 baseline `main`: **`b789ab74dcc9f3d151463ec64bfc2efd8edf0cb3`**
+- Accepted BE-04 storage authority kernel: PR #28 squash `3b3c7e56063357590ba6677240ee0d63ba73c8c3`, exact reviewed HEAD `fffe8e9cdb3ad96111c9e57a35076eb4026de139`
+- BE-04 storage authority exact-head gates: **DB-02 #80 SUCCESS on PostgreSQL 17/18; BE-00 #165 SUCCESS**
+- BE-04 storage authority panoramic reviews: **CLEAN**
+- BE-04 storage authority unresolved material threads at merge: **0**
+- Canonical BE-04 executable `main`: **`3b3c7e56063357590ba6677240ee0d63ba73c8c3`**
 
 - Active phase: **BE-04 — Storage Topology Management**
-- Active implementation slice: **`HOUSEHOLD_STORAGE_ADMINISTER` authority kernel**
-- Active branch: **`backend/be-04-storage-authority-kernel`**
-- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline accepted; storage administration authority kernel under exact-HEAD validation/review**
+- Active implementation slice: **CreateStorageLocation governed mutation**
+- Active branch: **`backend/be-04-create-storage-location`**
+- Backend implementation: **BE-00 through BE-03 accepted; BE-04 normative baseline + storage authority kernel accepted; CreateStorageLocation under exact-HEAD validation/review**
 - Frontend implementation: **not started**
 - Production deployment: **not started**
 
@@ -65,7 +69,9 @@ BE-03 establishes Household access governance: `HOUSEHOLD_MEMBERSHIP_ADMINISTER`
 
 BE-04 normative baseline establishes storage-topology authority/lifecycle/concurrency semantics before executable topology mutations: dedicated provider-neutral `HOUSEHOLD_STORAGE_ADMINISTER`, immutable Household ownership, same-Household Compartment parentage, retirement rather than ordinary delete, current observational reads, stable command identity, non-restoring replay, canonical lock order `Household -> StorageLocation -> Compartment`, post-lock temporal observation, stock-safe retirement, no automatic business cascades, least privilege and B4-030 as the authenticated phase-exit proof.
 
-DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
+The accepted BE-04 storage authority kernel materializes `HOUSEHOLD_STORAGE_ADMINISTER` only after current Household authorization, Household-first serialization, post-lock authority observation and governed role/capability revalidation. Membership-administration authority does not implicitly grant storage administration authority.
+
+DB-00, DB-01, DB-02 and BE-00 through BE-03 plus the accepted BE-04 normative baseline and storage authority kernel are authoritative for current BE-04 implementation. Framework defaults, provider claims, ORM behavior or hosting-provider conveniences may not silently weaken them.
 
 ## BE-01 acceptance
 
@@ -154,7 +160,7 @@ Key accepted rules include:
 - least-privileged intent-specific persistence;
 - B4-030 authenticated governed topology-mutation proof as phase exit condition.
 
-The first executable slice is intentionally the storage-administration authority kernel. StorageLocation/Compartment mutations may consume that stronger opaque capability only after its own exact-HEAD gate and review are accepted.
+The accepted first executable slice is the storage-administration authority kernel. The active CreateStorageLocation slice consumes that opaque capability and must prove stable caller-supplied CommandId plus candidate StorageLocation identity, active governed kind validation, post-lock creation time, durable non-restoring replay and least-privileged persistence before acceptance.
 
 ## Governance rule
 
