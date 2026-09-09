@@ -21,6 +21,7 @@ function normalizeDatabaseFailure(error: unknown): Error {
       ? String((error as { readonly code?: unknown }).code ?? '')
       : '';
   if (code === 'P6I01') return new IdempotencyConflictError();
+  if (code === 'P6N01') return new NotFoundError();
   if (code.startsWith('08') || DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)) {
     return new DependencyUnavailableError('required dependency is unavailable', error);
   }
