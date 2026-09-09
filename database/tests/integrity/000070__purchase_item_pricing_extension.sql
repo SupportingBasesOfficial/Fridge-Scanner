@@ -65,7 +65,7 @@ begin
   select pg_get_functiondef(
     'fridge_internal.guard_purchase_item_pricing_discrepancy_history()'::regprocedure
   ) into v_guard;
-  if position("tg_op = 'DELETE'" in v_guard) = 0
+  if position('tg_op = ''DELETE''' in v_guard) = 0
      or position('new.source_amount is distinct from old.source_amount' in v_guard) = 0
      or position('new.computed_amount is distinct from old.computed_amount' in v_guard) = 0
      or position('new.resolution_status is distinct from old.resolution_status' in v_guard) <> 0 then
