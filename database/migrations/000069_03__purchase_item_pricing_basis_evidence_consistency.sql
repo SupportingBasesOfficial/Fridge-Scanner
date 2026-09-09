@@ -63,8 +63,8 @@ begin
 
   if not found then
     raise exception using
-      errcode = '23514',
-      message = 'PurchaseItem pricing basis does not match its conversion evidence';
+      errcode = 'P6N01',
+      message = 'PurchaseItem pricing basis conversion evidence is not eligible';
   end if;
 
   return new;
@@ -72,7 +72,7 @@ end;
 $$;
 
 comment on function fridge_internal.guard_purchase_item_pricing_basis_evidence_consistency() is
-  'BE-06 physical invariant: same-unit pricing bases carry no conversion evidence; cross-unit pricing bases must reference exact visible evidence whose source and target quantities/units equal the committed PurchaseItem facts.';
+  'BE-06 physical invariant: same-unit pricing bases carry no conversion evidence; cross-unit pricing bases must reference exact visible evidence whose source and target quantities/units equal the committed PurchaseItem facts. Ineligible evidence raises private SQLSTATE P6N01 for provider-neutral nondisclosure normalization.';
 
 revoke all on function fridge_internal.guard_purchase_item_pricing_basis_evidence_consistency()
   from public, fridge_app, fridge_worker, fridge_readonly;
