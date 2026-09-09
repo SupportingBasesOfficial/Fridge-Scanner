@@ -74,7 +74,12 @@ jobs:
 
       - name: Install PostgreSQL client
         run: |
-          sudo apt-get update
+          grep -rlZ 'dl.google.com/linux/chrome-stable/deb' /etc/apt/sources.list.d 2>/dev/null \
+            | xargs -0 -r sudo rm -f
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i '\|dl.google.com/linux/chrome-stable/deb|d' /etc/apt/sources.list
+          fi
+          sudo apt-get update -o Acquire::Retries=3
           sudo apt-get install -y postgresql-client
 
       - name: Replay accepted DB-02 contract and tests
