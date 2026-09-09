@@ -29,6 +29,7 @@ export {
   PurchaseItemMoneyFactId,
   PurchaseItemPricingDiscrepancyId,
   ReceiptId,
+  ReceiptItemIntentId,
   StagedIdentifierClaimId,
   StorageLocationId,
   exactRational,
@@ -51,6 +52,7 @@ export * from './create-household-ingredient-concept.js';
 export * from './create-household-product.js';
 export * from './create-purchase.js';
 export * from './create-receipt.js';
+export * from './create-receipt-item-intent.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
 export * from './errors.js';
