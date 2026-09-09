@@ -15,6 +15,81 @@ alter table fridge.household_procurement_command_registry
       'COMMIT_PURCHASE_ITEM_PRICING_EXTENSION'
     ));
 
+-- B6-019 keeps two exact quantities intentionally distinct:
+-- (a) pricing_basis_quantity = the denominator of the quoted basis price; and
+-- (b) converted purchased quantity = the purchased quantity expressed in the
+--     pricing-basis unit. The 5A hardening originally over-bound (b) to (a).
+-- Correct the physical invariant here while retaining exact source/unit scope.
+create or replace function fridge_internal.guard_purchase_item_pricing_basis_evidence_consistency()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+begin
+  if new.pricing_basis_quantity_num is null then
+    if new.pricing_basis_quantity_den is not null
+       or new.pricing_basis_unit_id is not null
+       or new.pricing_conversion_evidence_id is not null then
+      raise exception using
+        errcode = '23514',
+        message = 'partial PurchaseItem pricing basis is not allowed';
+    end if;
+    return new;
+  end if;
+
+  if new.pricing_basis_quantity_den is null
+     or new.pricing_basis_unit_id is null
+     or new.pricing_basis_quantity_num <= 0
+     or not fridge_internal.assert_normalized_rational(
+       new.pricing_basis_quantity_num,
+       new.pricing_basis_quantity_den
+     ) then
+    raise exception using
+      errcode = '23514',
+      message = 'PurchaseItem pricing basis must be complete, positive and canonical';
+  end if;
+
+  if new.pricing_basis_unit_id = new.purchased_unit_id then
+    if new.pricing_conversion_evidence_id is not null then
+      raise exception using
+        errcode = '23514',
+        message = 'same-unit PurchaseItem pricing basis must not carry conversion evidence';
+    end if;
+    return new;
+  end if;
+
+  if new.pricing_conversion_evidence_id is null then
+    raise exception using
+      errcode = '23514',
+      message = 'cross-unit PurchaseItem pricing basis requires conversion evidence';
+  end if;
+
+  perform 1
+    from fridge.measurement_conversion_evidence e
+   where e.measurement_conversion_evidence_id = new.pricing_conversion_evidence_id
+     and (e.household_id is null or e.household_id = new.household_id)
+     and e.source_unit_id = new.purchased_unit_id
+     and e.source_quantity_num = new.purchased_quantity_num
+     and e.source_quantity_den = new.purchased_quantity_den
+     and e.target_unit_id = new.pricing_basis_unit_id;
+
+  if not found then
+    raise exception using
+      errcode = 'P6N01',
+      message = 'PurchaseItem pricing basis conversion evidence is not eligible';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function fridge_internal.guard_purchase_item_pricing_basis_evidence_consistency() is
+  'BE-06 physical invariant: cross-unit pricing basis evidence must prove the exact purchased source quantity and target pricing unit; its converted target quantity is intentionally independent from pricing_basis_quantity and is consumed later by B6-019 extension.';
+
+revoke all on function fridge_internal.guard_purchase_item_pricing_basis_evidence_consistency()
+  from public, fridge_app, fridge_worker, fridge_readonly;
+
 -- At most one platform-computed gross exists for one PurchaseItem. Source gross
 -- remains an independent fact and may coexist for reconciliation evidence.
 create unique index purchase_item_computed_line_gross_uq
@@ -356,9 +431,9 @@ begin
     return;
   end if;
 
-  -- Resolve the purchased quantity in pricing-basis units. For cross-unit
-  -- pricing #60 physically guarantees evidence source/target exactly match the
-  -- committed PurchaseItem source and pricing-basis target.
+  -- Resolve the exact purchased quantity in pricing-basis units. The converted
+  -- target quantity is a numerator input to B6-019 and is intentionally not the
+  -- pricing_basis_quantity denominator of the quoted basis price.
   if v_purchased_unit_id = v_pricing_basis_unit_id then
     v_extension_quantity_num := v_purchased_quantity_num;
     v_extension_quantity_den := v_purchased_quantity_den;
@@ -376,8 +451,6 @@ begin
        and e.source_quantity_num = v_purchased_quantity_num
        and e.source_quantity_den = v_purchased_quantity_den
        and e.target_unit_id = v_pricing_basis_unit_id
-       and e.target_quantity_num = v_pricing_basis_quantity_num
-       and e.target_quantity_den = v_pricing_basis_quantity_den
      for key share;
     if v_extension_quantity_num is null then
       return query select 'CONFLICT'::text, null::uuid, null::uuid;
@@ -486,7 +559,7 @@ $$;
 comment on function fridge_internal.commit_purchase_item_pricing_extension(
   uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid, uuid, text
 ) is
-  'Least-privileged BE-06 pricing extension boundary. Performs exact rational extension, executes only explicitly supported versioned monetary rounding, persists computed LINE_GROSS and preserves source mismatch as PricingDiscrepancy evidence.';
+  'Least-privileged BE-06 pricing extension boundary. Performs exact rational extension from converted purchased quantity over pricing-basis quantity, executes only explicitly supported versioned monetary rounding, persists computed LINE_GROSS and preserves source mismatch as PricingDiscrepancy evidence.';
 
 revoke all on table fridge.household_purchase_item_pricing_extension_command
   from public, fridge_app, fridge_worker, fridge_readonly;
