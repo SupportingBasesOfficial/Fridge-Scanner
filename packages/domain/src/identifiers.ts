@@ -42,6 +42,7 @@ export type PurchaseItemId = Brand<'PurchaseItemId'>;
 export type PurchaseItemMoneyFactId = Brand<'PurchaseItemMoneyFactId'>;
 export type PurchaseItemPricingDiscrepancyId = Brand<'PurchaseItemPricingDiscrepancyId'>;
 export type ReceiptId = Brand<'ReceiptId'>;
+export type ReceiptItemIntentId = Brand<'ReceiptItemIntentId'>;
 export type BatchId = Brand<'BatchId'>;
 export type InventoryMovementId = Brand<'InventoryMovementId'>;
 export type CommandId = Brand<'CommandId'>;
@@ -85,6 +86,8 @@ export const PurchaseItemMoneyFactId = (value: string): PurchaseItemMoneyFactId 
 export const PurchaseItemPricingDiscrepancyId = (value: string): PurchaseItemPricingDiscrepancyId =>
   parseUuid(value, 'PurchaseItemPricingDiscrepancyId');
 export const ReceiptId = (value: string): ReceiptId => parseUuid(value, 'ReceiptId');
+export const ReceiptItemIntentId = (value: string): ReceiptItemIntentId =>
+  parseUuid(value, 'ReceiptItemIntentId');
 export const BatchId = (value: string): BatchId => parseUuid(value, 'BatchId');
 export const InventoryMovementId = (value: string): InventoryMovementId => parseUuid(value, 'InventoryMovementId');
 export const CommandId = (value: string): CommandId => parseUuid(value, 'CommandId');
