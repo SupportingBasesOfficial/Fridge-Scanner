@@ -16,6 +16,7 @@
     "./create-household-compatibility-mapping": "./dist/create-household-compatibility-mapping.js",
     "./create-household-ingredient-concept": "./dist/create-household-ingredient-concept.js",
     "./create-household-product": "./dist/create-household-product.js",
+    "./create-purchase": "./dist/create-purchase.js",
     "./ingredient-concept-read": "./dist/ingredient-concept-read.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",

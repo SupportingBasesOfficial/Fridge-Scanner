@@ -16,16 +16,20 @@ export {
   HouseholdMembershipId,
   IngredientConceptId,
   ManufacturerId,
+  MeasurementUnitId,
   PrincipalId,
   ProductCategoryId,
   ProductId,
   ProductIdentifierId,
   ProductIdentifierNormalizationRuleId,
+  PurchaseId,
+  PurchaseItemId,
   StagedIdentifierClaimId,
   StorageLocationId,
+  exactRational,
   instant,
 } from '@fridge/domain';
-export type { Instant } from '@fridge/domain';
+export type { ExactRational, Instant } from '@fridge/domain';
 export * from './add-household-member.js';
 export * from './change-compartment-metadata.js';
 export * from './change-household-ingredient-concept-metadata.js';
@@ -37,6 +41,7 @@ export * from './create-compartment.js';
 export * from './create-household-compatibility-mapping.js';
 export * from './create-household-ingredient-concept.js';
 export * from './create-household-product.js';
+export * from './create-purchase.js';
 export * from './create-storage-location.js';
 export * from './end-household-membership.js';
 export * from './errors.js';
