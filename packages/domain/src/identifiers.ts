@@ -35,6 +35,7 @@ export type ProductCategoryId = Brand<'ProductCategoryId'>;
 export type StorageLocationId = Brand<'StorageLocationId'>;
 export type CompartmentId = Brand<'CompartmentId'>;
 export type MeasurementUnitId = Brand<'MeasurementUnitId'>;
+export type MeasurementConversionEvidenceId = Brand<'MeasurementConversionEvidenceId'>;
 export type PurchaseId = Brand<'PurchaseId'>;
 export type PurchaseItemId = Brand<'PurchaseItemId'>;
 export type PurchaseItemMoneyFactId = Brand<'PurchaseItemMoneyFactId'>;
@@ -70,6 +71,8 @@ export const ProductCategoryId = (value: string): ProductCategoryId => parseUuid
 export const StorageLocationId = (value: string): StorageLocationId => parseUuid(value, 'StorageLocationId');
 export const CompartmentId = (value: string): CompartmentId => parseUuid(value, 'CompartmentId');
 export const MeasurementUnitId = (value: string): MeasurementUnitId => parseUuid(value, 'MeasurementUnitId');
+export const MeasurementConversionEvidenceId = (value: string): MeasurementConversionEvidenceId =>
+  parseUuid(value, 'MeasurementConversionEvidenceId');
 export const PurchaseId = (value: string): PurchaseId => parseUuid(value, 'PurchaseId');
 export const PurchaseItemId = (value: string): PurchaseItemId => parseUuid(value, 'PurchaseItemId');
 export const PurchaseItemMoneyFactId = (value: string): PurchaseItemMoneyFactId =>
