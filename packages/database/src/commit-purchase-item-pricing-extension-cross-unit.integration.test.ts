@@ -192,7 +192,7 @@ test('extends 1 kg converted to 1000 g against a distinct 100 g pricing basis', 
             and pi.purchase_item_id = mf.purchase_item_id
           where mf.purchase_item_money_fact_id = $1::uuid`, [RESULT_FACT],
       );
-      assert.deepEqual(row.rows[0], { amount: '20.00', evidence_id: EVIDENCE });
+      assert.deepEqual(row.rows[0], { amount: '20', evidence_id: EVIDENCE });
     } finally {
       await pool.end();
     }
