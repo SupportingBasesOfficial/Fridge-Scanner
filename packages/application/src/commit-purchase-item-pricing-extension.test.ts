@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import {
   CommandId,
   HouseholdId,
@@ -9,7 +10,6 @@ import {
   PurchaseItemId,
   PurchaseItemMoneyFactId,
   PurchaseItemPricingDiscrepancyId,
-  UserId,
 } from '@fridge/domain';
 import { InvalidInputError } from './errors.js';
 import {
@@ -21,90 +21,99 @@ import type {
   HouseholdProcurementAdministrationTransactionManager,
 } from './household-procurement-administration.js';
 
-const actor = PrincipalId('10000000-0000-0000-0000-000000000001');
-const household = HouseholdId('10000000-0000-0000-0000-000000000002');
-const command = CommandId('10000000-0000-0000-0000-000000000003');
-const purchase = PurchaseId('10000000-0000-0000-0000-000000000004');
-const item = PurchaseItemId('10000000-0000-0000-0000-000000000005');
-const policy = MoneyRoundingPolicyId('10000000-0000-0000-0000-000000000006');
-const fact = PurchaseItemMoneyFactId('10000000-0000-0000-0000-000000000007');
-const discrepancy = PurchaseItemPricingDiscrepancyId('10000000-0000-0000-0000-000000000008');
+const PRINCIPAL = PrincipalId('10000000-0000-0000-0000-000000000001');
+const HOUSEHOLD = HouseholdId('10000000-0000-0000-0000-000000000002');
+const COMMAND = CommandId('10000000-0000-0000-0000-000000000003');
+const PURCHASE = PurchaseId('10000000-0000-0000-0000-000000000004');
+const ITEM = PurchaseItemId('10000000-0000-0000-0000-000000000005');
+const POLICY = MoneyRoundingPolicyId('10000000-0000-0000-0000-000000000006');
+const FACT = PurchaseItemMoneyFactId('10000000-0000-0000-0000-000000000007');
+const DISCREPANCY = PurchaseItemPricingDiscrepancyId('10000000-0000-0000-0000-000000000008');
+const MEMBERSHIP = HouseholdMembershipId('10000000-0000-0000-0000-000000000010');
 
-const transaction: HouseholdProcurementAdministrationTransaction = {
-  kind: 'household-procurement-administration-transaction',
-  principalId: actor,
-  userId: UserId('10000000-0000-0000-0000-000000000009'),
-  householdId: household,
-  membershipId: HouseholdMembershipId('10000000-0000-0000-0000-000000000010'),
-  householdRoleCode: 'OWNER',
-};
-
-function transactionManager(): HouseholdProcurementAdministrationTransactionManager {
+function transactionManager(onOpen?: () => void): HouseholdProcurementAdministrationTransactionManager {
   return {
-    async withHouseholdProcurementAdministrationTransaction(_principal, _household, operation) {
+    async withHouseholdProcurementAdministrationTransaction<T>(
+      principalId: PrincipalId,
+      householdId: HouseholdId,
+      operation: (transaction: HouseholdProcurementAdministrationTransaction) => Promise<T>,
+    ): Promise<T> {
+      onOpen?.();
+      const transaction = {
+        kind: 'fridge-household-procurement-administration-transaction',
+        principalId,
+        householdId,
+        membershipId: MEMBERSHIP,
+        householdRoleCode: 'TEST',
+      } as unknown as HouseholdProcurementAdministrationTransaction;
       return operation(transaction);
     },
   };
 }
 
-describe('CommitPurchaseItemPricingExtensionUseCase', () => {
-  it('trims provenance, passes semantic identity and keeps generated result identities out of input equality', async () => {
-    const writer: HouseholdPurchaseItemPricingExtensionWriter = {
-      commitPricingExtension: vi.fn(async (_tx, input) => ({
+test('trims provenance and delegates semantic identity with result-only candidate ids', async () => {
+  let captured: Parameters<HouseholdPurchaseItemPricingExtensionWriter['commitPricingExtension']>[1] | undefined;
+  const writer: HouseholdPurchaseItemPricingExtensionWriter = {
+    async commitPricingExtension(_transaction, input) {
+      captured = input;
+      return {
         purchaseItemMoneyFactId: input.candidatePurchaseItemMoneyFactId,
         pricingDiscrepancyId: input.candidatePricingDiscrepancyId,
-      })),
-    };
-    const useCase = new CommitPurchaseItemPricingExtensionUseCase(
-      transactionManager(),
-      writer,
-      { generate: () => fact },
-      { generate: () => discrepancy },
-    );
+      };
+    },
+  };
+  const useCase = new CommitPurchaseItemPricingExtensionUseCase(
+    transactionManager(),
+    writer,
+    { generate: () => FACT },
+    { generate: () => DISCREPANCY },
+  );
 
-    const output = await useCase.execute({
-      commandId: command,
-      actorPrincipalId: actor,
-      householdId: household,
-      purchaseId: purchase,
-      purchaseItemId: item,
-      moneyRoundingPolicyId: policy,
-      provenance: '  platform pricing extension  ',
-    });
-
-    expect(writer.commitPricingExtension).toHaveBeenCalledWith(transaction, {
-      commandId: command,
-      purchaseId: purchase,
-      purchaseItemId: item,
-      moneyRoundingPolicyId: policy,
-      candidatePurchaseItemMoneyFactId: fact,
-      candidatePricingDiscrepancyId: discrepancy,
-      provenance: 'platform pricing extension',
-    });
-    expect(output).toEqual({ purchaseItemMoneyFactId: fact, pricingDiscrepancyId: discrepancy });
+  const output = await useCase.execute({
+    commandId: COMMAND,
+    actorPrincipalId: PRINCIPAL,
+    householdId: HOUSEHOLD,
+    purchaseId: PURCHASE,
+    purchaseItemId: ITEM,
+    moneyRoundingPolicyId: POLICY,
+    provenance: '  platform pricing extension  ',
   });
 
-  it('rejects blank provenance before opening a governed transaction', async () => {
-    const transactions = transactionManager();
-    const spy = vi.spyOn(transactions, 'withHouseholdProcurementAdministrationTransaction');
-    const useCase = new CommitPurchaseItemPricingExtensionUseCase(
-      transactions,
-      { commitPricingExtension: vi.fn() },
-      { generate: () => fact },
-      { generate: () => discrepancy },
-    );
-
-    await expect(
-      useCase.execute({
-        commandId: command,
-        actorPrincipalId: actor,
-        householdId: household,
-        purchaseId: purchase,
-        purchaseItemId: item,
-        moneyRoundingPolicyId: policy,
-        provenance: '   ',
-      }),
-    ).rejects.toBeInstanceOf(InvalidInputError);
-    expect(spy).not.toHaveBeenCalled();
+  assert.deepEqual(output, {
+    purchaseItemMoneyFactId: FACT,
+    pricingDiscrepancyId: DISCREPANCY,
   });
+  assert.deepEqual(captured, {
+    commandId: COMMAND,
+    purchaseId: PURCHASE,
+    purchaseItemId: ITEM,
+    moneyRoundingPolicyId: POLICY,
+    candidatePurchaseItemMoneyFactId: FACT,
+    candidatePricingDiscrepancyId: DISCREPANCY,
+    provenance: 'platform pricing extension',
+  });
+});
+
+test('rejects blank provenance before opening a governed transaction', async () => {
+  let opened = false;
+  const useCase = new CommitPurchaseItemPricingExtensionUseCase(
+    transactionManager(() => { opened = true; }),
+    { async commitPricingExtension() { throw new Error('unexpected'); } },
+    { generate: () => FACT },
+    { generate: () => DISCREPANCY },
+  );
+
+  await assert.rejects(
+    useCase.execute({
+      commandId: COMMAND,
+      actorPrincipalId: PRINCIPAL,
+      householdId: HOUSEHOLD,
+      purchaseId: PURCHASE,
+      purchaseItemId: ITEM,
+      moneyRoundingPolicyId: POLICY,
+      provenance: '   ',
+    }),
+    InvalidInputError,
+  );
+  assert.equal(opened, false);
 });
