@@ -86,6 +86,8 @@ For the supported contract, the exact rational gross is scaled to the policy dec
 
 Rounding occurs exactly once: when producing the computed `LINE_GROSS` monetary fact.
 
+After that governed rounding decision, persisted computed pricing money is canonicalized with PostgreSQL `trim_scale`. The referenced `MoneyRoundingPolicy` remains the authoritative evidence of the decimal scale and algorithm that were executed; insignificant trailing zeros are presentation, not a second monetary value. Thus a scale-2 result mathematically equal to `20.00` is persisted canonically as numeric `20`, while presentation may render `20.00` according to currency/UI rules. PricingDiscrepancy source/computed amounts use the same canonical persistence rule.
+
 ## Computed LINE_GROSS
 
 A PurchaseItem may have at most one platform-computed `LINE_GROSS` fact.
@@ -97,7 +99,7 @@ The computed fact must carry:
 - Purchase transaction currency;
 - the exact `MoneyRoundingPolicyId` executed;
 - nonblank normalized provenance;
-- the rounded platform result.
+- the rounded, canonically persisted platform result.
 
 The existing append-only PurchaseItem money-fact guard makes the committed result immutable.
 
@@ -181,7 +183,7 @@ Cross-intent reuse remains governed by the shared BE-06 command registry.
 
 `fridge_app` receives only EXECUTE on `fridge_internal.commit_purchase_item_pricing_extension(...)`.
 
-It receives no direct command-ledger DML and no direct EXECUTE on discrepancy-history or late-source reconciliation trigger helpers.
+It receives no direct command-ledger DML and no direct EXECUTE on discrepancy-history, late-source reconciliation or numeric-canonicalization trigger helpers.
 
 Worker and readonly roles receive no pricing-extension mutation capability.
 
@@ -195,6 +197,7 @@ Acceptance requires exact-head evidence proving at minimum:
 - Runtime/TypeScript/unit success;
 - least-privileged PostgreSQL integration success;
 - exact nonterminating extension followed by one final rounding boundary (for example `1 / 6 -> 0.17` at scale 2);
+- canonical persistence strips insignificant numeric scale while retaining the executed policy identity;
 - cross-unit extension where converted purchased quantity differs from pricing-basis quantity (for example `1 kg -> 1000 g`, priced per `100 g`, computes a factor of 10);
 - explicit historically effective policy remains usable after lifecycle retirement;
 - future/not-effective policy is rejected;
