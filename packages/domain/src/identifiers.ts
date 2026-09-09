@@ -23,6 +23,8 @@ export type UserId = Brand<'UserId'>;
 export type HouseholdMembershipId = Brand<'HouseholdMembershipId'>;
 export type ProductId = Brand<'ProductId'>;
 export type IngredientConceptId = Brand<'IngredientConceptId'>;
+export type CompatibilityMappingFamilyId = Brand<'CompatibilityMappingFamilyId'>;
+export type CompatibilityMappingId = Brand<'CompatibilityMappingId'>;
 export type ProductIdentifierId = Brand<'ProductIdentifierId'>;
 export type ProductIdentifierNormalizationRuleId = Brand<'ProductIdentifierNormalizationRuleId'>;
 export type StagedIdentifierClaimId = Brand<'StagedIdentifierClaimId'>;
@@ -44,6 +46,10 @@ export const HouseholdMembershipId = (value: string): HouseholdMembershipId =>
 export const ProductId = (value: string): ProductId => parseUuid(value, 'ProductId');
 export const IngredientConceptId = (value: string): IngredientConceptId =>
   parseUuid(value, 'IngredientConceptId');
+export const CompatibilityMappingFamilyId = (value: string): CompatibilityMappingFamilyId =>
+  parseUuid(value, 'CompatibilityMappingFamilyId');
+export const CompatibilityMappingId = (value: string): CompatibilityMappingId =>
+  parseUuid(value, 'CompatibilityMappingId');
 export const ProductIdentifierId = (value: string): ProductIdentifierId =>
   parseUuid(value, 'ProductIdentifierId');
 export const ProductIdentifierNormalizationRuleId = (
