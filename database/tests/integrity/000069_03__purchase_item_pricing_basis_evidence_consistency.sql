@@ -23,8 +23,9 @@ begin
      or position('e.source_quantity_den = new.purchased_quantity_den' in v_trigger) = 0
      or position('e.target_quantity_num = new.pricing_basis_quantity_num' in v_trigger) = 0
      or position('e.target_quantity_den = new.pricing_basis_quantity_den' in v_trigger) = 0
-     or position('e.target_unit_id = new.pricing_basis_unit_id' in v_trigger) = 0 then
-    raise exception 'pricing-basis evidence guard does not bind exact source and target facts';
+     or position('e.target_unit_id = new.pricing_basis_unit_id' in v_trigger) = 0
+     or position('P6N01' in v_trigger) = 0 then
+    raise exception 'pricing-basis evidence guard does not bind exact source/target facts and nondisclosure SQLSTATE';
   end if;
 end;
 $$;
@@ -155,7 +156,7 @@ begin
      where purchase_item_id = 'c7400010-0b06-4740-8740-000000000010';
     raise exception 'mismatched conversion evidence target unexpectedly accepted';
   exception
-    when check_violation then
+    when sqlstate 'P6N01' then
       null;
   end;
 end;
