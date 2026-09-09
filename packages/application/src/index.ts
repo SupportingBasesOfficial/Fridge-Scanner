@@ -43,6 +43,7 @@ export * from './errors.js';
 export * from './household-catalog-administration.js';
 export * from './household-context.js';
 export * from './household-membership-administration.js';
+export * from './household-procurement-administration.js';
 export * from './household-storage-administration.js';
 export * from './observe-product-identifier.js';
 export * from './read-current-compartments.js';
