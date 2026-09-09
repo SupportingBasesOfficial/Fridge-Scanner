@@ -19,6 +19,7 @@
     "./membership-read": "./dist/membership-read.js",
     "./product-read": "./dist/product-read.js",
     "./retire-compartment": "./dist/retire-compartment.js",
+    "./retire-household-ingredient-concept": "./dist/retire-household-ingredient-concept.js",
     "./retire-household-product": "./dist/retire-household-product.js",
     "./retire-storage-location": "./dist/retire-storage-location.js",
     "./storage-administration": "./dist/storage-administration.js",
