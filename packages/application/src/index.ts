@@ -56,6 +56,7 @@ export * from './read-current-household-members.js';
 export * from './read-current-ingredient-concepts.js';
 export * from './read-current-products.js';
 export * from './read-current-storage-locations.js';
+export * from './read-household-purchases.js';
 export * from './resolve-product-identifier.js';
 export * from './retire-compartment.js';
 export * from './retire-household-compatibility-mapping.js';
