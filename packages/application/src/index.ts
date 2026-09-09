@@ -24,6 +24,7 @@ export {
   ProductIdentifierNormalizationRuleId,
   PurchaseId,
   PurchaseItemId,
+  PurchaseItemMoneyFactId,
   StagedIdentifierClaimId,
   StorageLocationId,
   exactRational,
@@ -37,6 +38,7 @@ export * from './change-household-member-role.js';
 export * from './change-household-product-metadata.js';
 export * from './change-storage-location-metadata.js';
 export * from './commit-compatibility-decision-evidence.js';
+export * from './commit-purchase-item-source-money-facts.js';
 export * from './create-compartment.js';
 export * from './create-household-compatibility-mapping.js';
 export * from './create-household-ingredient-concept.js';

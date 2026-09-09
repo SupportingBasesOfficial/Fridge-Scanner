@@ -11,6 +11,7 @@
     "./change-household-product-metadata": "./dist/change-household-product-metadata.js",
     "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
     "./commit-compatibility-decision-evidence": "./dist/commit-compatibility-decision-evidence.js",
+    "./commit-purchase-item-source-money-facts": "./dist/commit-purchase-item-source-money-facts.js",
     "./compartment": "./dist/compartment.js",
     "./compartment-read": "./dist/compartment-read.js",
     "./create-household-compatibility-mapping": "./dist/create-household-compatibility-mapping.js",
