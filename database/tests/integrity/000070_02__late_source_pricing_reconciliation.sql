@@ -19,7 +19,7 @@ begin
     'fridge_internal.reconcile_late_source_line_gross()'::regprocedure
   ) into v_trigger;
 
-  if position("new.semantic_role <> 'LINE_GROSS'" in v_trigger) = 0
+  if position('new.semantic_role <> ''LINE_GROSS''' in v_trigger) = 0
      or position('not mf.is_source_fact' in v_trigger) = 0
      or position('SOURCE_LINE_GROSS_MISMATCH' in v_trigger) = 0
      or position('new.purchase_item_money_fact_id' in v_trigger) = 0 then
@@ -100,7 +100,6 @@ insert into fridge.purchase_item (
     1, 1, 'c7700002-0b06-4770-8770-000000000002'
   );
 
--- Computed gross exists first.
 insert into fridge.purchase_item_money_fact (
   purchase_item_money_fact_id, household_id, purchase_id, purchase_item_id,
   semantic_role, amount, currency_code, is_source_fact,
@@ -123,7 +122,6 @@ insert into fridge.purchase_item_money_fact (
     'c7700005-0b06-4770-8770-000000000005', 'computed match'
   );
 
--- Late mismatching source must atomically create discrepancy using source fact identity.
 insert into fridge.purchase_item_money_fact (
   purchase_item_money_fact_id, household_id, purchase_id, purchase_item_id,
   semantic_role, amount, currency_code, is_source_fact,
@@ -136,7 +134,6 @@ insert into fridge.purchase_item_money_fact (
   'LINE_GROSS', 10.01, 'LRX', true, null, 'late source mismatch'
 );
 
--- Late matching source must preserve both facts without discrepancy.
 insert into fridge.purchase_item_money_fact (
   purchase_item_money_fact_id, household_id, purchase_id, purchase_item_id,
   semantic_role, amount, currency_code, is_source_fact,
