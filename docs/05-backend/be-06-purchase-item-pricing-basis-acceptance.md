@@ -40,8 +40,11 @@ If the units differ, conversion evidence is mandatory. The referenced immutable 
 
 - be GLOBAL (`household_id is null`) or belong to the same Household;
 - use the PurchaseItem `purchased_unit_id` as source unit;
+- bind exactly the committed purchased quantity as its source quantity;
 - use the requested pricing-basis unit as target unit;
-- bind exactly the committed purchased quantity as its source quantity.
+- bind exactly the requested `pricing_basis_quantity` as its target quantity.
+
+The source and target quantity/unit tuple is physically revalidated at the PurchaseItem persistence boundary. Evidence that is missing, foreign, endpoint-incompatible or quantity-incompatible is rejected nondisclosure-safely; the database uses a private SQLSTATE that the PostgreSQL adapter normalizes to provider-neutral `NotFoundError`.
 
 The command never guesses a factor, selects a conversion rule heuristically, or fabricates evidence.
 
@@ -69,6 +72,8 @@ After `pricing_basis_quantity_num` becomes non-null, the four basis fields are p
 - `pricing_basis_quantity_den`;
 - `pricing_basis_unit_id`;
 - `pricing_conversion_evidence_id`.
+
+A second physical guard also prevents partial pricing-basis state, same-unit evidence attachment, cross-unit commitment without evidence, and any mismatch between the committed PurchaseItem source/target quantity-unit tuple and the referenced immutable conversion evidence.
 
 The source `PRICING_BASIS` money fact is already covered by the accepted immutable PurchaseItem money-fact guard.
 
@@ -112,7 +117,7 @@ A conflict/not-found/invalid target does not reserve the CommandId as a successf
 
 The governed implementation behind that wrapper is not directly executable by `fridge_app`, worker or readonly roles. The wrapper enforces canonical exact-decimal lexical syntax before delegating.
 
-`fridge_app` receives no direct command-ledger DML and no direct EXECUTE on the pricing-basis immutability trigger helper. Worker/readonly roles receive no pricing-basis mutation capability.
+`fridge_app` receives no direct command-ledger DML and no direct EXECUTE on either pricing-basis trigger helper. Worker/readonly roles receive no pricing-basis mutation capability.
 
 ## Required proof
 
@@ -124,6 +129,7 @@ Acceptance requires exact-head evidence that proves at minimum:
 - same-unit commitment without conversion evidence;
 - cross-unit commitment with exact accepted evidence;
 - missing/foreign evidence is rejected nondisclosure-safely;
+- conversion evidence whose target quantity does not equal the requested pricing-basis quantity is physically rejected with provider-neutral nondisclosure normalization;
 - committed replay returns the original fact identity;
 - second-command redefinition conflicts;
 - concurrent same-CommandId first use produces one physical `PRICING_BASIS` fact;
