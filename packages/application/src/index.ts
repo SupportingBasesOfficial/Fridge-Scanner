@@ -22,6 +22,7 @@ export {
 export type { Instant } from '@fridge/domain';
 export * from './add-household-member.js';
 export * from './change-compartment-metadata.js';
+export * from './change-household-ingredient-concept-metadata.js';
 export * from './change-household-member-role.js';
 export * from './change-household-product-metadata.js';
 export * from './change-storage-location-metadata.js';
