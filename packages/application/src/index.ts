@@ -16,6 +16,8 @@ export {
   PrincipalId,
   ProductCategoryId,
   ProductId,
+  ProductIdentifierId,
+  StagedIdentifierClaimId,
   StorageLocationId,
   instant,
 } from '@fridge/domain';
@@ -36,6 +38,7 @@ export * from './household-catalog-administration.js';
 export * from './household-context.js';
 export * from './household-membership-administration.js';
 export * from './household-storage-administration.js';
+export * from './observe-product-identifier.js';
 export * from './read-current-compartments.js';
 export * from './read-current-household-members.js';
 export * from './read-current-ingredient-concepts.js';
