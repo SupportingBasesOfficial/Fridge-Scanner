@@ -12,6 +12,7 @@
     "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
     "./commit-compatibility-decision-evidence": "./dist/commit-compatibility-decision-evidence.js",
     "./commit-purchase-item-pricing-basis": "./dist/commit-purchase-item-pricing-basis.js",
+    "./commit-purchase-item-pricing-extension": "./dist/commit-purchase-item-pricing-extension.js",
     "./commit-purchase-item-source-money-facts": "./dist/commit-purchase-item-source-money-facts.js",
     "./compartment": "./dist/compartment.js",
     "./compartment-read": "./dist/compartment-read.js",

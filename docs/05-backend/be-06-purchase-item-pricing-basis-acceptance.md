@@ -2,9 +2,9 @@
 
 ## Status
 
-Candidate acceptance contract for the BE-06 pricing-basis sub-slice immediately after accepted PurchaseItem source money facts.
+Accepted BE-06 pricing-basis contract, with the B6-019 quantity-separation clarification applied by the downstream 5B pricing-extension migration.
 
-Upstream canonical base: `main @ e73ebb43ebddd73a1252f94cfcfcce1ddd9028f3`.
+Original upstream base: `main @ e73ebb43ebddd73a1252f94cfcfcce1ddd9028f3`.
 
 ## Purpose
 
@@ -30,6 +30,17 @@ Catalog/storage/provider claims do not imply this authority.
 
 `pricing_basis_quantity` is a positive canonical `ExactRational` and is persisted as normalized numerator/denominator.
 
+It is the denominator quantity of the quoted basis price, not the converted purchased quantity. For example, a PurchaseItem may represent a purchased 1 kg while the quoted source price is “R$ X per 100 g”; in that case the conversion evidence proves the purchased quantity expressed in grams, while `pricing_basis_quantity` remains 100 g.
+
+This distinction is required by B6-019:
+
+```text
+LINE_GROSS_exact
+  = PRICING_BASIS_amount
+    × converted_purchased_quantity
+    ÷ pricing_basis_quantity
+```
+
 The basis unit is an explicit `MeasurementUnit` identity. Pricing evidence is historical source evidence, so a later source document may still commit against a MeasurementUnit that has since been retired; existence and exact historical identity are required, not current lifecycle status.
 
 ## Conversion evidence
@@ -41,12 +52,13 @@ If the units differ, conversion evidence is mandatory. The referenced immutable 
 - be GLOBAL (`household_id is null`) or belong to the same Household;
 - use the PurchaseItem `purchased_unit_id` as source unit;
 - bind exactly the committed purchased quantity as its source quantity;
-- use the requested pricing-basis unit as target unit;
-- bind exactly the requested `pricing_basis_quantity` as its target quantity.
+- use the requested pricing-basis unit as target unit.
 
-The source and target quantity/unit tuple is physically revalidated at the PurchaseItem persistence boundary. Evidence that is missing, foreign, endpoint-incompatible or quantity-incompatible is rejected nondisclosure-safely; the database uses a private SQLSTATE that the PostgreSQL adapter normalizes to provider-neutral `NotFoundError`.
+Its target quantity is the exact purchased quantity converted into the pricing-basis unit. That target quantity is intentionally **independent** from `pricing_basis_quantity` and is consumed later by B6-019 pricing extension.
 
-The command never guesses a factor, selects a conversion rule heuristically, or fabricates evidence.
+The source quantity/unit and target unit are physically revalidated at the PurchaseItem persistence boundary. Evidence that is missing, foreign, source-incompatible or target-unit-incompatible is rejected nondisclosure-safely; the database uses a private SQLSTATE that the PostgreSQL adapter normalizes to provider-neutral `NotFoundError`.
+
+The command never guesses a factor, selects a conversion rule heuristically, fabricates evidence or equates converted purchased quantity with pricing-basis quantity.
 
 ## Money semantics
 
@@ -73,7 +85,9 @@ After `pricing_basis_quantity_num` becomes non-null, the four basis fields are p
 - `pricing_basis_unit_id`;
 - `pricing_conversion_evidence_id`.
 
-A second physical guard also prevents partial pricing-basis state, same-unit evidence attachment, cross-unit commitment without evidence, and any mismatch between the committed PurchaseItem source/target quantity-unit tuple and the referenced immutable conversion evidence.
+A second physical guard prevents partial pricing-basis state, same-unit evidence attachment, cross-unit commitment without evidence, and mismatch between the committed purchased source quantity/unit or pricing target unit and the referenced immutable conversion evidence.
+
+The guard deliberately does not require evidence target quantity to equal `pricing_basis_quantity`; those values represent different business facts.
 
 The source `PRICING_BASIS` money fact is already covered by the accepted immutable PurchaseItem money-fact guard.
 
@@ -129,7 +143,8 @@ Acceptance requires exact-head evidence that proves at minimum:
 - same-unit commitment without conversion evidence;
 - cross-unit commitment with exact accepted evidence;
 - missing/foreign evidence is rejected nondisclosure-safely;
-- conversion evidence whose target quantity does not equal the requested pricing-basis quantity is physically rejected with provider-neutral nondisclosure normalization;
+- conversion evidence must match purchased source quantity/unit and requested pricing target unit;
+- conversion evidence target quantity may differ from `pricing_basis_quantity`, preserving B6-019 extension semantics;
 - committed replay returns the original fact identity;
 - second-command redefinition conflicts;
 - concurrent same-CommandId first use produces one physical `PRICING_BASIS` fact;
@@ -156,4 +171,4 @@ This slice does not implement:
 - inventory ingress;
 - HTTP/frontend/deployment.
 
-The immediate follow-up is the 5B pricing extension/reconciliation boundary, which must execute only explicitly supported/versioned rounding algorithms and preserve discrepancy evidence when source and computed values differ.
+The downstream 5B pricing extension/reconciliation boundary consumes converted purchased quantity and pricing-basis quantity as distinct exact facts, executes only explicitly supported/versioned rounding algorithms and preserves discrepancy evidence when source and computed values differ.

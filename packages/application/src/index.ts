@@ -18,6 +18,7 @@ export {
   ManufacturerId,
   MeasurementConversionEvidenceId,
   MeasurementUnitId,
+  MoneyRoundingPolicyId,
   PrincipalId,
   ProductCategoryId,
   ProductId,
@@ -26,6 +27,7 @@ export {
   PurchaseId,
   PurchaseItemId,
   PurchaseItemMoneyFactId,
+  PurchaseItemPricingDiscrepancyId,
   StagedIdentifierClaimId,
   StorageLocationId,
   exactRational,
@@ -40,6 +42,7 @@ export * from './change-household-product-metadata.js';
 export * from './change-storage-location-metadata.js';
 export * from './commit-compatibility-decision-evidence.js';
 export * from './commit-purchase-item-pricing-basis.js';
+export * from './commit-purchase-item-pricing-extension.js';
 export * from './commit-purchase-item-source-money-facts.js';
 export * from './create-compartment.js';
 export * from './create-household-compatibility-mapping.js';

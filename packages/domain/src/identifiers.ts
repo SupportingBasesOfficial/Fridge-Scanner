@@ -36,9 +36,11 @@ export type StorageLocationId = Brand<'StorageLocationId'>;
 export type CompartmentId = Brand<'CompartmentId'>;
 export type MeasurementUnitId = Brand<'MeasurementUnitId'>;
 export type MeasurementConversionEvidenceId = Brand<'MeasurementConversionEvidenceId'>;
+export type MoneyRoundingPolicyId = Brand<'MoneyRoundingPolicyId'>;
 export type PurchaseId = Brand<'PurchaseId'>;
 export type PurchaseItemId = Brand<'PurchaseItemId'>;
 export type PurchaseItemMoneyFactId = Brand<'PurchaseItemMoneyFactId'>;
+export type PurchaseItemPricingDiscrepancyId = Brand<'PurchaseItemPricingDiscrepancyId'>;
 export type BatchId = Brand<'BatchId'>;
 export type InventoryMovementId = Brand<'InventoryMovementId'>;
 export type CommandId = Brand<'CommandId'>;
@@ -73,10 +75,14 @@ export const CompartmentId = (value: string): CompartmentId => parseUuid(value, 
 export const MeasurementUnitId = (value: string): MeasurementUnitId => parseUuid(value, 'MeasurementUnitId');
 export const MeasurementConversionEvidenceId = (value: string): MeasurementConversionEvidenceId =>
   parseUuid(value, 'MeasurementConversionEvidenceId');
+export const MoneyRoundingPolicyId = (value: string): MoneyRoundingPolicyId =>
+  parseUuid(value, 'MoneyRoundingPolicyId');
 export const PurchaseId = (value: string): PurchaseId => parseUuid(value, 'PurchaseId');
 export const PurchaseItemId = (value: string): PurchaseItemId => parseUuid(value, 'PurchaseItemId');
 export const PurchaseItemMoneyFactId = (value: string): PurchaseItemMoneyFactId =>
   parseUuid(value, 'PurchaseItemMoneyFactId');
+export const PurchaseItemPricingDiscrepancyId = (value: string): PurchaseItemPricingDiscrepancyId =>
+  parseUuid(value, 'PurchaseItemPricingDiscrepancyId');
 export const BatchId = (value: string): BatchId => parseUuid(value, 'BatchId');
 export const InventoryMovementId = (value: string): InventoryMovementId => parseUuid(value, 'InventoryMovementId');
 export const CommandId = (value: string): CommandId => parseUuid(value, 'CommandId');
