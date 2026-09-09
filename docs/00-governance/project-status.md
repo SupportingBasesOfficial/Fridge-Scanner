@@ -54,85 +54,92 @@
 - PR #36: one Codex P1 on an earlier head for retirement vs concurrent placement; fixed systemically, replied and resolved; no claim of final-head Codex CLEAN.
 - PRs #32, #33, #34 and #37: no automated Codex review published; no claim of Codex CLEAN.
 
-## BE-05 — Product Catalog Governance — ACTIVE
+## BE-05 — Product Catalog Governance — CLOSED / ACCEPTED
 
-### Accepted normative baseline
+BE-05 is formally closed on canonical `main @ 4e98cf551cc14568cdca80a38b711152cb3e045d`.
 
-- PR #38 squash `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`.
-- Exact reviewed HEAD `2e0c73387184c737abf0ec9bdada5af8e4f3f39d`.
-- BE-00 #208 SUCCESS.
-- Panoramic reviews CLEAN; unresolved material threads at merge: 0.
-- No automated Codex review published; no claim of Codex CLEAN.
+### Accepted lineage
 
-### Accepted Household catalog authority kernel
+- PR #38 — normative baseline: squash `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`, reviewed HEAD `2e0c73387184c737abf0ec9bdada5af8e4f3f39d`.
+- PR #39 — Household catalog authority kernel: squash `37e93ded114f1c8f82a16d7089d9e65b887bc433`, reviewed HEAD `25f56ac86a32657e1674527b686e26ef7922d229`.
+- PR #40 — CreateHouseholdProduct: squash `b568831c6227c3a48ff6d72f70f126b4aad30934`, reviewed HEAD `a1fdc4c7d7a4e56eef13bd4ec1d969cf00ba3aee`.
+- PR #41 — ChangeHouseholdProductMetadata: squash `2e91a52742ac1143292db2edd9da32b7aa6f8006`, reviewed HEAD `835966221e0181fc968f9708075c855595d5f015`.
+- PR #42 — RetireHouseholdProduct: squash `460f7d452fbac180a1db6320764c5ad60601c376`, reviewed HEAD `b2b43e27f0c36d1c35148661dd55549086f98e8d`.
+- PR #43 — current Product reads: squash `4563c7b04be15816665747bea26bf47045bff5e7`, reviewed HEAD `0e6ff7bbe874a71faedd03fefef9a2cd8ec1d402`.
+- PR #44 — current IngredientConcept reads: squash `d822a60d4ca6ea4008b69529e82ba1399f3d743f`, reviewed HEAD `27c2c8d512052e72ad7b5de470a0033e628e3f2f`.
+- PR #45 — CreateHouseholdIngredientConcept: squash `fb0958a38c38c6ec318a48a893189f3885b242c4`, reviewed HEAD `588cddecc1ff23d1bb04d7889ae4dbf7e1332bc8`.
+- PR #46 — ChangeHouseholdIngredientConceptMetadata: squash `3f5f9aaa18edffd036ff406de6e1d2ad2e54c81e`, reviewed HEAD `bc5632b8e64a9b54c2d880b3a8a65101123f79a4`.
+- PR #47 — RetireHouseholdIngredientConcept: squash `9c7f528b59838b781674449e7ec4c506e73a7601`, reviewed HEAD `9b0ddf6da751053080b83a30234696c047e3a455`.
+- PR #48 — ObserveProductIdentifier / staged evidence: squash `6de6fa1032855ad04b5f5f90e7d348adec68e3c4`, reviewed HEAD `5f69548d6fd1b3c7c8c3e57ab8128d3117878aea`.
+- PR #49 — ResolveProductIdentifier: squash `703fbe5016cda6a562429c7af5eb708832902151`, reviewed HEAD `421d65fb95ab646fe56f3a0fc57e762179eb0102`.
+- PR #50 — CreateHouseholdCompatibilityMapping: squash `a1c2d95e355043c863b65eac373267728ef11c47`, reviewed HEAD `2dbeb386c51956f0eeb9519c84a6d7b1a284dec0`.
+- PR #51 — RetireHouseholdCompatibilityMapping: squash `9239f82797b143530bf10ab0a50d268c27df2c04`, reviewed HEAD `ad8478adb6ab3a2f0c4c8fc0e9930696c524cd00`.
+- PR #52 — immutable CompatibilityDecisionEvidence: squash `589bf28f6547d384f524f08190c91d07aba76fd4`, reviewed HEAD `08a717ada9d5a5a7ee83f19f57c49a6db182f978`.
+- PR #53 — authenticated Product HTTP delivery / B5-039 closure: squash `4e98cf551cc14568cdca80a38b711152cb3e045d`, reviewed HEAD `c38e7944e7aecf0160e1735e2d639234a770ebc2`.
 
-- PR #39 squash/main `37e93ded114f1c8f82a16d7089d9e65b887bc433`.
-- Parent `bb5c8ef80c82fc93cac474ae9acc8dcc1c0a1ae4`.
-- Exact reviewed HEAD `25f56ac86a32657e1674527b686e26ef7922d229`.
-- DB-02 #128 SUCCESS on PostgreSQL 17/18.
-- BE-00 #215 SUCCESS complete.
-- Panoramic reviews CLEAN; unresolved material threads at merge: 0.
-- Capability `HOUSEHOLD_CATALOG_ADMINISTER`: **accepted** and distinct from membership/storage authority and future GLOBAL catalog governance.
-- Codex found one P1 and one P2 on an earlier head; both were fixed, replied, resolved and outdated before merge. No claim of a final-head Codex CLEAN review.
-- Accepted evidence: `docs/05-backend/be-05-household-catalog-authority-kernel.md`.
+### Accepted BE-05 outcome
 
-### Accepted CreateHouseholdProduct
+- `HOUSEHOLD_CATALOG_ADMINISTER` is distinct from membership/storage authority and future GLOBAL catalog governance.
+- Current Product/IngredientConcept visibility is ACTIVE GLOBAL + ACTIVE same-Household private with nondisclosure-safe foreign/missing handling.
+- Household Product and IngredientConcept create/change/retire lifecycles are governed and history-preserving.
+- ProductIdentifier observation is staged evidence, not canonical authority; staged claims do not reserve canonical uniqueness.
+- Canonical identifier resolution uses the exact governed scheme/namespace/rule/value identity; heuristic normalization is forbidden.
+- Product↔IngredientConcept compatibility is explicit governed data.
+- CompatibilityDecisionEvidence is immutable/append-only and pins the exact historical decision.
+- Stable CommandId, cross-intent conflict, non-restoring replay, serialization and least-privileged persistence are enforced.
+- Authenticated B5-039 proves provider identity -> platform PrincipalId -> current Household authority -> `HOUSEHOLD_CATALOG_ADMINISTER` -> durable Product mutation -> authenticated observation while provider claims remain non-authoritative.
 
-- PR #40 squash/main `b568831c6227c3a48ff6d72f70f126b4aad30934`.
-- Parent `37e93ded114f1c8f82a16d7089d9e65b887bc433`.
-- Exact reviewed HEAD `a1fdc4c7d7a4e56eef13bd4ec1d969cf00ba3aee`.
-- DB-02 #132 SUCCESS on PostgreSQL 17/18.
-- BE-00 #219 SUCCESS complete.
-- Panoramic reviews CLEAN; unresolved material threads at merge: 0.
-- No automated Codex review published; no claim of Codex CLEAN.
-- `CreateHouseholdProduct`, `HOUSEHOLD` scope/owner enforcement, internal ProductId candidate, shared Household catalog CommandId registry and non-restoring replay: **accepted**.
-- Accepted evidence: `docs/05-backend/be-05-create-household-product-acceptance.md`.
+### Final BE-05 gate
 
-### Accepted ChangeHouseholdProductMetadata
+- BE-00 #265: SUCCESS including Runtime / TypeScript / Unit, Container, accepted DB-02 replay, PostgreSQL/RLS integration and configured authentication runtime.
+- Final panoramic/adversarial review: CLEAN.
+- Unresolved material review threads at merge: 0.
+- Squash commit `4e98cf551cc14568cdca80a38b711152cb3e045d`: verified/valid signature.
+- Canonical BE-05 acceptance evidence: `docs/05-backend/be-05-acceptance.md`.
 
-- PR #41 squash/main `2e91a52742ac1143292db2edd9da32b7aa6f8006`.
-- Parent `b568831c6227c3a48ff6d72f70f126b4aad30934`.
-- Exact reviewed HEAD `835966221e0181fc968f9708075c855595d5f015`.
-- DB-02 #136 SUCCESS on PostgreSQL 17/18.
-- BE-00 #223 SUCCESS complete.
-- Panoramic reviews CLEAN; unresolved material threads at merge: 0.
-- No automated Codex review published; no claim of Codex CLEAN.
-- ProductId/scope/owner immutability, ACTIVE global reference consumption, nondisclosure and non-restoring replay: **accepted**.
-- Accepted evidence: `docs/05-backend/be-05-change-household-product-metadata-acceptance.md`.
+## BE-06 — Procurement & Receiving — ACTIVE NORMATIVE BASELINE
 
-### Active implementation candidate — RetireHouseholdProduct
+BE-06 starts from accepted `main @ 4e98cf551cc14568cdca80a38b711152cb3e045d` and consumes BE-00 through BE-05 without reopening them.
 
-- Active PR: **#42 — `backend: implement governed RetireHouseholdProduct mutation`**.
-- Active branch: `backend/be-05-retire-household-product`.
-- Base/canonical accepted `main`: `2e91a52742ac1143292db2edd9da32b7aa6f8006`.
-- Intent: `RETIRE_HOUSEHOLD_PRODUCT`.
-- Required authority: current `HOUSEHOLD_CATALOG_ADMINISTER`.
-- Current target: same-Household `HOUSEHOLD` Product with `lifecycle_status = ACTIVE` only.
-- Retirement preserves historical references and performs no cascade/downstream mutation.
-- Retirement blocks ACTIVE/non-retired StockItem, ACTIVE/non-retired ProductIdentifier and ACTIVE compatibility whose effective interval has not ended.
-- Current Product reference guards serialize current StockItem/ProductIdentifier/compatibility writes with Product retirement via Product KEY SHARE vs retirement FOR UPDATE.
-- Shared Household catalog CommandId registry extended with `RETIRE_HOUSEHOLD_PRODUCT`.
-- Committed replay resolves before current target/dependency validation and is non-restoring.
-- Foreign-Household private, GLOBAL, retired and missing Product targets collapse to provider-neutral NotFound.
-- GLOBAL catalog governance, identifier/compatibility retirement workflows, catalog reads/HTTP delivery, IngredientConcept, procurement/inventory implementation, frontend and deployment remain out of scope.
-- Candidate evidence: `docs/05-backend/be-05-retire-household-product-acceptance.md`.
-- Acceptance status: **not yet accepted**; requires immutable final HEAD with DB-02 PG17/18 + BE-00 SUCCESS, CLEAN panoramics, zero unresolved material findings and explicit owner-authorized squash merge.
+Primary scope:
+
+- Purchase / PurchaseItem commercial truth;
+- exact quantity + MeasurementUnit semantics;
+- role-typed exact money/currency facts and pricing discrepancy handling;
+- Receipt / ReceiptItem physical receiving;
+- partial receiving;
+- ordinary PurchaseItem↔ReceiptItem allocation;
+- explicit substitution allocation;
+- explicit over-receipt exception handling;
+- exact receiving-pool reconciliation;
+- immutable conversion evidence when contextual conversion is required;
+- atomic receipt inventory-ingress seam linking committed ReceiptItem quantity to exact inventory entry effects;
+- provider-neutral Household procurement authority and authenticated phase-exit proof.
+
+Normative direction:
+
+- dedicated `HOUSEHOLD_PROCUREMENT_ADMINISTER` mutation capability;
+- Purchase and Receipt remain distinct aggregates;
+- visible Product references consume BE-05 and never mutate catalog truth;
+- receiving placement consumes BE-04 current topology;
+- ReceiptItem commit and required inventory ingress are atomic;
+- BE-06 opens only the minimum intent-specific inventory ingress required by receiving, not generic inventory authority;
+- broader transfer/consumption/waste/count/reconciliation remain later inventory phases.
+
+Normative documents:
+
+- `docs/05-backend/be-06-overview.md`
+- `docs/05-backend/be-06-decisions.md`
+
+No BE-06 executable mutation/read slice is accepted until this normative baseline passes exact-HEAD review/gates and explicit owner-authorized squash merge.
 
 ## Accepted foundation
 
 DB-00 defines domain truth and invariants. DB-01 translates those contracts into the accepted technology-neutral logical relational model. DB-02 translates them into the accepted PostgreSQL physical schema, ordered migrations, privileges/RLS, transaction-safe mutation boundaries and adversarial tests.
 
-BE-00 establishes the executable runtime foundation: strict TypeScript, validated configuration, Fastify delivery, structured correlation/logging, PostgreSQL transactions, Household context, liveness/readiness, graceful shutdown, Docker non-root runtime and CI gates.
+BE-00 establishes the executable runtime foundation. BE-01 establishes the provider-neutral domain/application kernel. BE-02 establishes provider-neutral identity. BE-03 establishes Household access governance. BE-04 establishes storage topology. BE-05 establishes governed Product Catalog truth.
 
-BE-01 establishes the provider-neutral domain/application kernel: opaque identifiers, exact value semantics, canonical serialization, UTC instant semantics, provider-neutral errors, transaction authority, intent-specific ports and dependency direction.
-
-BE-02 establishes the provider-neutral identity boundary: authenticated provider evidence maps to a platform-owned principal; provider claims never become Household authority.
-
-BE-03 establishes Household access governance and the capability model consumed by later Household-scoped phases.
-
-BE-04 establishes accepted StorageLocation/Compartment ownership, lifecycle, current reads, canonical serialization/locking, placement and stock-safety contracts. Later phases consume BE-04 rather than inventing alternate topology semantics.
-
-BE-05 establishes Product Catalog as a separate authority domain. The accepted baseline preserves explicit GLOBAL vs HOUSEHOLD scope, immutable ordinary scope/owner, Product vs IngredientConcept/identifier/stock separation, governed identifiers and compatibility, history-preserving lifecycle, stable commands, post-serialization current time, least privilege, provider-neutral failures and an authenticated phase-exit proof requirement.
+BE-06 may compose those accepted boundaries but may not duplicate or weaken them.
 
 ## Acceptance references
 
@@ -140,22 +147,21 @@ BE-05 establishes Product Catalog as a separate authority domain. The accepted b
 - BE-02: `docs/05-backend/be-02-acceptance.md`
 - BE-03: `docs/05-backend/be-03-acceptance.md`
 - BE-04: `docs/05-backend/be-04-acceptance.md`
-- BE-05 normative: `docs/05-backend/be-05-overview.md`, `docs/05-backend/be-05-decisions.md`
-- BE-05 Household authority: `docs/05-backend/be-05-household-catalog-authority-kernel.md`
-- BE-05 CreateHouseholdProduct: `docs/05-backend/be-05-create-household-product-acceptance.md`
-- BE-05 ChangeHouseholdProductMetadata: `docs/05-backend/be-05-change-household-product-metadata-acceptance.md`
-- BE-05 RetireHouseholdProduct candidate: `docs/05-backend/be-05-retire-household-product-acceptance.md`
+- BE-05: `docs/05-backend/be-05-acceptance.md`
+- BE-06 normative: `docs/05-backend/be-06-overview.md`, `docs/05-backend/be-06-decisions.md`
 
 ## Current delivery status
 
-- Backend: BE-00 through BE-04 accepted/closed; BE-05 normative baseline + Household catalog authority + CreateHouseholdProduct + ChangeHouseholdProductMetadata accepted; RetireHouseholdProduct under validation/review.
+- Backend: BE-00 through BE-05 **accepted/closed**; BE-06 Procurement & Receiving **normative baseline active**.
 - Frontend: **not started**.
 - Production deployment: **not started**.
 
 ## Governance rule
 
-The repository is the canonical source of truth. Changes progress through branch → review → exact-HEAD validation → explicit merge authorization.
+The repository is the canonical source of truth. Changes progress through branch -> review -> exact-HEAD validation -> explicit merge authorization.
 
-A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary, Household-access, storage-topology or product-catalog invariant.
+A passing implementation does not override a violated domain, relational, physical, runtime, application-kernel, identity-boundary, Household-access, storage-topology, product-catalog, procurement or receiving invariant.
 
-BE-05 must not silently reopen or weaken DB-00/DB-01/DB-02/BE-00/BE-01/BE-02/BE-03/BE-04. If implementation exposes a genuine contradiction, it must be recorded and governed explicitly rather than hidden in framework, ORM, SQL, authentication provider or deployment convenience.
+Any new commit invalidates prior exact-HEAD CI/review evidence for the candidate being evaluated.
+
+External automated review is defense-in-depth, not the authoritative merge gate. Internal adversarial/panoramic review, exact-HEAD CI, zero unresolved material findings and explicit owner authorization remain mandatory.
