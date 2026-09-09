@@ -27,7 +27,7 @@ The target PurchaseItem must already have:
 - exactly one source `PRICING_BASIS` money fact;
 - cross-unit conversion evidence whenever purchased and pricing-basis units differ.
 
-The 5A physical invariant guarantees that cross-unit evidence binds the exact purchased source quantity/unit and exact pricing-basis target quantity/unit.
+The corrected 5A physical invariant guarantees that cross-unit evidence binds the exact purchased source quantity/unit and requested pricing target unit. The evidence target quantity is the purchased quantity converted into that target unit; it is intentionally independent from `pricing_basis_quantity`.
 
 A missing pricing basis or missing source `PRICING_BASIS` is a conflict with workflow state; this slice does not synthesize either fact.
 
@@ -44,7 +44,17 @@ LINE_GROSS_exact
 
 For same-unit pricing, `quantity_in_pricing_basis_unit` is the exact purchased quantity.
 
-For cross-unit pricing, it is the exact target quantity from the already-bound immutable `MeasurementConversionEvidence`.
+For cross-unit pricing, it is the exact target quantity from the bound immutable `MeasurementConversionEvidence`.
+
+`quantity_in_pricing_basis_unit` and `pricing_basis_quantity` are distinct business facts. For example:
+
+```text
+purchased quantity              = 1 kg
+converted purchased quantity    = 1000 g
+pricing basis                   = 100 g
+PRICING_BASIS amount            = 2.00
+LINE_GROSS_exact                = 2.00 × 1000 / 100 = 20.00
+```
 
 The implementation converts the exact decimal basis amount to an integer coefficient and performs quantity extension as rational integer arithmetic. It does not round the pricing basis, converted quantity, intermediate ratio or intermediate monetary value.
 
@@ -95,11 +105,16 @@ The existing append-only PurchaseItem money-fact guard makes the committed resul
 
 A source `LINE_GROSS` may independently exist because source monetary evidence is preserved rather than replaced by computation.
 
-If no source `LINE_GROSS` exists, the computed fact is committed with no discrepancy.
+B6-020 is arrival-order independent:
 
-If a source `LINE_GROSS` exists and equals the computed result, both facts remain preserved and no discrepancy is created.
+- if source `LINE_GROSS` exists before pricing extension, the governed extension compares it while committing the computed fact;
+- if source `LINE_GROSS` arrives after the computed fact, an AFTER INSERT reconciliation trigger compares it atomically;
+- if source and computed gross are equal, both facts remain preserved and no discrepancy is created;
+- if they differ, both facts remain preserved and one OPEN discrepancy is created.
 
-If a source `LINE_GROSS` exists and differs from the computed result, the command commits one `purchase_item_pricing_discrepancy` with:
+When the source arrives after computation, its immutable money-fact identity deterministically becomes the late-discrepancy identity. No hidden UUID generator or heuristic matching is introduced.
+
+A mismatch discrepancy records:
 
 - source amount;
 - computed amount;
@@ -166,7 +181,7 @@ Cross-intent reuse remains governed by the shared BE-06 command registry.
 
 `fridge_app` receives only EXECUTE on `fridge_internal.commit_purchase_item_pricing_extension(...)`.
 
-It receives no direct command-ledger DML and no direct EXECUTE on discrepancy-history trigger helpers.
+It receives no direct command-ledger DML and no direct EXECUTE on discrepancy-history or late-source reconciliation trigger helpers.
 
 Worker and readonly roles receive no pricing-extension mutation capability.
 
@@ -180,14 +195,15 @@ Acceptance requires exact-head evidence proving at minimum:
 - Runtime/TypeScript/unit success;
 - least-privileged PostgreSQL integration success;
 - exact nonterminating extension followed by one final rounding boundary (for example `1 / 6 -> 0.17` at scale 2);
+- cross-unit extension where converted purchased quantity differs from pricing-basis quantity (for example `1 kg -> 1000 g`, priced per `100 g`, computes a factor of 10);
 - explicit historically effective policy remains usable after lifecycle retirement;
 - future/not-effective policy is rejected;
 - policy from another currency is rejected;
 - unsupported algorithm/version is rejected without execution;
 - computed `LINE_GROSS` has `is_source_fact = false` and explicit policy identity;
 - one computed gross per PurchaseItem is physically enforced;
-- matching source/computed gross produces no discrepancy;
-- mismatching source/computed gross preserves both facts and creates OPEN discrepancy;
+- matching source/computed gross produces no discrepancy regardless of arrival order;
+- mismatching source/computed gross preserves both facts and creates OPEN discrepancy regardless of arrival order;
 - discrepancy evidence fields cannot be rewritten or deleted;
 - same-command replay returns original result identities;
 - second-command recomputation conflicts;
