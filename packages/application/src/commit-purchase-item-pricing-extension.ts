@@ -1,4 +1,4 @@
-import {
+import type {
   CommandId,
   HouseholdId,
   MoneyRoundingPolicyId,
@@ -7,44 +7,36 @@ import {
   PurchaseItemId,
   PurchaseItemMoneyFactId,
   PurchaseItemPricingDiscrepancyId,
-  type CommandId as CommandIdValue,
-  type HouseholdId as HouseholdIdValue,
-  type MoneyRoundingPolicyId as MoneyRoundingPolicyIdValue,
-  type PrincipalId as PrincipalIdValue,
-  type PurchaseId as PurchaseIdValue,
-  type PurchaseItemId as PurchaseItemIdValue,
-  type PurchaseItemMoneyFactId as PurchaseItemMoneyFactIdValue,
-  type PurchaseItemPricingDiscrepancyId as PurchaseItemPricingDiscrepancyIdValue,
 } from '@fridge/domain';
+import { InvalidInputError } from './errors.js';
 import type { IdentifierGenerator, UseCase } from './index.js';
 import type {
   HouseholdProcurementAdministrationTransaction,
   HouseholdProcurementAdministrationTransactionManager,
 } from './household-procurement-administration.js';
-import { InvalidInputError } from './errors.js';
 
 export interface CommitPurchaseItemPricingExtensionInput {
-  readonly commandId: string;
-  readonly actorPrincipalId: string;
-  readonly householdId: string;
-  readonly purchaseId: string;
-  readonly purchaseItemId: string;
-  readonly moneyRoundingPolicyId: string;
+  readonly commandId: CommandId;
+  readonly actorPrincipalId: PrincipalId;
+  readonly householdId: HouseholdId;
+  readonly purchaseId: PurchaseId;
+  readonly purchaseItemId: PurchaseItemId;
+  readonly moneyRoundingPolicyId: MoneyRoundingPolicyId;
   readonly provenance: string;
 }
 
 export interface CommitPurchaseItemPricingExtensionOutput {
-  readonly purchaseItemMoneyFactId: PurchaseItemMoneyFactIdValue;
-  readonly pricingDiscrepancyId: PurchaseItemPricingDiscrepancyIdValue | null;
+  readonly purchaseItemMoneyFactId: PurchaseItemMoneyFactId;
+  readonly pricingDiscrepancyId: PurchaseItemPricingDiscrepancyId | null;
 }
 
 export interface CommitPurchaseItemPricingExtensionPersistenceInput {
-  readonly commandId: CommandIdValue;
-  readonly purchaseId: PurchaseIdValue;
-  readonly purchaseItemId: PurchaseItemIdValue;
-  readonly moneyRoundingPolicyId: MoneyRoundingPolicyIdValue;
-  readonly candidatePurchaseItemMoneyFactId: PurchaseItemMoneyFactIdValue;
-  readonly candidatePricingDiscrepancyId: PurchaseItemPricingDiscrepancyIdValue;
+  readonly commandId: CommandId;
+  readonly purchaseId: PurchaseId;
+  readonly purchaseItemId: PurchaseItemId;
+  readonly moneyRoundingPolicyId: MoneyRoundingPolicyId;
+  readonly candidatePurchaseItemMoneyFactId: PurchaseItemMoneyFactId;
+  readonly candidatePricingDiscrepancyId: PurchaseItemPricingDiscrepancyId;
   readonly provenance: string;
 }
 
@@ -56,58 +48,49 @@ export interface HouseholdPurchaseItemPricingExtensionWriter {
 }
 
 function requireProvenance(value: string): string {
-  if (typeof value !== 'string') {
-    throw new InvalidInputError('pricing extension provenance must be a string');
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new InvalidInputError('pricing extension provenance is required');
   }
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    throw new InvalidInputError('pricing extension provenance must not be blank');
-  }
-  return normalized;
+  return value.trim();
 }
 
-export class CommitPurchaseItemPricingExtension
+export class CommitPurchaseItemPricingExtensionUseCase
   implements UseCase<CommitPurchaseItemPricingExtensionInput, CommitPurchaseItemPricingExtensionOutput>
 {
   constructor(
-    private readonly transactionManager: HouseholdProcurementAdministrationTransactionManager,
+    private readonly transactions: HouseholdProcurementAdministrationTransactionManager,
     private readonly writer: HouseholdPurchaseItemPricingExtensionWriter,
-    private readonly moneyFactIdGenerator: IdentifierGenerator<PurchaseItemMoneyFactIdValue>,
-    private readonly discrepancyIdGenerator: IdentifierGenerator<PurchaseItemPricingDiscrepancyIdValue>,
+    private readonly moneyFactIds: IdentifierGenerator<PurchaseItemMoneyFactId>,
+    private readonly discrepancyIds: IdentifierGenerator<PurchaseItemPricingDiscrepancyId>,
   ) {}
 
   async execute(
     input: CommitPurchaseItemPricingExtensionInput,
   ): Promise<CommitPurchaseItemPricingExtensionOutput> {
-    const actorPrincipalId: PrincipalIdValue = PrincipalId(input.actorPrincipalId);
-    const householdId: HouseholdIdValue = HouseholdId(input.householdId);
-    const commandId: CommandIdValue = CommandId(input.commandId);
-    const purchaseId: PurchaseIdValue = PurchaseId(input.purchaseId);
-    const purchaseItemId: PurchaseItemIdValue = PurchaseItemId(input.purchaseItemId);
-    const moneyRoundingPolicyId: MoneyRoundingPolicyIdValue = MoneyRoundingPolicyId(
-      input.moneyRoundingPolicyId,
-    );
     const provenance = requireProvenance(input.provenance);
-    const candidatePurchaseItemMoneyFactId = PurchaseItemMoneyFactId(
-      this.moneyFactIdGenerator.generate(),
-    );
-    const candidatePricingDiscrepancyId = PurchaseItemPricingDiscrepancyId(
-      this.discrepancyIdGenerator.generate(),
-    );
+    const candidatePurchaseItemMoneyFactId = this.moneyFactIds.generate();
+    const candidatePricingDiscrepancyId = this.discrepancyIds.generate();
 
-    return this.transactionManager.withHouseholdProcurementAdministrationTransaction(
-      actorPrincipalId,
-      householdId,
-      (transaction) =>
-        this.writer.commitPricingExtension(transaction, {
-          commandId,
-          purchaseId,
-          purchaseItemId,
-          moneyRoundingPolicyId,
+    let output: CommitPurchaseItemPricingExtensionOutput | undefined;
+    await this.transactions.withHouseholdProcurementAdministrationTransaction(
+      input.actorPrincipalId,
+      input.householdId,
+      async (transaction) => {
+        output = await this.writer.commitPricingExtension(transaction, {
+          commandId: input.commandId,
+          purchaseId: input.purchaseId,
+          purchaseItemId: input.purchaseItemId,
+          moneyRoundingPolicyId: input.moneyRoundingPolicyId,
           candidatePurchaseItemMoneyFactId,
           candidatePricingDiscrepancyId,
           provenance,
-        }),
+        });
+      },
     );
+
+    if (output === undefined) {
+      throw new TypeError('Household PurchaseItem pricing extension writer did not return an outcome');
+    }
+    return output;
   }
 }
