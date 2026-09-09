@@ -21,11 +21,11 @@ begin
 
   if position('e.source_quantity_num = new.purchased_quantity_num' in v_trigger) = 0
      or position('e.source_quantity_den = new.purchased_quantity_den' in v_trigger) = 0
-     or position('e.target_quantity_num = new.pricing_basis_quantity_num' in v_trigger) = 0
-     or position('e.target_quantity_den = new.pricing_basis_quantity_den' in v_trigger) = 0
      or position('e.target_unit_id = new.pricing_basis_unit_id' in v_trigger) = 0
-     or position('P6N01' in v_trigger) = 0 then
-    raise exception 'pricing-basis evidence guard does not bind exact source/target facts and nondisclosure SQLSTATE';
+     or position('P6N01' in v_trigger) = 0
+     or position('e.target_quantity_num = new.pricing_basis_quantity_num' in v_trigger) <> 0
+     or position('e.target_quantity_den = new.pricing_basis_quantity_den' in v_trigger) <> 0 then
+    raise exception 'pricing-basis evidence guard does not preserve converted-quantity/basis-quantity separation';
   end if;
 end;
 $$;
@@ -123,15 +123,16 @@ insert into fridge.purchase_item (
   'c7400002-0b06-4740-8740-000000000002'
 );
 
--- Exact evidence target 1 B is valid for purchased source 2 A.
+-- Evidence proves purchased 2 A -> converted 1 B. The quoted pricing basis is
+-- intentionally independent: e.g. a price may be quoted per 2 B.
 update fridge.purchase_item
-   set pricing_basis_quantity_num = 1,
+   set pricing_basis_quantity_num = 2,
        pricing_basis_quantity_den = 1,
        pricing_basis_unit_id = 'c7400003-0b06-4740-8740-000000000003',
        pricing_conversion_evidence_id = 'c7400006-0b06-4740-8740-000000000006'
  where purchase_item_id = 'c7400009-0b06-4740-8740-000000000009';
 
--- A second row proves the same evidence cannot justify a different target quantity.
+-- Evidence must still bind the exact purchased source quantity.
 insert into fridge.purchase_item (
   purchase_item_id, household_id, purchase_id, product_id,
   purchased_quantity_num, purchased_quantity_den, purchased_unit_id
@@ -140,7 +141,7 @@ insert into fridge.purchase_item (
   'c7400001-0b06-4740-8740-000000000001',
   'c7400008-0b06-4740-8740-000000000008',
   'c7400007-0b06-4740-8740-000000000007',
-  2,
+  4,
   1,
   'c7400002-0b06-4740-8740-000000000002'
 );
@@ -154,7 +155,7 @@ begin
            pricing_basis_unit_id = 'c7400003-0b06-4740-8740-000000000003',
            pricing_conversion_evidence_id = 'c7400006-0b06-4740-8740-000000000006'
      where purchase_item_id = 'c7400010-0b06-4740-8740-000000000010';
-    raise exception 'mismatched conversion evidence target unexpectedly accepted';
+    raise exception 'mismatched purchased source quantity unexpectedly accepted';
   exception
     when sqlstate 'P6N01' then
       null;
