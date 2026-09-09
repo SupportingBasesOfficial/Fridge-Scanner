@@ -19,6 +19,7 @@
     "./membership-read": "./dist/membership-read.js",
     "./observe-product-identifier": "./dist/observe-product-identifier.js",
     "./product-read": "./dist/product-read.js",
+    "./resolve-product-identifier": "./dist/resolve-product-identifier.js",
     "./retire-compartment": "./dist/retire-compartment.js",
     "./retire-household-ingredient-concept": "./dist/retire-household-ingredient-concept.js",
     "./retire-household-product": "./dist/retire-household-product.js",

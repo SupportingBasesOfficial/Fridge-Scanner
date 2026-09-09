@@ -24,6 +24,7 @@ export type HouseholdMembershipId = Brand<'HouseholdMembershipId'>;
 export type ProductId = Brand<'ProductId'>;
 export type IngredientConceptId = Brand<'IngredientConceptId'>;
 export type ProductIdentifierId = Brand<'ProductIdentifierId'>;
+export type ProductIdentifierNormalizationRuleId = Brand<'ProductIdentifierNormalizationRuleId'>;
 export type StagedIdentifierClaimId = Brand<'StagedIdentifierClaimId'>;
 export type BrandId = Brand<'BrandId'>;
 export type ManufacturerId = Brand<'ManufacturerId'>;
@@ -45,6 +46,9 @@ export const IngredientConceptId = (value: string): IngredientConceptId =>
   parseUuid(value, 'IngredientConceptId');
 export const ProductIdentifierId = (value: string): ProductIdentifierId =>
   parseUuid(value, 'ProductIdentifierId');
+export const ProductIdentifierNormalizationRuleId = (
+  value: string,
+): ProductIdentifierNormalizationRuleId => parseUuid(value, 'ProductIdentifierNormalizationRuleId');
 export const StagedIdentifierClaimId = (value: string): StagedIdentifierClaimId =>
   parseUuid(value, 'StagedIdentifierClaimId');
 export const BrandId = (value: string): BrandId => parseUuid(value, 'BrandId');
