@@ -107,6 +107,8 @@ select fridge_internal.assert_product_visible_to_household(
 );
 
 -- Representative operational consumer cannot attach private Product from B.
+-- BE-06 now enforces this earlier at the PurchaseItem current-reference trigger
+-- with internal SQLSTATE P6P01; the direct helper's 23514 contract is proven above.
 do $$
 begin
   begin
@@ -121,13 +123,8 @@ begin
       1, 1,
       'f4000000-0000-4000-8000-000000000001'
     );
-    perform fridge_internal.assert_product_visible_to_household(
-      'f2000000-0000-4000-8000-000000000003',
-      'f1000000-0000-4000-8000-000000000001',
-      'PurchaseItem'
-    );
     raise exception 'PurchaseItem cross-Household private Product unexpectedly accepted';
-  exception when check_violation then null;
+  exception when sqlstate 'P6P01' then null;
   end;
 end;
 $$;
