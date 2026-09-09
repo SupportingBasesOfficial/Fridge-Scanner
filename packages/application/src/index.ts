@@ -50,6 +50,7 @@ export * from './read-current-products.js';
 export * from './read-current-storage-locations.js';
 export * from './resolve-product-identifier.js';
 export * from './retire-compartment.js';
+export * from './retire-household-compatibility-mapping.js';
 export * from './retire-household-ingredient-concept.js';
 export * from './retire-household-product.js';
 export * from './retire-storage-location.js';
