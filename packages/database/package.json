@@ -17,6 +17,7 @@
     "./ingredient-concept-read": "./dist/ingredient-concept-read.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
+    "./observe-product-identifier": "./dist/observe-product-identifier.js",
     "./product-read": "./dist/product-read.js",
     "./retire-compartment": "./dist/retire-compartment.js",
     "./retire-household-ingredient-concept": "./dist/retire-household-ingredient-concept.js",
