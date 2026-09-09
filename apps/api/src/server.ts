@@ -18,6 +18,10 @@ import {
 import type { RuntimeConfig } from '@fridge/config';
 import type { AuthenticatedPrincipalResolver } from './auth.js';
 import {
+  registerCatalogProductRoutes,
+  type CatalogProductRouteDependencies,
+} from './catalog-product-routes.js';
+import {
   registerStorageTopologyRoutes,
   type StorageTopologyRouteDependencies,
 } from './storage-topology-routes.js';
@@ -46,6 +50,7 @@ export interface ApiServerDependencies {
     AddHouseholdMemberOutput
   >;
   readonly storageTopology?: StorageTopologyRouteDependencies;
+  readonly catalogProducts?: CatalogProductRouteDependencies;
 }
 
 function parseHouseholdId(value: string) {
@@ -156,6 +161,7 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
     readCurrentHouseholdMembers,
     addHouseholdMember,
     storageTopology,
+    catalogProducts,
   } = dependencies;
 
   const server = Fastify({
@@ -257,6 +263,10 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
 
   if (storageTopology !== undefined) {
     registerStorageTopologyRoutes(server, authenticatedPrincipal, storageTopology);
+  }
+
+  if (catalogProducts !== undefined) {
+    registerCatalogProductRoutes(server, authenticatedPrincipal, catalogProducts);
   }
 
   server.setErrorHandler((error, request, reply) => {

@@ -5,12 +5,16 @@ import {
   ChangeStorageLocationMetadataUseCase,
   CompartmentId,
   CreateCompartmentUseCase,
+  CreateHouseholdProductUseCase,
   CreateStorageLocationUseCase,
   GetCurrentCompartmentUseCase,
+  GetCurrentProductUseCase,
   GetCurrentStorageLocationUseCase,
   HouseholdMembershipId,
   ListCurrentCompartmentsUseCase,
+  ListCurrentProductsUseCase,
   ListCurrentStorageLocationsUseCase,
+  ProductId,
   ReadAuthorizedHouseholdContext,
   ReadCurrentHouseholdMembersUseCase,
   RetireCompartmentUseCase,
@@ -19,11 +23,14 @@ import {
 } from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
+import { PgHouseholdCatalogAdministrationTransactionManager } from '@fridge/database/catalog-administration';
 import { PgCompartmentMetadataChanger } from '@fridge/database/change-compartment-metadata';
 import { PgStorageLocationMetadataChanger } from '@fridge/database/change-storage-location-metadata';
 import { PgCompartmentWriter } from '@fridge/database/compartment';
 import { PgCurrentCompartmentReader } from '@fridge/database/compartment-read';
+import { PgHouseholdProductWriter } from '@fridge/database/create-household-product';
 import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
+import { PgCurrentProductReader } from '@fridge/database/product-read';
 import { PgCompartmentRetirer } from '@fridge/database/retire-compartment';
 import { PgStorageLocationRetirer } from '@fridge/database/retire-storage-location';
 import { PgHouseholdStorageAdministrationTransactionManager } from '@fridge/database/storage-administration';
@@ -102,6 +109,18 @@ const storageTopology = {
   ),
 };
 
+const catalogAdministration = new PgHouseholdCatalogAdministrationTransactionManager(database);
+const currentProducts = new PgCurrentProductReader();
+const catalogProducts = {
+  listCurrentProducts: new ListCurrentProductsUseCase(database, currentProducts),
+  getCurrentProduct: new GetCurrentProductUseCase(database, currentProducts),
+  createHouseholdProduct: new CreateHouseholdProductUseCase(
+    catalogAdministration,
+    new PgHouseholdProductWriter(),
+    { generate: () => ProductId(randomUUID()) },
+  ),
+};
+
 const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
   config,
   database,
@@ -114,6 +133,7 @@ const server = buildApiServer({
   readCurrentHouseholdMembers,
   addHouseholdMember,
   storageTopology,
+  catalogProducts,
 });
 
 let shuttingDown = false;
