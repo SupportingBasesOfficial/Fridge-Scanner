@@ -7,6 +7,7 @@
     ".": "./dist/index.js",
     "./catalog-administration": "./dist/catalog-administration.js",
     "./change-compartment-metadata": "./dist/change-compartment-metadata.js",
+    "./change-household-ingredient-concept-metadata": "./dist/change-household-ingredient-concept-metadata.js",
     "./change-household-product-metadata": "./dist/change-household-product-metadata.js",
     "./change-storage-location-metadata": "./dist/change-storage-location-metadata.js",
     "./compartment": "./dist/compartment.js",
