@@ -8,7 +8,6 @@ import {
   MoneyRoundingPolicyId,
   PurchaseId,
   PurchaseItemId,
-  exactRational,
   type CommitPurchaseItemPricingBasisInput,
   type CommitPurchaseItemPricingBasisOutput,
   type CommitPurchaseItemPricingExtensionInput,
@@ -19,6 +18,7 @@ import {
   type UseCase,
 } from '@fridge/application';
 import type { AuthenticatedPrincipalResolver } from './auth.js';
+import { parseCanonicalExactRationalWire } from './exact-rational-wire.js';
 
 export interface ProcurementPricingRouteDependencies {
   readonly commitSourceMoneyFacts: UseCase<CommitPurchaseItemSourceMoneyFactsInput, CommitPurchaseItemSourceMoneyFactsOutput>;
@@ -59,13 +59,6 @@ function parseRoundingPolicyId(value: unknown) {
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string') throw new InvalidInputError(`${label} is invalid`);
   return value;
-}
-function parseQuantity(value: unknown) {
-  if (typeof value !== 'object' || value === null) throw new InvalidInputError('Pricing basis quantity is invalid');
-  const numerator = (value as { numerator?: unknown }).numerator;
-  const denominator = (value as { denominator?: unknown }).denominator;
-  if (typeof numerator !== 'string' || typeof denominator !== 'string') throw new InvalidInputError('Pricing basis quantity is invalid');
-  try { return exactRational(BigInt(numerator), BigInt(denominator)); } catch (error) { throw new InvalidInputError('Pricing basis quantity is invalid', error); }
 }
 
 export function registerProcurementPricingRoutes(
@@ -114,7 +107,10 @@ export function registerProcurementPricingRoutes(
       householdId: parseHouseholdId(request.params.householdId),
       purchaseId: parsePurchaseId(request.params.purchaseId),
       purchaseItemId: parsePurchaseItemId(request.params.purchaseItemId),
-      pricingBasisQuantity: parseQuantity(request.body?.pricingBasisQuantity),
+      pricingBasisQuantity: parseCanonicalExactRationalWire(
+        request.body?.pricingBasisQuantity,
+        'Pricing basis quantity',
+      ),
       pricingBasisUnitId: parseUnitId(request.body?.pricingBasisUnitId),
       ...(pricingConversionEvidenceId === undefined ? {} : { pricingConversionEvidenceId }),
       basisAmount: requireString(request.body?.basisAmount, 'Pricing basis amount'),
