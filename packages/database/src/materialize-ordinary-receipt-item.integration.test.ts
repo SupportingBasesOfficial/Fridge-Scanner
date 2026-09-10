@@ -135,12 +135,12 @@ async function seedFixture(): Promise<void> {
     );
     await pool.query(
       `insert into fridge.currency (currency_code, display_name, lifecycle_status)
-       values ('M73', 'BE06 materialization currency', 'ACTIVE')`,
+       values ('RMI', 'BE06 materialization currency', 'ACTIVE')`,
     );
     await pool.query(
       `insert into fridge.purchase (
          purchase_id, household_id, transaction_currency_code, occurred_at, recorded_at
-       ) values ($1::uuid, $2::uuid, 'M73', '2026-09-09T12:00:00Z', '2026-09-09T12:00:00Z')`,
+       ) values ($1::uuid, $2::uuid, 'RMI', '2026-09-09T12:00:00Z', '2026-09-09T12:00:00Z')`,
       [PURCHASE, HOUSEHOLD],
     );
     await pool.query(
