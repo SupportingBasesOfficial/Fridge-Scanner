@@ -33,6 +33,13 @@ test('canonical exact-rational wire rejects non-decimal and non-canonical intege
   rejects({ numerator: '1', denominator: '-2' });
 });
 
+test('canonical exact-rational wire rejects components beyond PostgreSQL numeric integer range before BigInt parsing', () => {
+  const tooManyDigits = '1'.repeat(131_073);
+  rejects({ numerator: tooManyDigits, denominator: '1' });
+  rejects({ numerator: `-${tooManyDigits}`, denominator: '1' });
+  rejects({ numerator: '1', denominator: tooManyDigits });
+});
+
 test('canonical exact-rational wire rejects structural ambiguity and extra keys', () => {
   rejects(null);
   rejects([]);
