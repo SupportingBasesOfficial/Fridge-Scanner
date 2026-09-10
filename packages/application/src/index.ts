@@ -32,6 +32,7 @@ export {
   PurchaseItemReceiptAllocationId,
   PurchaseItemSubstitutionAllocationId,
   PurchaseReceivingExceptionId,
+  PurchaseReceivingExceptionResolutionId,
   ReceiptId,
   ReceiptItemId,
   ReceiptItemIntentId,
@@ -43,6 +44,7 @@ export {
   instant,
 } from '@fridge/domain';
 export type { ExactRational, Instant } from '@fridge/domain';
+export * from './accept-ordinary-over-receipt.js';
 export * from './add-household-member.js';
 export * from './change-compartment-metadata.js';
 export * from './change-household-ingredient-concept-metadata.js';
