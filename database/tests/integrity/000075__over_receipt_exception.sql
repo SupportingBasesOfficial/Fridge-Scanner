@@ -52,17 +52,25 @@ $$;
 do $$
 declare
   v_table text;
+  v_role text;
 begin
-  foreach v_table in array array[
-    'purchase_receiving_exception',
-    'receipt_item_intent_over_receipt_exception',
-    'household_over_receipt_exception_command'
-  ]
+  foreach v_role in array array['fridge_app', 'fridge_worker', 'fridge_readonly']
   loop
-    if has_table_privilege('fridge_app', format('fridge.%I', v_table), 'INSERT')
-       or has_table_privilege('fridge_app', format('fridge.%I', v_table), 'UPDATE')
-       or has_table_privilege('fridge_app', format('fridge.%I', v_table), 'DELETE') then
-      raise exception 'fridge_app has direct DML on %', v_table;
+    foreach v_table in array array[
+      'purchase_receiving_exception',
+      'receipt_item_intent_over_receipt_exception',
+      'household_over_receipt_exception_command'
+    ]
+    loop
+      if has_table_privilege(v_role, format('fridge.%I', v_table), 'INSERT')
+         or has_table_privilege(v_role, format('fridge.%I', v_table), 'UPDATE')
+         or has_table_privilege(v_role, format('fridge.%I', v_table), 'DELETE') then
+        raise exception '% has direct DML on %', v_role, v_table;
+      end if;
+    end loop;
+
+    if not has_table_privilege(v_role, 'fridge.purchase_receiving_exception', 'SELECT') then
+      raise exception '% lost established RLS-protected SELECT on purchase_receiving_exception', v_role;
     end if;
   end loop;
 end;
