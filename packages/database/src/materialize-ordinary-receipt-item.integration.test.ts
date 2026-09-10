@@ -162,11 +162,15 @@ async function seedFixture(): Promise<void> {
     );
     await pool.query(
       `insert into fridge.storage_location (
-         storage_location_id, household_id, kind_code, display_name, lifecycle_status, retired_at
+         storage_location_id, household_id, kind_code, display_name,
+         lifecycle_status, created_at, retired_at
        ) values
-         ($1::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 location', 'ACTIVE', null),
-         ($2::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 compartment parent', 'ACTIVE', null),
-         ($3::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 retired location', 'RETIRED', clock_timestamp())`,
+         ($1::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 location',
+          'ACTIVE', clock_timestamp() - interval '2 hours', null),
+         ($2::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 compartment parent',
+          'ACTIVE', clock_timestamp() - interval '2 hours', null),
+         ($3::uuid, $4::uuid, 'BE06_MATERIALIZE_LOCATION', 'BE06 retired location',
+          'RETIRED', clock_timestamp() - interval '2 hours', clock_timestamp() - interval '1 hour')`,
       [LOCATION, PARENT_LOCATION, RETIRED_LOCATION, HOUSEHOLD],
     );
     await pool.query(
