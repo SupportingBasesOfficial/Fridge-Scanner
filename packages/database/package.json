@@ -24,6 +24,7 @@
     "./create-receipt-item-intent": "./dist/create-receipt-item-intent.js",
     "./ingredient-concept-read": "./dist/ingredient-concept-read.js",
     "./materialize-ordinary-receipt-item": "./dist/materialize-ordinary-receipt-item.js",
+    "./materialize-substitution-receipt-item": "./dist/materialize-substitution-receipt-item.js",
     "./membership-end": "./dist/membership-end.js",
     "./membership-read": "./dist/membership-read.js",
     "./observe-product-identifier": "./dist/observe-product-identifier.js",
