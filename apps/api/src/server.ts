@@ -22,6 +22,10 @@ import {
   type CatalogProductRouteDependencies,
 } from './catalog-product-routes.js';
 import {
+  registerProcurementReceivingRoutes,
+  type ProcurementReceivingRouteDependencies,
+} from './procurement-receiving-routes.js';
+import {
   registerStorageTopologyRoutes,
   type StorageTopologyRouteDependencies,
 } from './storage-topology-routes.js';
@@ -51,6 +55,7 @@ export interface ApiServerDependencies {
   >;
   readonly storageTopology?: StorageTopologyRouteDependencies;
   readonly catalogProducts?: CatalogProductRouteDependencies;
+  readonly procurementReceiving?: ProcurementReceivingRouteDependencies;
 }
 
 function parseHouseholdId(value: string) {
@@ -162,6 +167,7 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
     addHouseholdMember,
     storageTopology,
     catalogProducts,
+    procurementReceiving,
   } = dependencies;
 
   const server = Fastify({
@@ -267,6 +273,10 @@ export function buildApiServer(dependencies: ApiServerDependencies): FastifyInst
 
   if (catalogProducts !== undefined) {
     registerCatalogProductRoutes(server, authenticatedPrincipal, catalogProducts);
+  }
+
+  if (procurementReceiving !== undefined) {
+    registerProcurementReceivingRoutes(server, authenticatedPrincipal, procurementReceiving);
   }
 
   server.setErrorHandler((error, request, reply) => {
