@@ -1,5 +1,6 @@
 import type {
   CommandId,
+  CompartmentId,
   HouseholdId,
   InventoryMovementId,
   MeasurementConversionEvidenceId,
@@ -10,6 +11,7 @@ import type {
   ReceiptItemIntentId,
   ReceiptItemInventoryEffectId,
   StockItemId,
+  StorageLocationId,
 } from '@fridge/domain';
 import { InvalidInputError } from './errors.js';
 import type { IdentifierGenerator, UseCase } from './index.js';
@@ -46,8 +48,8 @@ export interface MaterializeSubstitutionReceiptItemPersistenceInput {
   readonly allocationConversionEvidenceId: MeasurementConversionEvidenceId | undefined;
   readonly reason: string;
   readonly placementKind: 'LOCATION' | 'COMPARTMENT';
-  readonly storageLocationId: ReceiptPlacement extends { kind: 'LOCATION'; storageLocationId: infer T } ? T | undefined : never;
-  readonly compartmentId: ReceiptPlacement extends { kind: 'COMPARTMENT'; compartmentId: infer T } ? T | undefined : never;
+  readonly storageLocationId: StorageLocationId | undefined;
+  readonly compartmentId: CompartmentId | undefined;
   readonly provenance: string;
   readonly candidateReceiptItemId: ReceiptItemId;
   readonly candidatePurchaseItemSubstitutionAllocationId: PurchaseItemSubstitutionAllocationId;
@@ -72,8 +74,8 @@ function canonicalText(value: string, label: string): string {
 
 function canonicalPlacement(value: ReceiptPlacement): {
   readonly placementKind: 'LOCATION' | 'COMPARTMENT';
-  readonly storageLocationId: MaterializeSubstitutionReceiptItemPersistenceInput['storageLocationId'];
-  readonly compartmentId: MaterializeSubstitutionReceiptItemPersistenceInput['compartmentId'];
+  readonly storageLocationId: StorageLocationId | undefined;
+  readonly compartmentId: CompartmentId | undefined;
 } {
   if (typeof value !== 'object' || value === null || !('kind' in value)) {
     throw new InvalidInputError('receipt substitution placement is required');
