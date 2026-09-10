@@ -68,7 +68,7 @@ begin
   if position('household_accept_ordinary_over_receipt_command' in v_claim) = 0
      or position('household_accept_substitution_over_receipt_command' in v_claim) = 0
      or position('candidate_receipt_item_id = new.receipt_item_id' in v_claim) = 0
-     or position("v_kind = 'SUBSTITUTION'" in v_claim) = 0 then
+     or position('v_kind = ''SUBSTITUTION''' in v_claim) = 0 then
     raise exception 'DETECTED physical claim is not restricted by matching acceptance authority';
   end if;
 
