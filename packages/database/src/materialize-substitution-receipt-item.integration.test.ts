@@ -29,18 +29,18 @@ const ADMIN_DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error('BE00_TEST_DATABASE_URL is required for substitution receiving integration tests');
 if (!ADMIN_DATABASE_URL) throw new Error('DATABASE_URL is required for substitution receiving integration tests');
 
-const HOUSEHOLD = HouseholdId('c7400001-0b06-4740-8740-000000000001');
-const ADMIN = PrincipalId('c7400002-0b06-4740-8740-000000000002');
-const MEMBERSHIP = 'c7400003-0b06-4740-8740-000000000003';
+const HOUSEHOLD = HouseholdId('e8650001-0b06-4740-8740-000000000001');
+const ADMIN = PrincipalId('e8650002-0b06-4740-8740-000000000002');
+const MEMBERSHIP = 'e8650003-0b06-4740-8740-000000000003';
 const ROLE = 'BE06_SUBSTITUTION_ADMIN';
-const REQUESTED = 'c7400004-0b06-4740-8740-000000000004';
-const RECEIVED = 'c7400005-0b06-4740-8740-000000000005';
-const UNIT = 'c7400006-0b06-4740-8740-000000000006';
-const PURCHASE = 'c7400007-0b06-4740-8740-000000000007';
-const REQUESTED_ITEM = PurchaseItemId('c7400008-0b06-4740-8740-000000000008');
-const RECEIVED_ITEM = PurchaseItemId('c7400009-0b06-4740-8740-000000000009');
-const RECEIPT = 'c7400010-0b06-4740-8740-000000000010';
-const LOCATION = StorageLocationId('c7400011-0b06-4740-8740-000000000011');
+const REQUESTED = 'e8650004-0b06-4740-8740-000000000004';
+const RECEIVED = 'e8650005-0b06-4740-8740-000000000005';
+const UNIT = 'e8650006-0b06-4740-8740-000000000006';
+const PURCHASE = 'e8650007-0b06-4740-8740-000000000007';
+const REQUESTED_ITEM = PurchaseItemId('e8650008-0b06-4740-8740-000000000008');
+const RECEIVED_ITEM = PurchaseItemId('e8650009-0b06-4740-8740-000000000009');
+const RECEIPT = 'e8650010-0b06-4740-8740-000000000010';
+const LOCATION = StorageLocationId('e8650011-0b06-4740-8740-000000000011');
 
 class OneId<T> implements IdentifierGenerator<T> {
   constructor(private value: T | undefined) {}
@@ -62,11 +62,11 @@ interface SubIds {
 
 function subIds(seed: string): SubIds {
   return {
-    receipt: ReceiptItemId(`c741${seed}01-0b06-4741-8741-000000000001`),
-    allocation: PurchaseItemSubstitutionAllocationId(`c741${seed}02-0b06-4741-8741-000000000002`),
-    stock: StockItemId(`c741${seed}03-0b06-4741-8741-000000000003`),
-    movement: InventoryMovementId(`c741${seed}04-0b06-4741-8741-000000000004`),
-    effect: ReceiptItemInventoryEffectId(`c741${seed}05-0b06-4741-8741-000000000005`),
+    receipt: ReceiptItemId(`e866${seed}01-0b06-4741-8741-000000000001`),
+    allocation: PurchaseItemSubstitutionAllocationId(`e866${seed}02-0b06-4741-8741-000000000002`),
+    stock: StockItemId(`e866${seed}03-0b06-4741-8741-000000000003`),
+    movement: InventoryMovementId(`e866${seed}04-0b06-4741-8741-000000000004`),
+    effect: ReceiptItemInventoryEffectId(`e866${seed}05-0b06-4741-8741-000000000005`),
   };
 }
 
@@ -158,8 +158,8 @@ await seed();
 test('different-Product substitution commits exact physical truth, replay is stable, and cross-kind rematerialization is blocked', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const intent = ReceiptItemIntentId('c7420001-0b06-4742-8742-000000000001');
-  const command = CommandId('c7420002-0b06-4742-8742-000000000002');
+  const intent = ReceiptItemIntentId('e8670001-0b06-4742-8742-000000000001');
+  const command = CommandId('e8670002-0b06-4742-8742-000000000002');
   const ids = subIds('10');
 
   try {
@@ -232,16 +232,16 @@ test('different-Product substitution commits exact physical truth, replay is sta
     const ordinary = new MaterializeOrdinaryReceiptItemUseCase(
       new PgHouseholdProcurementAdministrationTransactionManager(database),
       new PgHouseholdOrdinaryReceiptItemMaterializer(),
-      new OneId(ReceiptItemId('c7430001-0b06-4743-8743-000000000001')),
-      new OneId(PurchaseItemReceiptAllocationId('c7430002-0b06-4743-8743-000000000002')),
-      new OneId(StockItemId('c7430003-0b06-4743-8743-000000000003')),
-      new OneId(InventoryMovementId('c7430004-0b06-4743-8743-000000000004')),
-      new OneId(ReceiptItemInventoryEffectId('c7430005-0b06-4743-8743-000000000005')),
+      new OneId(ReceiptItemId('e8680001-0b06-4743-8743-000000000001')),
+      new OneId(PurchaseItemReceiptAllocationId('e8680002-0b06-4743-8743-000000000002')),
+      new OneId(StockItemId('e8680003-0b06-4743-8743-000000000003')),
+      new OneId(InventoryMovementId('e8680004-0b06-4743-8743-000000000004')),
+      new OneId(ReceiptItemInventoryEffectId('e8680005-0b06-4743-8743-000000000005')),
     );
 
     await assert.rejects(
       ordinary.execute({
-        commandId: CommandId('c7430006-0b06-4743-8743-000000000006'),
+        commandId: CommandId('e8680006-0b06-4743-8743-000000000006'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         receiptItemIntentId: intent,
@@ -260,14 +260,14 @@ test('different-Product substitution commits exact physical truth, replay is sta
 test('substitution shares PurchaseItem allowance and over-receipt attempt rolls back all candidate physical artifacts', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
   const admin = new Pool({ connectionString: ADMIN_DATABASE_URL, max: 1 });
-  const intent = ReceiptItemIntentId('c7440001-0b06-4744-8744-000000000001');
+  const intent = ReceiptItemIntentId('e8690001-0b06-4744-8744-000000000001');
   const ids = subIds('20');
 
   try {
     await createIntent(intent, RECEIVED, 2);
     await assert.rejects(
       substitutionUseCase(database, ids).execute({
-        commandId: CommandId('c7440002-0b06-4744-8744-000000000002'),
+        commandId: CommandId('e8690002-0b06-4744-8744-000000000002'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         receiptItemIntentId: intent,
@@ -296,12 +296,12 @@ test('substitution shares PurchaseItem allowance and over-receipt attempt rolls 
 
 test('same-Product intent is rejected by substitution boundary', async () => {
   const database = new PgDatabase({ connectionString: DATABASE_URL, capabilityRole: 'fridge_app' });
-  const intent = ReceiptItemIntentId('c7450001-0b06-4745-8745-000000000001');
+  const intent = ReceiptItemIntentId('e86a0001-0b06-4745-8745-000000000001');
   try {
     await createIntent(intent, REQUESTED, 1);
     await assert.rejects(
       substitutionUseCase(database, subIds('30')).execute({
-        commandId: CommandId('c7450002-0b06-4745-8745-000000000002'),
+        commandId: CommandId('e86a0002-0b06-4745-8745-000000000002'),
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         receiptItemIntentId: intent,
