@@ -13,8 +13,8 @@ begin
   if v_def is null
      or position('ACCEPTED_ORDINARY_EXCESS' in v_def) = 0
      or position('ACCEPTED_SUBSTITUTION_EXCESS' in v_def) = 0
-     or position('ordinary_allocation_id IS NOT NULL' in upper(v_def)) = 0
-     or position('substitution_allocation_id IS NOT NULL' in upper(v_def)) = 0 then
+     or position('ORDINARY_ALLOCATION_ID IS NOT NULL' in upper(v_def)) = 0
+     or position('SUBSTITUTION_ALLOCATION_ID IS NOT NULL' in upper(v_def)) = 0 then
     raise exception 'resolution allocation-kind exclusivity is incomplete';
   end if;
 end;
