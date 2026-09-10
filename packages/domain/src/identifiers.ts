@@ -44,6 +44,7 @@ export type PurchaseItemPricingDiscrepancyId = Brand<'PurchaseItemPricingDiscrep
 export type PurchaseItemReceiptAllocationId = Brand<'PurchaseItemReceiptAllocationId'>;
 export type PurchaseItemSubstitutionAllocationId = Brand<'PurchaseItemSubstitutionAllocationId'>;
 export type PurchaseReceivingExceptionId = Brand<'PurchaseReceivingExceptionId'>;
+export type PurchaseReceivingExceptionResolutionId = Brand<'PurchaseReceivingExceptionResolutionId'>;
 export type ReceiptId = Brand<'ReceiptId'>;
 export type ReceiptItemId = Brand<'ReceiptItemId'>;
 export type ReceiptItemIntentId = Brand<'ReceiptItemIntentId'>;
@@ -97,6 +98,9 @@ export const PurchaseItemSubstitutionAllocationId = (value: string): PurchaseIte
   parseUuid(value, 'PurchaseItemSubstitutionAllocationId');
 export const PurchaseReceivingExceptionId = (value: string): PurchaseReceivingExceptionId =>
   parseUuid(value, 'PurchaseReceivingExceptionId');
+export const PurchaseReceivingExceptionResolutionId = (
+  value: string,
+): PurchaseReceivingExceptionResolutionId => parseUuid(value, 'PurchaseReceivingExceptionResolutionId');
 export const ReceiptId = (value: string): ReceiptId => parseUuid(value, 'ReceiptId');
 export const ReceiptItemId = (value: string): ReceiptItemId => parseUuid(value, 'ReceiptItemId');
 export const ReceiptItemIntentId = (value: string): ReceiptItemIntentId =>
