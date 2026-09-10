@@ -5,6 +5,7 @@ import {
   CommandId,
   HouseholdId,
   InventoryMovementId,
+  MeasurementConversionEvidenceId,
   PrincipalId,
   PurchaseItemId,
   PurchaseItemReceiptAllocationId,
@@ -33,7 +34,7 @@ const PRODUCT = 'b7310004-0b06-4731-8731-000000000004';
 const EACH = 'b7310005-0b06-4731-8731-000000000005';
 const PAIR = 'b7310006-0b06-4731-8731-000000000006';
 const RULE = 'b7310007-0b06-4731-8731-000000000007';
-const EVIDENCE = 'b7310008-0b06-4731-8731-000000000008';
+const EVIDENCE = MeasurementConversionEvidenceId('b7310008-0b06-4731-8731-000000000008');
 const PURCHASE = 'b7310009-0b06-4731-8731-000000000009';
 const PURCHASE_ITEM = PurchaseItemId('b7310010-0b06-4731-8731-000000000010');
 const RECEIPT = 'b7310011-0b06-4731-8731-000000000011';
