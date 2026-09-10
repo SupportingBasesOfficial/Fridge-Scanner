@@ -6,19 +6,34 @@ import {
   CompartmentId,
   CreateCompartmentUseCase,
   CreateHouseholdProductUseCase,
+  CreatePurchaseUseCase,
+  CreateReceiptItemIntentUseCase,
+  CreateReceiptUseCase,
   CreateStorageLocationUseCase,
   GetCurrentCompartmentUseCase,
   GetCurrentProductUseCase,
   GetCurrentStorageLocationUseCase,
+  GetHouseholdPurchaseUseCase,
   HouseholdMembershipId,
+  InventoryMovementId,
   ListCurrentCompartmentsUseCase,
   ListCurrentProductsUseCase,
   ListCurrentStorageLocationsUseCase,
+  ListHouseholdPurchasesUseCase,
+  MaterializeOrdinaryReceiptItemUseCase,
   ProductId,
+  PurchaseId,
+  PurchaseItemId,
+  PurchaseItemReceiptAllocationId,
   ReadAuthorizedHouseholdContext,
   ReadCurrentHouseholdMembersUseCase,
+  ReceiptId,
+  ReceiptItemId,
+  ReceiptItemIntentId,
+  ReceiptItemInventoryEffectId,
   RetireCompartmentUseCase,
   RetireStorageLocationUseCase,
+  StockItemId,
   StorageLocationId,
 } from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
@@ -29,8 +44,14 @@ import { PgStorageLocationMetadataChanger } from '@fridge/database/change-storag
 import { PgCompartmentWriter } from '@fridge/database/compartment';
 import { PgCurrentCompartmentReader } from '@fridge/database/compartment-read';
 import { PgHouseholdProductWriter } from '@fridge/database/create-household-product';
+import { PgHouseholdPurchaseWriter } from '@fridge/database/create-purchase';
+import { PgHouseholdReceiptWriter } from '@fridge/database/create-receipt';
+import { PgHouseholdReceiptItemIntentWriter } from '@fridge/database/create-receipt-item-intent';
+import { PgHouseholdOrdinaryReceiptItemMaterializer } from '@fridge/database/materialize-ordinary-receipt-item';
 import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
+import { PgHouseholdProcurementAdministrationTransactionManager } from '@fridge/database/procurement-administration';
 import { PgCurrentProductReader } from '@fridge/database/product-read';
+import { PgHouseholdPurchaseReader } from '@fridge/database/purchase-read';
 import { PgCompartmentRetirer } from '@fridge/database/retire-compartment';
 import { PgStorageLocationRetirer } from '@fridge/database/retire-storage-location';
 import { PgHouseholdStorageAdministrationTransactionManager } from '@fridge/database/storage-administration';
@@ -121,6 +142,38 @@ const catalogProducts = {
   ),
 };
 
+const procurementAdministration = new PgHouseholdProcurementAdministrationTransactionManager(database);
+const purchaseReader = new PgHouseholdPurchaseReader();
+const procurementReceiving = {
+  listHouseholdPurchases: new ListHouseholdPurchasesUseCase(database, purchaseReader),
+  getHouseholdPurchase: new GetHouseholdPurchaseUseCase(database, purchaseReader),
+  createPurchase: new CreatePurchaseUseCase(
+    procurementAdministration,
+    new PgHouseholdPurchaseWriter(),
+    { generate: () => PurchaseId(randomUUID()) },
+    { generate: () => PurchaseItemId(randomUUID()) },
+  ),
+  createReceipt: new CreateReceiptUseCase(
+    procurementAdministration,
+    new PgHouseholdReceiptWriter(),
+    { generate: () => ReceiptId(randomUUID()) },
+  ),
+  createReceiptItemIntent: new CreateReceiptItemIntentUseCase(
+    procurementAdministration,
+    new PgHouseholdReceiptItemIntentWriter(),
+    { generate: () => ReceiptItemIntentId(randomUUID()) },
+  ),
+  materializeOrdinaryReceiptItem: new MaterializeOrdinaryReceiptItemUseCase(
+    procurementAdministration,
+    new PgHouseholdOrdinaryReceiptItemMaterializer(),
+    { generate: () => ReceiptItemId(randomUUID()) },
+    { generate: () => PurchaseItemReceiptAllocationId(randomUUID()) },
+    { generate: () => StockItemId(randomUUID()) },
+    { generate: () => InventoryMovementId(randomUUID()) },
+    { generate: () => ReceiptItemInventoryEffectId(randomUUID()) },
+  ),
+};
+
 const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
   config,
   database,
@@ -134,6 +187,7 @@ const server = buildApiServer({
   addHouseholdMember,
   storageTopology,
   catalogProducts,
+  procurementReceiving,
 });
 
 let shuttingDown = false;
