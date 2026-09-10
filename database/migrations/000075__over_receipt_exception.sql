@@ -586,7 +586,9 @@ $$;
 comment on function fridge_internal.register_over_receipt_exception(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,text,uuid) is
   'BE-06 governed pre-materialization over-receipt discrepancy detection. Computes exact excess from the serialized PurchaseItem receiving pool and persists append-only exception evidence only; it creates no ReceiptItem, allocation, StockItem or InventoryMovement.';
 
-revoke all on table fridge.purchase_receiving_exception
+-- Preserve the existing RLS-protected read surface granted by 000019 while
+-- keeping mutation authority function-only.
+revoke insert, update, delete on table fridge.purchase_receiving_exception
   from public, fridge_app, fridge_worker, fridge_readonly;
 revoke all on table fridge.receipt_item_intent_over_receipt_exception
   from public, fridge_app, fridge_worker, fridge_readonly;
