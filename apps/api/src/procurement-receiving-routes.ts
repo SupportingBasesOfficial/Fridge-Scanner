@@ -12,7 +12,6 @@ import {
   ReceiptId,
   ReceiptItemIntentId,
   StorageLocationId,
-  exactRational,
   instant,
   type CreatePurchaseInput,
   type CreatePurchaseOutput,
@@ -31,6 +30,7 @@ import {
   type UseCase,
 } from '@fridge/application';
 import type { AuthenticatedPrincipalResolver } from './auth.js';
+import { parseCanonicalExactRationalWire } from './exact-rational-wire.js';
 
 export interface ProcurementReceivingRouteDependencies {
   readonly listHouseholdPurchases: UseCase<ListHouseholdPurchasesInput, ListHouseholdPurchasesOutput>;
@@ -79,15 +79,6 @@ function parseOptionalConversionEvidenceId(value: unknown) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'string') throw new InvalidInputError('Measurement conversion evidence identifier is invalid');
   try { return MeasurementConversionEvidenceId(value); } catch (error) { throw new InvalidInputError('Measurement conversion evidence identifier is invalid', error); }
-}
-function parseExactQuantity(value: unknown) {
-  if (typeof value !== 'object' || value === null) throw new InvalidInputError('Quantity is invalid');
-  const numerator = (value as { numerator?: unknown }).numerator;
-  const denominator = (value as { denominator?: unknown }).denominator;
-  if (typeof numerator !== 'string' || typeof denominator !== 'string') {
-    throw new InvalidInputError('Quantity numerator and denominator must be strings');
-  }
-  try { return exactRational(BigInt(numerator), BigInt(denominator)); } catch (error) { throw new InvalidInputError('Quantity is invalid', error); }
 }
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string') throw new InvalidInputError(`${label} is invalid`);
@@ -197,7 +188,7 @@ export function registerProcurementReceivingRoutes(
         if (typeof item !== 'object' || item === null) throw new InvalidInputError('Purchase item is invalid');
         return {
           productId: parseProductId((item as { productId?: unknown }).productId),
-          quantity: parseExactQuantity((item as { quantity?: unknown }).quantity),
+          quantity: parseCanonicalExactRationalWire((item as { quantity?: unknown }).quantity),
           measurementUnitId: parseMeasurementUnitId((item as { measurementUnitId?: unknown }).measurementUnitId),
         };
       }),
@@ -234,7 +225,7 @@ export function registerProcurementReceivingRoutes(
       householdId,
       receiptId: parseReceiptId(request.params.receiptId),
       productId: parseProductId(request.body?.productId),
-      quantity: parseExactQuantity(request.body?.quantity),
+      quantity: parseCanonicalExactRationalWire(request.body?.quantity),
       measurementUnitId: parseMeasurementUnitId(request.body?.measurementUnitId),
       provenance: requireString(request.body?.provenance, 'Receipt item intent provenance'),
     });
