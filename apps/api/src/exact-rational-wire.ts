@@ -2,6 +2,19 @@ import { InvalidInputError, exactRational } from '@fridge/application';
 
 const CANONICAL_SIGNED_INTEGER = /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/;
 const CANONICAL_POSITIVE_INTEGER = /^[1-9][0-9]*$/;
+const POSTGRES_NUMERIC_MAX_INTEGER_DIGITS = 131_072;
+
+function magnitudeDigitCount(value: string): number {
+  return value.startsWith('-') ? value.length - 1 : value.length;
+}
+
+function requirePostgresNumericIntegerRange(value: string, label: string): void {
+  if (magnitudeDigitCount(value) > POSTGRES_NUMERIC_MAX_INTEGER_DIGITS) {
+    throw new InvalidInputError(
+      `${label} exceeds PostgreSQL numeric integer range (${POSTGRES_NUMERIC_MAX_INTEGER_DIGITS} digits)`,
+    );
+  }
+}
 
 function gcd(left: bigint, right: bigint): bigint {
   let a = left < 0n ? -left : left;
@@ -35,6 +48,9 @@ export function parseCanonicalExactRationalWire(value: unknown, label = 'Quantit
   ) {
     throw new InvalidInputError(`${label} numerator and denominator must be canonical decimal integer strings`);
   }
+
+  requirePostgresNumericIntegerRange(numerator, `${label} numerator`);
+  requirePostgresNumericIntegerRange(denominator, `${label} denominator`);
 
   const numeratorValue = BigInt(numerator);
   const denominatorValue = BigInt(denominator);
