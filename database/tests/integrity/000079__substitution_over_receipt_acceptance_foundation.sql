@@ -41,17 +41,42 @@ $$;
 do $$
 declare
   v_assert text;
+  v_canonical text;
   v_generic text;
+  v_substitution text;
 begin
+  select pg_get_functiondef(
+    'fridge_internal.ordinary_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)'::regprocedure
+  ) into v_canonical;
+
+  if position('for update' in lower(v_canonical)) = 0
+     or position('purchase_item_receipt_allocation' in v_canonical) = 0
+     or position('purchase_item_substitution_allocation' in v_canonical) = 0
+     or position('ordinary_allocation_id' in v_canonical) = 0
+     or position('substitution_allocation_id' in v_canonical) = 0
+     or position('quantity_in_target_unit' in v_canonical) = 0
+     or position('normalize_rational' in v_canonical) = 0 then
+    raise exception 'canonical accepted-excess calculator does not reconcile both allocation kinds under PurchaseItem serialization';
+  end if;
+
   select pg_get_functiondef(
     'fridge_internal.receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)'::regprocedure
   ) into v_generic;
 
-  if position('purchase_item_receipt_allocation' in v_generic) = 0
-     or position('purchase_item_substitution_allocation' in v_generic) = 0
-     or position('ordinary_allocation_id' in v_generic) = 0
-     or position('substitution_allocation_id' in v_generic) = 0 then
-    raise exception 'generic accepted-excess calculator does not reconcile both allocation kinds';
+  if position('ordinary_receiving_required_accepted_excess' in v_generic) = 0
+     or position('purchase_item_receipt_allocation' in v_generic) > 0
+     or position('purchase_item_substitution_allocation' in v_generic) > 0 then
+    raise exception 'generic accepted-excess entrypoint is not a thin delegate to the canonical implementation';
+  end if;
+
+  select pg_get_functiondef(
+    'fridge_internal.substitution_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)'::regprocedure
+  ) into v_substitution;
+
+  if position('ordinary_receiving_required_accepted_excess' in v_substitution) = 0
+     or position('purchase_item_receipt_allocation' in v_substitution) > 0
+     or position('purchase_item_substitution_allocation' in v_substitution) > 0 then
+    raise exception 'substitution accepted-excess entrypoint is not a thin delegate to the canonical implementation';
   end if;
 
   select pg_get_functiondef(
@@ -73,6 +98,10 @@ declare
 begin
   foreach v_role in array array['fridge_app', 'fridge_worker', 'fridge_readonly'] loop
     if has_function_privilege(
+      v_role,
+      'fridge_internal.ordinary_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)',
+      'EXECUTE'
+    ) or has_function_privilege(
       v_role,
       'fridge_internal.receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)',
       'EXECUTE'
