@@ -79,8 +79,6 @@ comment on constraint receiving_exception_resolution_exact_substitution_material
   on fridge.purchase_receiving_exception_resolution is
   'Prevents substitution accepted excess from being attributed to an allocation/ReceiptItem that is not the exact substitution physical materialization of the ReceiptItemIntent bound to the detected exception.';
 
--- Shared calculation: current covered receiving quantity excludes only exact
--- accepted excess portions already bound to their corresponding allocation.
 create or replace function fridge_internal.receiving_required_accepted_excess(
   p_household_id uuid,
   p_purchase_item_id uuid,
@@ -177,7 +175,7 @@ begin
       if v_row.accepted_num * v_piece_den > v_piece_num * v_row.accepted_den then
         raise exception using
           errcode = '23514',
-          message = 'accepted over-receipt excess exceeds linked receiving allocation';
+          message = 'accepted over-receipt excess exceeds linked ordinary allocation or substitution allocation';
       end if;
 
       select quantity_num, quantity_den into v_piece_num, v_piece_den
@@ -386,7 +384,7 @@ begin
       if v_row.accepted_num * v_piece_den > v_piece_num * v_row.accepted_den then
         raise exception using
           errcode = '23514',
-          message = 'accepted over-receipt excess exceeds linked receiving allocation';
+          message = 'accepted over-receipt excess exceeds linked ordinary allocation or substitution allocation';
       end if;
 
       select quantity_num, quantity_den into v_piece_num, v_piece_den
