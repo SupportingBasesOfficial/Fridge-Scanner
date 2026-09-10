@@ -31,6 +31,7 @@ export {
   PurchaseItemPricingDiscrepancyId,
   PurchaseItemReceiptAllocationId,
   PurchaseItemSubstitutionAllocationId,
+  PurchaseReceivingExceptionId,
   ReceiptId,
   ReceiptItemId,
   ReceiptItemIntentId,
@@ -76,6 +77,7 @@ export * from './read-current-ingredient-concepts.js';
 export * from './read-current-products.js';
 export * from './read-current-storage-locations.js';
 export * from './read-household-purchases.js';
+export * from './register-over-receipt-exception.js';
 export * from './resolve-product-identifier.js';
 export * from './retire-compartment.js';
 export * from './retire-household-compatibility-mapping.js';
