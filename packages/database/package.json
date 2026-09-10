@@ -34,6 +34,7 @@
     "./product-read": "./dist/product-read.js",
     "./purchase-read": "./dist/purchase-read.js",
     "./register-over-receipt-exception": "./dist/register-over-receipt-exception.js",
+    "./resolve-over-receipt-without-ingress": "./dist/resolve-over-receipt-without-ingress.js",
     "./resolve-product-identifier": "./dist/resolve-product-identifier.js",
     "./retire-compartment": "./dist/retire-compartment.js",
     "./retire-household-compatibility-mapping": "./dist/retire-household-compatibility-mapping.js",
