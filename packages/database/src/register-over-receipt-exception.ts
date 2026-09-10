@@ -16,6 +16,17 @@ import {
 import { HouseholdAuthorizationError, requirePgClient } from './index.js';
 
 const DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES = new Set(['53300', '57P01', '57P02', '57P03']);
+const INTEGRAL_NUMERIC_TEXT = /^([+-]?\d+)(?:\.0+)?$/;
+
+function parseIntegralNumeric(value: string): bigint {
+  const match = INTEGRAL_NUMERIC_TEXT.exec(value);
+  if (match === null || match[1] === undefined) {
+    throw new InternalApplicationError(
+      new Error('database returned a non-integral rational component'),
+    );
+  }
+  return BigInt(match[1]);
+}
 
 function normalizeFailure(error: unknown): Error {
   const code =
@@ -95,8 +106,8 @@ export class PgHouseholdOverReceiptExceptionRegistrar
             outcome.result_purchase_receiving_exception_id,
           ),
           discrepantQuantity: exactRational(
-            BigInt(outcome.result_discrepant_quantity_num),
-            BigInt(outcome.result_discrepant_quantity_den),
+            parseIntegralNumeric(outcome.result_discrepant_quantity_num),
+            parseIntegralNumeric(outcome.result_discrepant_quantity_den),
           ),
           discrepantUnitId: MeasurementUnitId(outcome.result_discrepant_unit_id),
         };
