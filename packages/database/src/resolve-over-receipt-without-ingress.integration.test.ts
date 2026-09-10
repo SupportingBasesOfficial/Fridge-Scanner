@@ -131,8 +131,8 @@ async function seed(): Promise<void> {
       [REJECT_INTENT, SUPER_INTENT, HOUSEHOLD, REJECT_RECEIPT, PRODUCT, UNIT, SUPER_RECEIPT],
     );
 
-    -- Historical stale DETECTED evidence: current PurchaseItem allowance is 3 and intent is only 2.
-    -- This fixture represents a prior erroneous detection without rewriting that historical fact.
+    // Historical stale DETECTED evidence: current PurchaseItem allowance is 3 and intent is only 2.
+    // This fixture represents a prior erroneous detection without rewriting that historical fact.
     await pool.query(
       `insert into fridge.purchase_receiving_exception (
          purchase_receiving_exception_id, household_id, purchase_item_id,
@@ -179,6 +179,24 @@ test('REJECTED_NO_INGRESS records terminal nonphysical resolution and blocks byp
       reason: 'two presented against one purchased',
       provenance: 'rejection detector',
     });
+
+    const invalidSupersession = new ResolveOverReceiptWithoutIngressUseCase(
+      transactions,
+      new PgHouseholdOverReceiptNonphysicalResolver(),
+      new OneId(PurchaseReceivingExceptionResolutionId('ae810020-0b06-4810-8810-000000000020')),
+    );
+    await assert.rejects(
+      invalidSupersession.execute({
+        commandId: CommandId('ae810021-0b06-4810-8810-000000000021'),
+        actorPrincipalId: ADMIN,
+        householdId: HOUSEHOLD,
+        purchaseReceivingExceptionId: REJECT_EXCEPTION,
+        resolutionKind: 'SUPERSEDED_DETECTION',
+        reason: 'attempt to supersede while excess still exists',
+        provenance: 'negative supersession proof',
+      }),
+      ConflictError,
+    );
 
     const resolve = new ResolveOverReceiptWithoutIngressUseCase(
       transactions,
