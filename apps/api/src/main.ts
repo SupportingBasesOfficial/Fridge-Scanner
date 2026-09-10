@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
+  AcceptOrdinaryOverReceiptUseCase,
+  AcceptSubstitutionOverReceiptUseCase,
   AddHouseholdMemberUseCase,
   ChangeCompartmentMetadataUseCase,
   ChangeStorageLocationMetadataUseCase,
@@ -21,16 +23,22 @@ import {
   ListCurrentStorageLocationsUseCase,
   ListHouseholdPurchasesUseCase,
   MaterializeOrdinaryReceiptItemUseCase,
+  MaterializeSubstitutionReceiptItemUseCase,
   ProductId,
   PurchaseId,
   PurchaseItemId,
   PurchaseItemReceiptAllocationId,
+  PurchaseItemSubstitutionAllocationId,
+  PurchaseReceivingExceptionId,
+  PurchaseReceivingExceptionResolutionId,
   ReadAuthorizedHouseholdContext,
   ReadCurrentHouseholdMembersUseCase,
   ReceiptId,
   ReceiptItemId,
   ReceiptItemIntentId,
   ReceiptItemInventoryEffectId,
+  RegisterOverReceiptExceptionUseCase,
+  ResolveOverReceiptWithoutIngressUseCase,
   RetireCompartmentUseCase,
   RetireStorageLocationUseCase,
   StockItemId,
@@ -38,6 +46,8 @@ import {
 } from '@fridge/application';
 import { parseRuntimeConfig } from '@fridge/config';
 import { PgDatabase, PgHouseholdProfileReader } from '@fridge/database';
+import { PgHouseholdOrdinaryOverReceiptAcceptor } from '@fridge/database/accept-ordinary-over-receipt';
+import { PgHouseholdSubstitutionOverReceiptAcceptor } from '@fridge/database/accept-substitution-over-receipt';
 import { PgHouseholdCatalogAdministrationTransactionManager } from '@fridge/database/catalog-administration';
 import { PgCompartmentMetadataChanger } from '@fridge/database/change-compartment-metadata';
 import { PgStorageLocationMetadataChanger } from '@fridge/database/change-storage-location-metadata';
@@ -48,15 +58,19 @@ import { PgHouseholdPurchaseWriter } from '@fridge/database/create-purchase';
 import { PgHouseholdReceiptWriter } from '@fridge/database/create-receipt';
 import { PgHouseholdReceiptItemIntentWriter } from '@fridge/database/create-receipt-item-intent';
 import { PgHouseholdOrdinaryReceiptItemMaterializer } from '@fridge/database/materialize-ordinary-receipt-item';
+import { PgHouseholdSubstitutionReceiptItemMaterializer } from '@fridge/database/materialize-substitution-receipt-item';
 import { PgCurrentHouseholdMembershipReader } from '@fridge/database/membership-read';
 import { PgHouseholdProcurementAdministrationTransactionManager } from '@fridge/database/procurement-administration';
 import { PgCurrentProductReader } from '@fridge/database/product-read';
 import { PgHouseholdPurchaseReader } from '@fridge/database/purchase-read';
+import { PgHouseholdOverReceiptExceptionRegistrar } from '@fridge/database/register-over-receipt-exception';
+import { PgHouseholdOverReceiptNonphysicalResolver } from '@fridge/database/resolve-over-receipt-without-ingress';
 import { PgCompartmentRetirer } from '@fridge/database/retire-compartment';
 import { PgStorageLocationRetirer } from '@fridge/database/retire-storage-location';
 import { PgHouseholdStorageAdministrationTransactionManager } from '@fridge/database/storage-administration';
 import { PgStorageLocationWriter } from '@fridge/database/storage-location';
 import { PgCurrentStorageLocationReader } from '@fridge/database/storage-location-read';
+import { registerProcurementReceivingExceptionRoutes } from './procurement-receiving-exception-routes.js';
 import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
 import { buildApiServer } from './server.js';
 
@@ -66,10 +80,7 @@ const database = new PgDatabase({
   capabilityRole: config.databaseCapabilityRole,
 });
 const householdProfiles = new PgHouseholdProfileReader();
-const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(
-  database,
-  householdProfiles,
-);
+const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(database, householdProfiles);
 const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(
   database,
   new PgCurrentHouseholdMembershipReader(),
@@ -77,23 +88,15 @@ const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(
 const addHouseholdMember = new AddHouseholdMemberUseCase(
   database,
   database,
-  {
-    generate: () => HouseholdMembershipId(randomUUID()),
-  },
+  { generate: () => HouseholdMembershipId(randomUUID()) },
 );
 
 const storageAdministration = new PgHouseholdStorageAdministrationTransactionManager(database);
 const currentStorageLocations = new PgCurrentStorageLocationReader();
 const currentCompartments = new PgCurrentCompartmentReader();
 const storageTopology = {
-  listCurrentStorageLocations: new ListCurrentStorageLocationsUseCase(
-    database,
-    currentStorageLocations,
-  ),
-  getCurrentStorageLocation: new GetCurrentStorageLocationUseCase(
-    database,
-    currentStorageLocations,
-  ),
+  listCurrentStorageLocations: new ListCurrentStorageLocationsUseCase(database, currentStorageLocations),
+  getCurrentStorageLocation: new GetCurrentStorageLocationUseCase(database, currentStorageLocations),
   createStorageLocation: new CreateStorageLocationUseCase(
     storageAdministration,
     new PgStorageLocationWriter(),
@@ -107,14 +110,8 @@ const storageTopology = {
     storageAdministration,
     new PgStorageLocationRetirer(),
   ),
-  listCurrentCompartments: new ListCurrentCompartmentsUseCase(
-    database,
-    currentCompartments,
-  ),
-  getCurrentCompartment: new GetCurrentCompartmentUseCase(
-    database,
-    currentCompartments,
-  ),
+  listCurrentCompartments: new ListCurrentCompartmentsUseCase(database, currentCompartments),
+  getCurrentCompartment: new GetCurrentCompartmentUseCase(database, currentCompartments),
   createCompartment: new CreateCompartmentUseCase(
     storageAdministration,
     new PgCompartmentWriter(),
@@ -174,10 +171,49 @@ const procurementReceiving = {
   ),
 };
 
-const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(
-  config,
-  database,
-);
+const procurementReceivingExceptions = {
+  materializeSubstitutionReceiptItem: new MaterializeSubstitutionReceiptItemUseCase(
+    procurementAdministration,
+    new PgHouseholdSubstitutionReceiptItemMaterializer(),
+    { generate: () => ReceiptItemId(randomUUID()) },
+    { generate: () => PurchaseItemSubstitutionAllocationId(randomUUID()) },
+    { generate: () => StockItemId(randomUUID()) },
+    { generate: () => InventoryMovementId(randomUUID()) },
+    { generate: () => ReceiptItemInventoryEffectId(randomUUID()) },
+  ),
+  registerOverReceiptException: new RegisterOverReceiptExceptionUseCase(
+    procurementAdministration,
+    new PgHouseholdOverReceiptExceptionRegistrar(),
+    { generate: () => PurchaseReceivingExceptionId(randomUUID()) },
+  ),
+  acceptOrdinaryOverReceipt: new AcceptOrdinaryOverReceiptUseCase(
+    procurementAdministration,
+    new PgHouseholdOrdinaryOverReceiptAcceptor(),
+    { generate: () => PurchaseReceivingExceptionResolutionId(randomUUID()) },
+    { generate: () => ReceiptItemId(randomUUID()) },
+    { generate: () => PurchaseItemReceiptAllocationId(randomUUID()) },
+    { generate: () => StockItemId(randomUUID()) },
+    { generate: () => InventoryMovementId(randomUUID()) },
+    { generate: () => ReceiptItemInventoryEffectId(randomUUID()) },
+  ),
+  acceptSubstitutionOverReceipt: new AcceptSubstitutionOverReceiptUseCase(
+    procurementAdministration,
+    new PgHouseholdSubstitutionOverReceiptAcceptor(),
+    { generate: () => PurchaseReceivingExceptionResolutionId(randomUUID()) },
+    { generate: () => ReceiptItemId(randomUUID()) },
+    { generate: () => PurchaseItemSubstitutionAllocationId(randomUUID()) },
+    { generate: () => StockItemId(randomUUID()) },
+    { generate: () => InventoryMovementId(randomUUID()) },
+    { generate: () => ReceiptItemInventoryEffectId(randomUUID()) },
+  ),
+  resolveOverReceiptWithoutIngress: new ResolveOverReceiptWithoutIngressUseCase(
+    procurementAdministration,
+    new PgHouseholdOverReceiptNonphysicalResolver(),
+    { generate: () => PurchaseReceivingExceptionResolutionId(randomUUID()) },
+  ),
+};
+
+const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(config, database);
 const server = buildApiServer({
   config,
   readiness: database,
@@ -189,14 +225,16 @@ const server = buildApiServer({
   catalogProducts,
   procurementReceiving,
 });
+registerProcurementReceivingExceptionRoutes(
+  server,
+  authenticatedPrincipal,
+  procurementReceivingExceptions,
+);
 
 let shuttingDown = false;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
-  if (shuttingDown) {
-    return;
-  }
-
+  if (shuttingDown) return;
   shuttingDown = true;
   server.log.info({ signal }, 'shutdown requested');
 
@@ -218,19 +256,11 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   }
 }
 
-process.once('SIGTERM', () => {
-  void shutdown('SIGTERM');
-});
-
-process.once('SIGINT', () => {
-  void shutdown('SIGINT');
-});
+process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.once('SIGINT', () => { void shutdown('SIGINT'); });
 
 try {
-  await server.listen({
-    host: config.httpHost,
-    port: config.httpPort,
-  });
+  await server.listen({ host: config.httpHost, port: config.httpPort });
 } catch (error) {
   server.log.fatal({ err: error }, 'API startup failed');
   await database.close().catch(() => undefined);
