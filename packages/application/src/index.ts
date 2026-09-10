@@ -15,6 +15,7 @@ export {
   HouseholdId,
   HouseholdMembershipId,
   IngredientConceptId,
+  InventoryMovementId,
   ManufacturerId,
   MeasurementConversionEvidenceId,
   MeasurementUnitId,
@@ -28,9 +29,13 @@ export {
   PurchaseItemId,
   PurchaseItemMoneyFactId,
   PurchaseItemPricingDiscrepancyId,
+  PurchaseItemReceiptAllocationId,
   ReceiptId,
+  ReceiptItemId,
   ReceiptItemIntentId,
+  ReceiptItemInventoryEffectId,
   StagedIdentifierClaimId,
+  StockItemId,
   StorageLocationId,
   exactRational,
   instant,
@@ -61,6 +66,7 @@ export * from './household-context.js';
 export * from './household-membership-administration.js';
 export * from './household-procurement-administration.js';
 export * from './household-storage-administration.js';
+export * from './materialize-ordinary-receipt-item.js';
 export * from './observe-product-identifier.js';
 export * from './read-current-compartments.js';
 export * from './read-current-household-members.js';
