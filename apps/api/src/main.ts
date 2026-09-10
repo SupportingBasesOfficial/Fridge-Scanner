@@ -5,6 +5,9 @@ import {
   AddHouseholdMemberUseCase,
   ChangeCompartmentMetadataUseCase,
   ChangeStorageLocationMetadataUseCase,
+  CommitPurchaseItemPricingBasisUseCase,
+  CommitPurchaseItemPricingExtensionUseCase,
+  CommitPurchaseItemSourceMoneyFactsUseCase,
   CompartmentId,
   CreateCompartmentUseCase,
   CreateHouseholdProductUseCase,
@@ -27,6 +30,8 @@ import {
   ProductId,
   PurchaseId,
   PurchaseItemId,
+  PurchaseItemMoneyFactId,
+  PurchaseItemPricingDiscrepancyId,
   PurchaseItemReceiptAllocationId,
   PurchaseItemSubstitutionAllocationId,
   PurchaseReceivingExceptionId,
@@ -51,6 +56,9 @@ import { PgHouseholdSubstitutionOverReceiptAcceptor } from '@fridge/database/acc
 import { PgHouseholdCatalogAdministrationTransactionManager } from '@fridge/database/catalog-administration';
 import { PgCompartmentMetadataChanger } from '@fridge/database/change-compartment-metadata';
 import { PgStorageLocationMetadataChanger } from '@fridge/database/change-storage-location-metadata';
+import { PgHouseholdPurchaseItemPricingBasisWriter } from '@fridge/database/commit-purchase-item-pricing-basis';
+import { PgHouseholdPurchaseItemPricingExtensionWriter } from '@fridge/database/commit-purchase-item-pricing-extension';
+import { PgHouseholdPurchaseItemSourceMoneyWriter } from '@fridge/database/commit-purchase-item-source-money-facts';
 import { PgCompartmentWriter } from '@fridge/database/compartment';
 import { PgCurrentCompartmentReader } from '@fridge/database/compartment-read';
 import { PgHouseholdProductWriter } from '@fridge/database/create-household-product';
@@ -70,21 +78,16 @@ import { PgStorageLocationRetirer } from '@fridge/database/retire-storage-locati
 import { PgHouseholdStorageAdministrationTransactionManager } from '@fridge/database/storage-administration';
 import { PgStorageLocationWriter } from '@fridge/database/storage-location';
 import { PgCurrentStorageLocationReader } from '@fridge/database/storage-location-read';
+import { registerProcurementPricingRoutes } from './procurement-pricing-routes.js';
 import { registerProcurementReceivingExceptionRoutes } from './procurement-receiving-exception-routes.js';
 import { buildRuntimeAuthenticatedPrincipalResolver } from './runtime-auth.js';
 import { buildApiServer } from './server.js';
 
 const config = parseRuntimeConfig(process.env);
-const database = new PgDatabase({
-  connectionString: config.databaseUrl,
-  capabilityRole: config.databaseCapabilityRole,
-});
+const database = new PgDatabase({ connectionString: config.databaseUrl, capabilityRole: config.databaseCapabilityRole });
 const householdProfiles = new PgHouseholdProfileReader();
 const readAuthorizedHouseholdContext = new ReadAuthorizedHouseholdContext(database, householdProfiles);
-const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(
-  database,
-  new PgCurrentHouseholdMembershipReader(),
-);
+const readCurrentHouseholdMembers = new ReadCurrentHouseholdMembersUseCase(database, new PgCurrentHouseholdMembershipReader());
 const addHouseholdMember = new AddHouseholdMemberUseCase(
   database,
   database,
@@ -97,34 +100,14 @@ const currentCompartments = new PgCurrentCompartmentReader();
 const storageTopology = {
   listCurrentStorageLocations: new ListCurrentStorageLocationsUseCase(database, currentStorageLocations),
   getCurrentStorageLocation: new GetCurrentStorageLocationUseCase(database, currentStorageLocations),
-  createStorageLocation: new CreateStorageLocationUseCase(
-    storageAdministration,
-    new PgStorageLocationWriter(),
-    { generate: () => StorageLocationId(randomUUID()) },
-  ),
-  changeStorageLocationMetadata: new ChangeStorageLocationMetadataUseCase(
-    storageAdministration,
-    new PgStorageLocationMetadataChanger(),
-  ),
-  retireStorageLocation: new RetireStorageLocationUseCase(
-    storageAdministration,
-    new PgStorageLocationRetirer(),
-  ),
+  createStorageLocation: new CreateStorageLocationUseCase(storageAdministration, new PgStorageLocationWriter(), { generate: () => StorageLocationId(randomUUID()) }),
+  changeStorageLocationMetadata: new ChangeStorageLocationMetadataUseCase(storageAdministration, new PgStorageLocationMetadataChanger()),
+  retireStorageLocation: new RetireStorageLocationUseCase(storageAdministration, new PgStorageLocationRetirer()),
   listCurrentCompartments: new ListCurrentCompartmentsUseCase(database, currentCompartments),
   getCurrentCompartment: new GetCurrentCompartmentUseCase(database, currentCompartments),
-  createCompartment: new CreateCompartmentUseCase(
-    storageAdministration,
-    new PgCompartmentWriter(),
-    { generate: () => CompartmentId(randomUUID()) },
-  ),
-  changeCompartmentMetadata: new ChangeCompartmentMetadataUseCase(
-    storageAdministration,
-    new PgCompartmentMetadataChanger(),
-  ),
-  retireCompartment: new RetireCompartmentUseCase(
-    storageAdministration,
-    new PgCompartmentRetirer(),
-  ),
+  createCompartment: new CreateCompartmentUseCase(storageAdministration, new PgCompartmentWriter(), { generate: () => CompartmentId(randomUUID()) }),
+  changeCompartmentMetadata: new ChangeCompartmentMetadataUseCase(storageAdministration, new PgCompartmentMetadataChanger()),
+  retireCompartment: new RetireCompartmentUseCase(storageAdministration, new PgCompartmentRetirer()),
 };
 
 const catalogAdministration = new PgHouseholdCatalogAdministrationTransactionManager(database);
@@ -132,11 +115,7 @@ const currentProducts = new PgCurrentProductReader();
 const catalogProducts = {
   listCurrentProducts: new ListCurrentProductsUseCase(database, currentProducts),
   getCurrentProduct: new GetCurrentProductUseCase(database, currentProducts),
-  createHouseholdProduct: new CreateHouseholdProductUseCase(
-    catalogAdministration,
-    new PgHouseholdProductWriter(),
-    { generate: () => ProductId(randomUUID()) },
-  ),
+  createHouseholdProduct: new CreateHouseholdProductUseCase(catalogAdministration, new PgHouseholdProductWriter(), { generate: () => ProductId(randomUUID()) }),
 };
 
 const procurementAdministration = new PgHouseholdProcurementAdministrationTransactionManager(database);
@@ -150,16 +129,8 @@ const procurementReceiving = {
     { generate: () => PurchaseId(randomUUID()) },
     { generate: () => PurchaseItemId(randomUUID()) },
   ),
-  createReceipt: new CreateReceiptUseCase(
-    procurementAdministration,
-    new PgHouseholdReceiptWriter(),
-    { generate: () => ReceiptId(randomUUID()) },
-  ),
-  createReceiptItemIntent: new CreateReceiptItemIntentUseCase(
-    procurementAdministration,
-    new PgHouseholdReceiptItemIntentWriter(),
-    { generate: () => ReceiptItemIntentId(randomUUID()) },
-  ),
+  createReceipt: new CreateReceiptUseCase(procurementAdministration, new PgHouseholdReceiptWriter(), { generate: () => ReceiptId(randomUUID()) }),
+  createReceiptItemIntent: new CreateReceiptItemIntentUseCase(procurementAdministration, new PgHouseholdReceiptItemIntentWriter(), { generate: () => ReceiptItemIntentId(randomUUID()) }),
   materializeOrdinaryReceiptItem: new MaterializeOrdinaryReceiptItemUseCase(
     procurementAdministration,
     new PgHouseholdOrdinaryReceiptItemMaterializer(),
@@ -213,6 +184,25 @@ const procurementReceivingExceptions = {
   ),
 };
 
+const procurementPricing = {
+  commitSourceMoneyFacts: new CommitPurchaseItemSourceMoneyFactsUseCase(
+    procurementAdministration,
+    new PgHouseholdPurchaseItemSourceMoneyWriter(),
+    { generate: () => PurchaseItemMoneyFactId(randomUUID()) },
+  ),
+  commitPricingBasis: new CommitPurchaseItemPricingBasisUseCase(
+    procurementAdministration,
+    new PgHouseholdPurchaseItemPricingBasisWriter(),
+    { generate: () => PurchaseItemMoneyFactId(randomUUID()) },
+  ),
+  commitPricingExtension: new CommitPurchaseItemPricingExtensionUseCase(
+    procurementAdministration,
+    new PgHouseholdPurchaseItemPricingExtensionWriter(),
+    { generate: () => PurchaseItemMoneyFactId(randomUUID()) },
+    { generate: () => PurchaseItemPricingDiscrepancyId(randomUUID()) },
+  ),
+};
+
 const authenticatedPrincipal = buildRuntimeAuthenticatedPrincipalResolver(config, database);
 const server = buildApiServer({
   config,
@@ -225,11 +215,8 @@ const server = buildApiServer({
   catalogProducts,
   procurementReceiving,
 });
-registerProcurementReceivingExceptionRoutes(
-  server,
-  authenticatedPrincipal,
-  procurementReceivingExceptions,
-);
+registerProcurementReceivingExceptionRoutes(server, authenticatedPrincipal, procurementReceivingExceptions);
+registerProcurementPricingRoutes(server, authenticatedPrincipal, procurementPricing);
 
 let shuttingDown = false;
 
