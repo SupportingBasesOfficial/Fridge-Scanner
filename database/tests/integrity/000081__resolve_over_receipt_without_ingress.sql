@@ -2,7 +2,6 @@
 -- 000081__resolve_over_receipt_without_ingress.sql
 
 begin;
-
 do $$
 declare
   v_definition text;
@@ -18,6 +17,20 @@ begin
      or v_constraint not like '%ACCEPT_SUBSTITUTION_OVER_RECEIPT%'
      or v_constraint not like '%RESOLVE_OVER_RECEIPT_WITHOUT_INGRESS%' then
     raise exception 'BE-06 command registry lost accepted intents or nonphysical resolution intent';
+  end if;
+
+  select pg_get_constraintdef(oid) into v_constraint
+    from pg_constraint
+   where conrelid = 'fridge.purchase_receiving_exception_resolution'::regclass
+     and conname = 'receiving_exception_resolution_allocation_kind_ck';
+  if v_constraint is null
+     or position('ACCEPTED_ORDINARY_EXCESS' in v_constraint) = 0
+     or position('ACCEPTED_SUBSTITUTION_EXCESS' in v_constraint) = 0
+     or position('REJECTED_NO_INGRESS' in v_constraint) = 0
+     or position('SUPERSEDED_DETECTION' in v_constraint) = 0
+     or position('ORDINARY_ALLOCATION_ID IS NOT NULL' in upper(v_constraint)) = 0
+     or position('SUBSTITUTION_ALLOCATION_ID IS NOT NULL' in upper(v_constraint)) = 0 then
+    raise exception 'compatibility allocation-kind constraint does not preserve accepted and nonphysical resolution shapes';
   end if;
 
   select pg_get_constraintdef(oid) into v_constraint
