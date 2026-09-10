@@ -31,6 +31,7 @@
     "./procurement-administration": "./dist/procurement-administration.js",
     "./product-read": "./dist/product-read.js",
     "./purchase-read": "./dist/purchase-read.js",
+    "./register-over-receipt-exception": "./dist/register-over-receipt-exception.js",
     "./resolve-product-identifier": "./dist/resolve-product-identifier.js",
     "./retire-compartment": "./dist/retire-compartment.js",
     "./retire-household-compatibility-mapping": "./dist/retire-household-compatibility-mapping.js",
