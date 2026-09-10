@@ -48,12 +48,13 @@ class Transactions implements HouseholdProcurementAdministrationTransactionManag
     assert.equal(principalId, actorPrincipalId);
     assert.equal(household, householdId);
     return operation({
-      kind: 'household-procurement-administration',
+      kind: 'fridge-transaction',
       principalId,
       householdId: household,
-      membershipId: 'a7510009-0b06-4751-8751-000000000009' as never,
+      membershipId: 'a7510009-0b06-4751-8751-000000000009',
       householdRoleCode: 'ADMIN',
-    } as HouseholdProcurementAdministrationTransaction);
+      procurementAdministrationCapability: 'HOUSEHOLD_PROCUREMENT_ADMINISTER',
+    } as unknown as HouseholdProcurementAdministrationTransaction);
   }
 }
 
