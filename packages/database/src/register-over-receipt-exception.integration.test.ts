@@ -6,15 +6,23 @@ import {
   ConflictError,
   HouseholdId,
   IdempotencyConflictError,
+  InventoryMovementId,
+  MaterializeOrdinaryReceiptItemUseCase,
   PrincipalId,
   PurchaseItemId,
+  PurchaseItemReceiptAllocationId,
   PurchaseReceivingExceptionId,
+  ReceiptItemId,
   ReceiptItemIntentId,
+  ReceiptItemInventoryEffectId,
   RegisterOverReceiptExceptionUseCase,
+  StockItemId,
+  StorageLocationId,
   exactRational,
   type IdentifierGenerator,
 } from '@fridge/application';
 import { PgDatabase, HouseholdAuthorizationError } from './index.js';
+import { PgHouseholdOrdinaryReceiptItemMaterializer } from './materialize-ordinary-receipt-item.js';
 import { PgHouseholdProcurementAdministrationTransactionManager } from './procurement-administration.js';
 import { PgHouseholdOverReceiptExceptionRegistrar } from './register-over-receipt-exception.js';
 
@@ -38,6 +46,7 @@ const AVAILABLE_ITEM = PurchaseItemId('f8500010-0b06-4850-8850-000000000010');
 const RECEIPT = 'f8500011-0b06-4850-8850-000000000011';
 const OVER_INTENT = ReceiptItemIntentId('f8500012-0b06-4850-8850-000000000012');
 const AVAILABLE_INTENT = ReceiptItemIntentId('f8500013-0b06-4850-8850-000000000013');
+const LOCATION = StorageLocationId('f8500014-0b06-4850-8850-000000000014');
 
 class OneId<T> implements IdentifierGenerator<T> {
   constructor(private value: T | undefined) {}
@@ -136,6 +145,16 @@ async function seed(): Promise<void> {
        ($2::uuid, $3::uuid, $4::uuid, $5::uuid, 2, 1, $6::uuid, 'two within allowance')`,
       [OVER_INTENT, AVAILABLE_INTENT, HOUSEHOLD, RECEIPT, PRODUCT, UNIT],
     );
+    await pool.query(
+      `insert into fridge.storage_location_kind (kind_code, display_name, lifecycle_status)
+       values ('BE06_OVER_LOCATION', 'BE06 over-receipt location', 'ACTIVE')`,
+    );
+    await pool.query(
+      `insert into fridge.storage_location (
+         storage_location_id, household_id, kind_code, display_name, lifecycle_status
+       ) values ($1::uuid, $2::uuid, 'BE06_OVER_LOCATION', 'BE06 over-receipt location', 'ACTIVE')`,
+      [LOCATION, HOUSEHOLD],
+    );
   } finally {
     await pool.end();
   }
@@ -191,16 +210,15 @@ test('registers exact detected over-receipt without creating physical receiving 
         where e.purchase_receiving_exception_id = $1::uuid`,
       [exceptionId],
     );
-    assert.deepEqual(stored.rows, [{
-      exception_kind: 'OVER_RECEIPT',
-      resolution_status: 'DETECTED',
-      discrepant_quantity_num: '1',
-      discrepant_quantity_den: '1',
-      receipt_item_id: null,
-      ordinary_allocation_id: null,
-      substitution_allocation_id: null,
-      detection_provenance: 'receiving station exact count',
-    }]);
+    assert.equal(stored.rows.length, 1);
+    assert.equal(stored.rows[0]?.exception_kind, 'OVER_RECEIPT');
+    assert.equal(stored.rows[0]?.resolution_status, 'DETECTED');
+    assert.equal(Number(stored.rows[0]?.discrepant_quantity_num), 1);
+    assert.equal(Number(stored.rows[0]?.discrepant_quantity_den), 1);
+    assert.equal(stored.rows[0]?.receipt_item_id, null);
+    assert.equal(stored.rows[0]?.ordinary_allocation_id, null);
+    assert.equal(stored.rows[0]?.substitution_allocation_id, null);
+    assert.equal(stored.rows[0]?.detection_provenance, 'receiving station exact count');
 
     const physical = await admin.query<{ receipt_items: string; ordinary: string; substitutions: string; movements: string }>(
       `select
@@ -236,6 +254,45 @@ test('registers exact detected over-receipt without creating physical receiving 
       }),
       ConflictError,
     );
+
+    const receiptCandidate = ReceiptItemId('f8510010-0b06-4851-8851-000000000010');
+    const allocationCandidate = PurchaseItemReceiptAllocationId('f8510011-0b06-4851-8851-000000000011');
+    const stockCandidate = StockItemId('f8510012-0b06-4851-8851-000000000012');
+    const movementCandidate = InventoryMovementId('f8510013-0b06-4851-8851-000000000013');
+    const effectCandidate = ReceiptItemInventoryEffectId('f8510014-0b06-4851-8851-000000000014');
+    const ordinary = new MaterializeOrdinaryReceiptItemUseCase(
+      new PgHouseholdProcurementAdministrationTransactionManager(database),
+      new PgHouseholdOrdinaryReceiptItemMaterializer(),
+      new OneId(receiptCandidate),
+      new OneId(allocationCandidate),
+      new OneId(stockCandidate),
+      new OneId(movementCandidate),
+      new OneId(effectCandidate),
+    );
+
+    await assert.rejects(
+      ordinary.execute({
+        commandId: CommandId('f8510015-0b06-4851-8851-000000000015'),
+        actorPrincipalId: ADMIN,
+        householdId: HOUSEHOLD,
+        receiptItemIntentId: OVER_INTENT,
+        purchaseItemId: OVER_ITEM,
+        placement: { kind: 'LOCATION', storageLocationId: LOCATION },
+        provenance: 'detected excess must not bypass receiving allowance',
+      }),
+      ConflictError,
+    );
+
+    const rejectedPhysical = await admin.query<{ receipt_item: string; allocation: string; stock: string; movement: string; effect: string }>(
+      `select
+        (select count(*)::text from fridge.receipt_item where receipt_item_id = $1::uuid) as receipt_item,
+        (select count(*)::text from fridge.purchase_item_receipt_allocation where purchase_item_receipt_allocation_id = $2::uuid) as allocation,
+        (select count(*)::text from fridge.stock_item where stock_item_id = $3::uuid) as stock,
+        (select count(*)::text from fridge.inventory_movement where inventory_movement_id = $4::uuid) as movement,
+        (select count(*)::text from fridge.receipt_item_inventory_effect where receipt_item_inventory_effect_id = $5::uuid) as effect`,
+      [receiptCandidate, allocationCandidate, stockCandidate, movementCandidate, effectCandidate],
+    );
+    assert.deepEqual(rejectedPhysical.rows, [{ receipt_item: '0', allocation: '0', stock: '0', movement: '0', effect: '0' }]);
   } finally {
     await database.close();
     await admin.end();
