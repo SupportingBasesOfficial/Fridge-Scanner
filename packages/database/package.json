@@ -6,6 +6,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./accept-ordinary-over-receipt": "./dist/accept-ordinary-over-receipt.js",
+    "./accept-substitution-over-receipt": "./dist/accept-substitution-over-receipt.js",
     "./catalog-administration": "./dist/catalog-administration.js",
     "./change-compartment-metadata": "./dist/change-compartment-metadata.js",
     "./change-household-ingredient-concept-metadata": "./dist/change-household-ingredient-concept-metadata.js",
