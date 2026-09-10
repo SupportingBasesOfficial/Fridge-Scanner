@@ -39,6 +39,22 @@ The proposed exact intent quantity is converted to the PurchaseItem unit using p
 
 No rounding, truncation or hidden enlargement of purchased quantity is permitted.
 
+### Cross-unit evidence has one directional responsibility
+
+The physical `ReceiptItem`, ordinary allocation and `RECEIPT_INGRESS` movement remain expressed in the exact unit observed by the immutable ReceiptItemIntent.
+
+When that unit differs from the PurchaseItem purchased unit, pinned `MeasurementConversionEvidence` is used only to reconcile the allocation into the PurchaseItem receiving pool. The same evidence is **not** reapplied when reconciling the allocation back to the ReceiptItem if `allocation_unit_id == received_unit_id`; that side is an exact identity relation.
+
+Therefore an example such as:
+
+```text
+physical receipt: 2 PAIR
+purchase basis:   4 EACH
+evidence:         2 PAIR -> 4 EACH
+```
+
+preserves 2 PAIR as physical truth while consuming exactly 4 EACH from the PurchaseItem receiving allowance.
+
 ### Placement is mandatory in this first ingress slice
 
 Only current same-Household BE-04 topology is accepted:
@@ -72,14 +88,27 @@ Therefore the physical commit must satisfy:
 
 ```text
 ReceiptItem exact quantity
-  == ordinary allocation quantity attributed in this slice
-  == positive RECEIPT_INGRESS movement quantity
-  == linked receipt_item_inventory_effect quantity
+  == ordinary allocation physical quantity attributed in this slice
+  == positive RECEIPT_INGRESS movement physical quantity
+  == linked receipt_item_inventory_effect physical quantity
 ```
 
-for the one-effect/no-split case, while existing deferred constraints remain defense in depth.
+for the one-effect/no-split case. When the PurchaseItem uses a different unit, its receiving-pool comparison is separately and exactly evidence-converted.
 
-Future split receiving may create multiple effects only under B6-027 exact conservation.
+Existing deferred constraints remain defense in depth. Future split receiving may create multiple effects only under B6-027 exact conservation.
+
+## Deferred conservation privilege boundary
+
+The accepted conservation helpers remain private internal functions and are not callable by `fridge_app`.
+
+Because constraint triggers are `DEFERRABLE INITIALLY DEFERRED`, their enforcement may execute at transaction commit after the governed security-definer command has returned. The trigger wrappers required by this physical path therefore execute with controlled `SECURITY DEFINER` authority and a pinned `search_path = pg_catalog, fridge, fridge_internal` while remaining non-executable as direct runtime API surfaces.
+
+This applies to:
+
+- ReceiptItem ↔ inventory-effect conservation wrappers; and
+- ordinary/substitution receiving-allocation conservation wrapper.
+
+The hardening does **not** grant `fridge_app` direct EXECUTE on `assert_receipt_item_inventory_effects`, `assert_purchase_receiving_pool`, `assert_receipt_item_allocation_pool`, or their trigger wrappers.
 
 ## Intent consumption
 
@@ -139,7 +168,7 @@ It receives no direct insert/update/delete authority over:
 - InventoryMovement;
 - receipt inventory effect.
 
-The receiving-availability helper remains private.
+The receiving-availability and conservation helpers remain private.
 
 ## Required executable proofs
 
@@ -152,11 +181,13 @@ Acceptance requires at minimum:
 - COMPARTMENT placement;
 - partial receiving across multiple intents;
 - deterministic over-receipt conflict with zero candidate physical artifacts;
+- exact cross-unit receiving where physical unit is preserved and PurchaseItem allowance is evidence-converted;
 - same CommandId replay returns original identities;
 - Product mismatch conflicts;
 - retired/invalid topology is rejected;
 - missing procurement capability is unauthorized;
 - shared CommandId cross-intent semantics remain intact;
+- deferred conservation succeeds at least privilege while private helpers remain non-executable directly by `fridge_app`;
 - no direct runtime physical DML;
 - PostgreSQL 17 and 18 DB-02 replay;
 - BE-00 runtime/build/RLS/container proof on one exact HEAD;
