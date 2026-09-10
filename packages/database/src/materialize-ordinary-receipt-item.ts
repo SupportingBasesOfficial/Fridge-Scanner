@@ -31,6 +31,7 @@ function normalizeFailure(error: unknown): Error {
       : '';
 
   if (code === 'P6I01') return new IdempotencyConflictError();
+  if (code === 'P6R01') return new ConflictError('ReceiptItem intent is already physically materialized');
   if (code.startsWith('08') || DEPENDENCY_UNAVAILABLE_SQLSTATE_CODES.has(code)) {
     return new DependencyUnavailableError('required dependency is unavailable', error);
   }
