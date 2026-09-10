@@ -76,8 +76,8 @@ begin
   ) into v_claim;
 
   if position('household_accept_ordinary_over_receipt_command' in v_claim) = 0
-     or position("outcome_code = 'PENDING'" in v_claim) = 0
-     or position("v_kind <> 'ORDINARY'" in v_claim) = 0
+     or position('outcome_code = ''PENDING''' in v_claim) = 0
+     or position('v_kind <> ''ORDINARY''' in v_claim) = 0
      or position('candidate_receipt_item_id = new.receipt_item_id' in v_claim) = 0 then
     raise exception 'DETECTED physical claim barrier is not restricted to exact pending ordinary acceptance authority';
   end if;
