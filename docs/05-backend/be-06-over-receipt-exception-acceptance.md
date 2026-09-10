@@ -73,6 +73,16 @@ Successful detection appends:
 
 `DETECTED` is immutable evidence that the discrepancy existed under the serialized receiving state at detection time. It is **not** a reservation and is **not** itself acceptance authority.
 
+## Detected-intent materialization barrier
+
+Once a `ReceiptItemIntent` has a detected over-receipt bridge, that intent is not eligible for ordinary or substitution physical materialization.
+
+Both physical paths must pass through the shared `receipt_item_intent_physical_materialization` claim guard. The guard rejects a detected intent before physical commitment can become durable, regardless of whether a caller later presents the same intent against a different PurchaseItem with otherwise sufficient receiving allowance.
+
+The rejection must roll back every candidate physical effect from the attempted transaction, including `ReceiptItem`, receiving allocation, `StockItem`, `InventoryMovement` and `receipt_item_inventory_effect`.
+
+A future governed acceptance/correction workflow may change materialization eligibility only through a new explicit contract and evidence model. Detection itself never grants that authority.
+
 ## No reservation semantics
 
 Detection does not reserve PurchaseItem allowance and does not freeze the rest of the receiving pool.
