@@ -1,6 +1,6 @@
 -- FridgeScanner BE-06
 -- 000079_01__ordinary_accepted_excess_contract_compatibility.sql
--- Preserve the accepted ordinary helper as a fully-auditable implementation while
+-- Preserve the accepted ordinary helper as the single fully-auditable implementation while
 -- extending its covered pool to accepted substitution excess.
 
 begin;
@@ -161,7 +161,38 @@ end;
 $$;
 
 comment on function fridge_internal.ordinary_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid) is
-  'Locks one PurchaseItem and returns the exact incremental portion of one proposed receiving allocation outside remaining purchased allowance after subtracting all previously accepted ordinary and substitution allocation-local excess portions. The accepted ordinary helper remains a full auditable implementation for backward governance compatibility.';
+  'Canonical fully-auditable accepted-excess calculation. Locks one PurchaseItem and returns the exact incremental portion of one proposed receiving allocation outside remaining purchased allowance after subtracting all previously accepted ordinary and substitution allocation-local excess portions.';
+
+create or replace function fridge_internal.receiving_required_accepted_excess(
+  p_household_id uuid,
+  p_purchase_item_id uuid,
+  p_quantity_num numeric,
+  p_quantity_den numeric,
+  p_unit_id uuid,
+  p_conversion_evidence_id uuid
+)
+returns table (
+  accepted_excess_num numeric,
+  accepted_excess_den numeric,
+  comparison_unit_id uuid
+)
+language sql
+volatile
+security invoker
+set search_path = pg_catalog, fridge, fridge_internal
+as $$
+  select * from fridge_internal.ordinary_receiving_required_accepted_excess(
+    p_household_id,
+    p_purchase_item_id,
+    p_quantity_num,
+    p_quantity_den,
+    p_unit_id,
+    p_conversion_evidence_id
+  );
+$$;
+
+comment on function fridge_internal.receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid) is
+  'Compatibility/general entrypoint delegating to the single canonical fully-auditable accepted-excess implementation.';
 
 create or replace function fridge_internal.substitution_receiving_required_accepted_excess(
   p_household_id uuid,
@@ -192,9 +223,11 @@ as $$
 $$;
 
 comment on function fridge_internal.substitution_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid) is
-  'Substitution acceptance delegates to the canonical fully-auditable accepted-excess calculation shared with ordinary acceptance.';
+  'Substitution acceptance delegates to the single canonical fully-auditable accepted-excess calculation shared with ordinary acceptance.';
 
 revoke all on function fridge_internal.ordinary_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)
+  from public, fridge_app, fridge_worker, fridge_readonly;
+revoke all on function fridge_internal.receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)
   from public, fridge_app, fridge_worker, fridge_readonly;
 revoke all on function fridge_internal.substitution_receiving_required_accepted_excess(uuid,uuid,numeric,numeric,uuid,uuid)
   from public, fridge_app, fridge_worker, fridge_readonly;
