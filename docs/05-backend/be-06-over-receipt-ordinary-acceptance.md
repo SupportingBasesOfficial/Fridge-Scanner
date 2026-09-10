@@ -26,6 +26,8 @@ Acceptance appends a separate `purchase_receiving_exception_resolution` fact wit
 
 The resolution is append-only.
 
+The resolution is also structurally bound to the exact ordinary `receipt_item_intent_materialization` tuple. The detected ReceiptItemIntent, committed ReceiptItem and ordinary allocation therefore cannot be mixed with physical artifacts belonging to another intent, even when both allocations target the same PurchaseItem.
+
 ## Purchased truth never expands
 
 Acceptance does **not** update `PurchaseItem.purchased_quantity_*`.
@@ -174,7 +176,7 @@ One successful transaction commits together:
 5. positive `RECEIPT_INGRESS` InventoryMovement;
 6. exact ReceiptItemInventoryEffect;
 7. ordinary ReceiptItemIntent materialization bridge / physical claim;
-8. append-only accepted-excess resolution;
+8. append-only accepted-excess resolution bound by FK to that exact intent materialization + ReceiptItem + ordinary allocation;
 9. PurchaseItem receiving conservation proof;
 10. ReceiptItem allocation conservation proof;
 11. ReceiptItem inventory-effect conservation proof;
@@ -237,6 +239,7 @@ Acceptance requires one exact PR HEAD with:
 - cross-unit integration;
 - stable replay;
 - normal receiving remaining blocked without explicit acceptance;
+- structural proof that accepted excess is bound to the exact detected-intent ordinary materialization;
 - zero unresolved material review threads;
 - panoramic/adversarial CLEAN;
 - branch 0 behind canonical `main`.
