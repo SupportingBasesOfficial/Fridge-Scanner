@@ -207,7 +207,7 @@ test('registers exact detected over-receipt without creating physical receiving 
         (select count(*)::text from fridge.receipt_item where household_id = $1::uuid and receipt_id = $2::uuid) as receipt_items,
         (select count(*)::text from fridge.purchase_item_receipt_allocation where household_id = $1::uuid and purchase_item_id = $3::uuid) as ordinary,
         (select count(*)::text from fridge.purchase_item_substitution_allocation where household_id = $1::uuid and purchase_item_id = $3::uuid) as substitutions,
-        (select count(*)::text from fridge.inventory_movement where household_id = $1::uuid and receipt_id = $2::uuid) as movements`,
+        (select count(*)::text from fridge.inventory_movement where household_id = $1::uuid) as movements`,
       [HOUSEHOLD, RECEIPT, OVER_ITEM],
     );
     assert.deepEqual(physical.rows, [{ receipt_items: '0', ordinary: '0', substitutions: '0', movements: '0' }]);
