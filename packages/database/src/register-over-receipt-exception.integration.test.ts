@@ -276,9 +276,9 @@ test('registers exact detected over-receipt without creating physical receiving 
         actorPrincipalId: ADMIN,
         householdId: HOUSEHOLD,
         receiptItemIntentId: OVER_INTENT,
-        purchaseItemId: OVER_ITEM,
+        purchaseItemId: AVAILABLE_ITEM,
         placement: { kind: 'LOCATION', storageLocationId: LOCATION },
-        provenance: 'detected excess must not bypass receiving allowance',
+        provenance: 'detected excess must block alternate receiving allocation',
       }),
       ConflictError,
     );
